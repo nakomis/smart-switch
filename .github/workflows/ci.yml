@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Deploys on main queue behind each other; PR runs cancel their superseded predecessor.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # The firmware, board and publishing jobs arrive with PETRO-9. Until then this gate is the one
+  # required check, so branch protection has something to require. When jobs are added, give this
+  # `if: always()`, list them in `needs`, and fail if any result is failure or cancelled.
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "No jobs yet: see PETRO-9."
