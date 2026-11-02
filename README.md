@@ -1,6 +1,6 @@
 # Petro: a 10 A mains Wi-Fi smart switch
 
-<!-- logo: docs/logo.png once chosen from docs/logo-candidates/ -->
+<img src="docs/logo.png" alt="Petro logo" width="200" align="right"/>
 
 ## Support
 

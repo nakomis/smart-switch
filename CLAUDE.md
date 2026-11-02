@@ -22,6 +22,7 @@ anyone else can have one.
 | MCU | ESP32-S3-MINI-1-N8, soldered directly, antenna overhanging the edge furthest from the mains |
 | Control | One tactile button cycling **on → off → auto**. On and off are local overrides (remote relay commands are refused); auto follows MQTT and Alexa. The mode persists in NVS and doubles as the power-on state. A press with a trip latched clears the trip and leaves the relay off |
 | LED | WS2812B-2020 under a light pipe: mode, boot, Wi-Fi joining, connected, pairing, OTA, fault |
+| Light sealing | The case is **opaque**, and no light may leak through cracks or joins. The light pipe runs through an opaque tunnel/boss whose **flange sits around the LED on the board**, optionally glued down with opaque glue or enamel paint. So the board keeps a **2 mm clear perimeter around the LED** (no parts, and nothing taller than the mask) for the flange to seat on; the case and board designs share the LED's position and the flange footprint |
 | Integration | MQTT/Fleet, plus Alexa Smart Home on day one (nakostat's Alexa Lambda pattern). No Home Assistant yet |
 | Earth | Does not go through the PCB: a Wago 221 or crimp inside the case |
 
