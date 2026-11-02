@@ -17,8 +17,8 @@ anyone else can have one.
 |---|---|
 | Rating | 10 A continuous, 230 V AC, resistive. Derate inductive and capacitive loads. Design margin in: a 16 A relay |
 | Form factor | In-line cord unit (cable in, cable out) in a bought UL94 V-0 ABS/PC junction box with glands and cord grips. Never PLA or PETG for the mains enclosure |
-| Power | Mains, through an isolated module on the board (Mean Well IRM-03-5 or IRM-02-5; HLK-PM01 fallback). Everything after it is SELV. **Never** a non-isolated dropper or buck for the main supply |
-| Metering | BL0942 (UART). Option A (shunt + reinforced isolators) or B (CT + VT) is decided in PETRO-1; the lean is A |
+| Power | Mains, through two Mean Well modules: an **IRM-05-5** (1 A) for the SELV side, and an **IRM-01-5** whose output is tied to live, powering the mains-side metering (with a second IRM-05-5 as the fallback). Everything after the IRM-05-5 is SELV. **Never** a non-isolated dropper or buck for the SELV supply. Safety-critical parts come only from authorised distributors (see `docs/DESIGN.md` §3.2) |
+| Metering | Option A: a 1 mΩ Kelvin shunt and a divider, with the metering chip on the mains side and its UART crossing through a reinforced wide-body isolator (ISO7721DW; never the basic-rated B variant) |
 | MCU | ESP32-S3-MINI-1-N8, soldered directly, antenna overhanging the edge furthest from the mains |
 | Control | One tactile button cycling **on → off → auto**. On and off are local overrides (remote relay commands are refused); auto follows MQTT and Alexa. The mode persists in NVS and doubles as the power-on state. A press with a trip latched clears the trip and leaves the relay off |
 | LED | WS2812B-2020 under a light pipe: mode, boot, Wi-Fi joining, connected, pairing, OTA, fault |
