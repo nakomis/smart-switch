@@ -11,7 +11,7 @@ safety tested or certified.
 - 10 A continuous at 230 V AC (UK), resistive. Derate inductive and capacitive loads.
 - An in-line cord unit: cable in, cable out, in a bought UL94 V-0 enclosure with glands and cord
   grips. The case is opaque and must not leak LED light through cracks or joins.
-- Energy metering: V, A, W and kWh.
+- Energy metering: V, A, W and kWh (BL0939).
 - One tactile button cycling on → off → auto; a WS2812B status LED.
 - MQTT through AWS IoT Core (Fleet), OTA updates with rollback, and Alexa.
 - Everything on the low-voltage side is SELV, so USB and the debug pads are safe to touch while
@@ -20,7 +20,7 @@ safety tested or certified.
 ## 2. Block diagram
 
 ```
- L in ─┬─ F1 10 A ─┬─ MOV ─┐ (L–N)
+ L in ─┬─ F1 15 A ─┬─ MOV ─┐ (L–N)
        │           │       │
        │           ├─ F2 T500 mA ─┬─ PSU1 IRM-05-5 ══╪══ 5 V SELV ─┬─ diode-OR ─ AP2112K 3V3 ─ ESP32-S3
        │           │              │    (reinforced)   ║              │   (USB VBUS)              │  │
@@ -29,7 +29,7 @@ safety tested or certified.
        │           │                  live: mains)   │║                                            │
        │           └─ R_shunt 1 mΩ (Kelvin) ── K1 relay contact ── L out                         │
        │                  │                                                                       │
-       │              BL0942 ── LDO 3V3 ── PSU2           UART ═ U_iso (reinforced) ═════════════┘
+       │              BL0939 ── LDO 3V3 ── PSU2           UART ═ U_iso (reinforced) ═════════════┘
        │                  │ (V divider L–N)
  N in ─┴──────────────────┴─────────────────────────────────────────────── N out
                                                      ═ / ║ : the 8 mm reinforced barrier
@@ -47,7 +47,7 @@ PSU2's isolation does no safety work: its output is deliberately tied to live.
 Decided on 2 Nov 2026, after asking seven models through `cabal` (6 votes to 1; the answers are in
 `docs/design/cabal/`).
 
-- **A 1 mΩ manganin shunt in the live, and a resistor divider for voltage.** The BL0942 sits on
+- **A 1 mΩ manganin shunt in the live, and a resistor divider for voltage.** The BL0939 sits on
   the mains side, its ground on the shunt/live node.
 - **Not Option B (a current transformer and a voltage transformer).** The ZMPT101B and ZMCT103C
   have no safety certification, so in Option B they would be the only thing between mains and the
@@ -58,7 +58,7 @@ Decided on 2 Nov 2026, after asking seven models through `cabal` (6 votes to 1; 
   (2–5 mA per channel) strains a small supply. The narrow-body ISO6721 is rated only as basic
   insulation, so it doesn't qualify.
 - **Order in the live:** fuse → MOV → shunt → relay → load. The fuse comes first, because the
-  shunt isn't a fuse and won't fail safely. The shunt goes before the relay, so the BL0942 keeps its
+  shunt isn't a fuse and won't fail safely. The shunt goes before the relay, so the BL0939 keeps its
   reference to live when the relay is open.
 - **The shunt is wired Kelvin-style:** the sense traces leave from the inside edges of its pads, as
   a tight pair, laid out symmetrically for temperature. 10 mm of 5 mm-wide 2 oz track is about
@@ -69,7 +69,7 @@ Decided on 2 Nov 2026, after asking seven models through `cabal` (6 votes to 1; 
 - **PSU1, the IRM-05-5 (5 V, 1 A), for the SELV side.** The IRM-03-5's 600 mA was tight: the peak
   load is about 450 mA (Wi-Fi transmit about 340 mA, relay coil about 80 mA, LED). RS 135-8923.
 - **PSU2, the IRM-01-5 (5 V, 200 mA), for the mains-side metering.** Its output is tied to live,
-  and it feeds a 3.3 V LDO for the BL0942 and the isolator's mains side, which draw about 5–10 mA.
+  and it feeds a 3.3 V LDO for the BL0939 and the isolator's mains side, which draw about 5–10 mA.
   RS 135-9124. It replaces the capacitive dropper the brief suggested, which cabal favoured 5 votes
   to 2 against. A dropper brings inrush, MOV placement, X2-capacitor ageing and its return current
   flowing through the shunt, and it would need sizing for about 5 mA, not 1 mA. The fallback, if the
@@ -105,15 +105,16 @@ Figures marked *unverified* there have not been checked against a primary datash
 | Ref | Part | Maker | LCSC | Stock | Key rating | Notes |
 |---|---|---|---|---|---|---|
 | K1 | HF115F-I/005-1HS3A | Hongfa | C2976795 | 25 | 16 A 250 VAC; 5 V coil, 80 mA; coil–contact 5 kV, 10 mm creepage, reinforced (VDE) | Coil and contact pins about 20 mm apart, so no slot needed. **Not** the plain HF115F/005-1HS3 (C81373), which is VDE-rated only 10 A at 70 °C. Fallback: Omron G5RL-1A-E-HR (not on LCSC) |
-| F1 | 0215010.MXP (T10A 5×20 ceramic) | Littelfuse | C142733 | 11,143 | 1.5 kA breaking | **The rating is pending: see §5.1** |
-| F1 holder | 65600001009 (656 series) | Littelfuse | C187510 | 55 (+199 of the `.J` variant) | 10 A, 250 V, UL94 V-0 | Open holder |
-| F2 | 0215.500MXP (T500mA 5×20 ceramic) | Littelfuse | C142839 | 2,052 | 1.5 kA breaking | Feeds both PSUs, in a second 656 holder. Not a TR5 (35 A breaking only) |
+| F1 | 0505015.MXP (15 A, 6.3×32 mm ceramic, sand-filled, high breaking capacity) | Littelfuse | C3165450 | 65 | **50 kA** breaking at 500 VAC | Decided in §5.1. Fallback: 0215015.MXP (5×20, 15 A, only 500 A breaking, C720202) in 01000056Z clips (15 A, C151074) |
+| F1 clips | 3557-2 (×2, 6.3 mm fuse clips) | Keystone | C352820 | 1,089 | 30 A, 500 V | Fit a cover or barrier if the case allows |
+| F2 | 0215.500MXP (T500mA 5×20 ceramic) | Littelfuse | C142839 | 2,052 | 1.5 kA breaking | Feeds both PSUs. Not a TR5 (35 A breaking only) |
+| F2 holder | 65600001009 (656 series) | Littelfuse | C187510 | 55 (+199 of the `.J` variant) | 10 A, 250 V, UL94 V-0 | Open holder |
 | RV1 | TMOV20RP275E | Littelfuse | C187710 | 440 | 275 VAC, thermally protected | TMOV14RP275E (C1528070) is the smaller option, but only 3 are in stock |
 | R_SH | WSK25121L000FEA (1 mΩ, 4-terminal, 2512) | Vishay | C4248455 | 4,000 | Kelvin terminals | 0.1 W at 10 A |
 | J1, J2 | DG636-7.62-02P | Degson | C2827897 | 933 | 32 A, 630 V, 7.62 mm pitch | L in/N in and L out/N out; wire entry to the side |
 | PSU1 | IRM-05-5 | Mean Well | (RS 135-8923) | RS: in stock | 5 V 1 A, reinforced | 45.7 × 25.4 × 21.5 mm; inrush 40 A at 230 V |
 | PSU2 | IRM-01-5 | Mean Well | (RS 135-9124) | RS: in stock | 5 V 200 mA | 33.7 × 22.2 × 15 mm; output tied to live; inrush 10 A |
-| U_M | BL0939 (SOP-16), **pending §5.2** | Belling | C2836697 | 2,684 | 2 current channels, 1 voltage, ZX, UART 4800 | SSOP-20 C2841044: 6,789 in stock |
+| U_M | BL0939 (SOP-16) | Belling | C2836697 | 2,684 | 2 current channels, 1 voltage, ZX, UART 4800 | SSOP-20 C2841044: 6,789 in stock |
 | R_V | 5 × 390 kΩ (1206) over 510 Ω | | | | ≈ 3825:1 | The Belling/Tuya reference divider; re-check the headroom for the chosen chip |
 | U_LDO_M | AP2112K-3.3TRG1 | Diodes | C51118 | 7,985 | 600 mA | The mains-side 3.3 V |
 | Q1, D1 | AO3400A, 1N4148W | | | | | Relay driver and flyback, as on the heatlink |
@@ -146,30 +147,36 @@ gland was found. That leaves a **board of about 120 × 60 mm** on the box's boss
 
 ## 5. Open questions
 
-### 5.1 The main fuse at 10 A continuous
+### 5.1 The main fuse and the current rating: decided 2 Nov 2026
 
-A T10A fuse carrying 10 A continuously, in a 10 A holder inside a closed box, is at 100 % of both
-ratings. Normal practice runs a fuse at about 75 % of its rating (*unverified* for the 215 series).
-It will run hot and may age into a nuisance blow. The options:
+**Petro stays at 10 A continuous.** A T10A fuse in a 10 A holder at 10 A continuous would run at
+100 % of both ratings, against normal practice of about 75 %. So:
 
-- **(a) Rate Petro at about 7.5 A (1.7 kW) continuous** and keep the T10A. Simple and honest, but
-  a 2.3 kW heater is then out of spec.
-- **(b) Keep 10 A continuous.** Size the board's copper, terminals and relay (already 16 A) for
-  16 A, and fit a larger internal fuse (T15A or T16A, in a holder rated for it) for short-circuit
-  protection. The plug's 13 A BS 1362 fuse then protects the cord against overload, and the firmware
-  trip at about 10.5 A is the backstop.
-- **(c) Keep the T10A at 10 A and measure it at Gate 4.**
+- **The copper, terminals and relay are sized for 16 A.** The relay is already 16 A and the
+  terminals 32 A, and the `Mains16A` net class's minimum width is set for 16 A.
+- **F1 is a 15 A high-breaking-capacity fuse** (0505015.MXP, 6.3×32 mm, 50 kA) in 30 A clips. It
+  protects against short circuits. 15 A, not 16 A: 16 A comes in neither the high-breaking range
+  nor 15 A clips, and 10 A is 67 % of 15 A. A 5×20 15 A fuse breaks only about 500 A, which is low
+  for a UK socket's prospective fault current, hence the 6.3×32.
+- **Overload:** the plug's 13 A BS 1362 fuse protects the cord, and the firmware trip at about
+  10.5 A is the backstop for the unit's rating (PETRO-5).
 
-### 5.2 Metering chip: the BL0942 is out of stock
+### 5.2 Metering chip: the BL0939, decided 2 Nov 2026
 
-The BL0942 has 0 stock at LCSC and JLCPCB in every package. In-stock alternatives:
+The BL0942 has 0 stock at LCSC and JLCPCB in every package. **We use the BL0939** (C2836697 SOP-16,
+2,684 in stock; or C2841044 SSOP-20, 6,789): the same Belling family, a UART at 4800 baud, voltage
+and current zero-cross outputs (so zero-cross switching stays possible), and ESPHome's `bl0939`
+component as a reference. It has two current channels: one measures the shunt, and the other is
+spare (tie it off, or use it later). Its datasheet is in Chinese only, so the register map comes
+from that and ESPHome.
 
-| Chip | Stock | UART | Zero-cross out | ESPHome | Notes |
+The alternatives considered:
+
+| Chip | Stock | UART | Zero-cross out | ESPHome | Why not |
 |---|---|---|---|---|---|
-| **BL0939** | 2,684 (SOP-16), 6,789 (SSOP-20) | 4800 baud | Yes (ZX_V, ZX_I) | Yes | The same Belling family and protocol style. Two current channels (one spare), with leakage and over-current monitoring. A Chinese datasheet only |
-| HLW8032 | 30,003 | TX only | No (pulse output only) | Yes | The CSE7766 frame format. No zero-cross output, so no zero-cross switching |
-| HLW8110 | 13,521 | Yes | Yes (*unverified*) | No | Its driver would be written from scratch |
-| BL0942 via PCBWay or consigned | — | | Yes (CF1 as ZX) | Yes | Not a safety part, so a marketplace source only risks accuracy |
+| HLW8032 | 30,003 | TX only | No | Yes | No zero-cross output |
+| HLW8110 | 13,521 | Yes | Yes (*unverified*) | No | The driver would be written from scratch |
+| BL0942 from elsewhere | — | Yes | Yes | Yes | Not stocked where the board is assembled |
 
 ### 5.3 Other open questions
 

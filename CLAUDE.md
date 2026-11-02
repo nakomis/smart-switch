@@ -15,10 +15,10 @@ anyone else can have one.
 
 | Topic | Decision |
 |---|---|
-| Rating | 10 A continuous, 230 V AC, resistive. Derate inductive and capacitive loads. Design margin in: a 16 A relay |
+| Rating | 10 A continuous, 230 V AC, resistive. Derate inductive and capacitive loads. Design margin in: a 16 A relay, and copper and terminals sized for 16 A |
 | Form factor | In-line cord unit (cable in, cable out) in a bought UL94 V-0 ABS/PC junction box with glands and cord grips. Never PLA or PETG for the mains enclosure |
 | Power | Mains, through two Mean Well modules: an **IRM-05-5** (1 A) for the SELV side, and an **IRM-01-5** whose output is tied to live, powering the mains-side metering (with a second IRM-05-5 as the fallback). Everything after the IRM-05-5 is SELV. **Never** a non-isolated dropper or buck for the SELV supply. Safety-critical parts come only from authorised distributors (see `docs/DESIGN.md` §3.2) |
-| Metering | Option A: a 1 mΩ Kelvin shunt and a divider, with the metering chip on the mains side and its UART crossing through a reinforced wide-body isolator (ISO7721DW; never the basic-rated B variant) |
+| Metering | Option A: a **BL0939** (the BL0942 is out of stock), a 1 mΩ Kelvin shunt and a divider on the mains side, with its UART crossing through a reinforced wide-body isolator (ISO7721DW; never the basic-rated B variant) |
 | MCU | ESP32-S3-MINI-1-N8, soldered directly, antenna overhanging the edge furthest from the mains |
 | Control | One tactile button cycling **on → off → auto**. On and off are local overrides (remote relay commands are refused); auto follows MQTT and Alexa. The mode persists in NVS and doubles as the power-on state. A press with a trip latched clears the trip and leaves the relay off |
 | LED | WS2812B-2020 under a light pipe: mode, boot, Wi-Fi joining, connected, pairing, OTA, fault |
@@ -28,11 +28,13 @@ anyone else can have one.
 
 ## Mains design rules (non-negotiable)
 
-- 2 oz copper; a `Mains10A` net class with a minimum width in the DRC, so the build fails if
-  routing thins a mains track; solid pours on both layers for mains nets, stitched with vias.
+- 2 oz copper; a `Mains16A` net class with a minimum width in the DRC, so the build fails if
+  routing thins a mains track (the copper is sized for 16 A, though the unit is rated 10 A); solid pours on both layers for mains nets, stitched with vias.
 - 8 mm reinforced mains↔SELV; ≥ 2.5 mm functional L↔N (more where there's room); 3 mm to the board
   edge and holes; no ground pour in the mains area; slots under the relay and PSU where they help.
-- A 10 A fuse, a 275 V AC MOV after it, and a separate T500 mA fuse on the PSU branch.
+- F1: a 15 A high-breaking-capacity fuse (6.3×32 mm, 50 kA) for short circuits; the plug's 13 A
+  fuse and the firmware trip (~10.5 A) cover overload. Then a 275 V AC thermally protected MOV, and
+  a separate T500 mA fuse on the PSU branch.
 - The relay must itself bridge the SELV/mains boundary: reinforced coil-to-contact insulation
   (≥ 8 mm creepage, 4–5 kV).
 
@@ -66,7 +68,7 @@ a fab: fill the baskets and stop.
 - Tinycrypt: `~/repos/nakomis/tinycrypt/hardware/key-board/` (original pipeline, house USB connector).
 - Heatlink firmware: `~/repos/nakomis/nakostat/embedded/esp32/heatlink/`.
 - Alexa pattern: nakostat `docs/alexa-setup.md` and its Alexa Lambda in `infra/`.
-- ESPHome's `bl0942` component: a reference for the register map and calibration.
+- ESPHome's `bl0939` component: a reference for the register map and calibration (the datasheet is Chinese only).
 
 ## Tooling
 
