@@ -173,3 +173,17 @@ def test_neutral_runs_above_the_live_chain():
         pads = {n: b for n, b in _pads(ref)}
         live = next(n for n in pads if n != "N")
         assert pads["N"][3] < pads[live][1], ref
+
+
+def test_every_test_hole_is_on_the_selv_side():
+    for ref in pb.TEST_HOLES:
+        assert P.at[ref][1] > pb.SELV_Y + 1.0, ref
+
+
+def test_supply_and_relay_test_holes_have_a_gnd_hole_at_one_pitch():
+    """So a loop pair, or the probe's spring-ground tip, measures ripple and spikes honestly."""
+    gnd = [P.at[r][:2] for r, n in pb.TEST_HOLES.items() if n == "GND"]
+    for ref, n in pb.TEST_HOLES.items():
+        if n in ("+5V", "+3V3", "COIL"):
+            x, y, _ = P.at[ref]
+            assert any(math.hypot(x - gx, y - gy) == pytest.approx(2.54) for gx, gy in gnd), ref

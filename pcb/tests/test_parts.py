@@ -13,7 +13,7 @@ ESPRESSIF_GND = {1, 2, 42, 43} | set(range(46, 61))
 def test_every_assembled_part_has_footprint_and_lcsc():
     for key, p in PARTS.items():
         assert p.footprint.pads, key
-        if key in ("DEBUG", "MH", "MHN"):
+        if key in ("DEBUG", "MH", "MHN", "TESTHOLE"):
             assert p.lcsc is None, key            # board-only: never in the BOM or CPL
         else:
             assert p.lcsc.startswith("C"), key
@@ -162,3 +162,14 @@ def test_bl0939_pinout():
         "VDD": ["1"], "IP1": ["3"], "IN1": ["4"], "IP2": ["5"], "IN2": ["6"], "VP": ["7"],
         "GND": ["8"], "ZX": ["9"], "I_leak": ["10"], "SEL": ["12"], "RX/SDI": ["14"], "TX/SDO": ["15"]}
     assert not part("MHN").tht
+
+
+def test_test_hole_is_one_bare_plated_hole_for_a_push_in_loop():
+    """Martin's ceramic test loops are pushed in, not soldered: one plated hole, no BOM line."""
+    from board.parts import TESTHOLE_DRILL
+    p = part("TESTHOLE")
+    assert p.lcsc is None and p.tht
+    (pad,) = p.footprint.pads
+    assert pad.kind == "thru_hole" and pad.number == "1"
+    assert 0.8 <= TESTHOLE_DRILL <= 1.0                   # the loop maker's 0.8-1.0 mm board hole
+    assert pad.w == pad.h and pad.w - TESTHOLE_DRILL >= 0.8   # an annular ring of at least 0.4 mm

@@ -286,7 +286,18 @@ def build_petro():
     part("MHN", "H1")
     part("MHN", "H2")
     c.connect(gnd, (part("MH", "H3"), "1"), (part("MH", "H4"), "1"))
+
+    # Test holes for push-in probe loops, SELV only (never the mains side or the island).
+    for ref, net in TEST_HOLES.items():
+        c.connect(net, (part("TESTHOLE", ref), "1"))
     return c
+
+
+# Test holes: the isolator's four signals in a row below it; the supplies and the relay drive,
+# each beside a GND hole one pitch (2.54 mm) away, with the LED data and button bottom right.
+TEST_HOLES = {"TP2": "BL_RX", "TP3": "BL_TX", "TP4": "ZX", "TP5": "OC", "TP6": "GND",
+              "TP7": "+5V", "TP8": "GND", "TP9": "+3V3",
+              "TP10": "COIL", "TP11": "GND", "TP12": "LED_DIN", "TP13": "BUTTON"}
 
 
 # --- placement (step 6) --------------------------------------------------------------------------
@@ -351,6 +362,10 @@ AT = {
     "J5": (110.0, 50.0, 0), "U6": (106.0, 56.0, 0), "F4": (111.0, 56.5, 90), "D2": (115.0, 56.5, 90),
     "D6": (110.0, 60.5, 0), "R13": (116.5, 50.0, 90),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
+    # test holes (TEST_HOLES): a row under the isolator, and a 4 x 2 block bottom right
+    **{f"TP{2 + k}": (41.0 + 2.54 * k, 50.2, 0) for k in range(5)},
+    **{f"TP{7 + k}": (104.0 + 2.54 * k, 64.2, 0) for k in range(3)},
+    **{f"TP{10 + k}": (104.0 + 2.54 * k, 66.74, 0) for k in range(4)},
 }
 
 

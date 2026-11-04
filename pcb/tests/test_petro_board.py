@@ -181,3 +181,18 @@ def test_rules_build_for_the_board():
         assert f'"{g} to SELV"' in dru
     for ref in pb.BARRIERS:
         assert f'"{ref} own pads, mains to SELV"' in dru
+
+
+# --- test holes for push-in probe loops (SELV only) ----------------------------------------------
+
+def test_test_holes_cover_the_signals_worth_scoping():
+    holes = {C.net_of(r, "1") for r, i in C.instances.items() if i.part.key == "TESTHOLE"}
+    assert holes == set(pb.TEST_HOLES.values())
+    assert {"+5V", "+3V3", "COIL", "BL_TX", "BL_RX", "ZX", "OC", "LED_DIN", "BUTTON", "GND"} <= holes
+
+
+def test_test_holes_are_never_on_mains_or_island_nets():
+    for ref, n in pb.TEST_HOLES.items():
+        assert n not in MAINS, ref
+        assert C.instances[ref].part.key == "TESTHOLE"
+        assert C.net_of(ref, "1") == n
