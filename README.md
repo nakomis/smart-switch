@@ -28,7 +28,7 @@ If you find this useful, please consider buying me a coffee:
 Petro is a home-built Wi-Fi smart switch: an in-line cord unit (cable in, cable out) that switches a
 resistive load of up to **10 A at 230 V AC**. It has:
 
-- energy metering (voltage, current, power and energy totals), from a BL0942;
+- energy metering (voltage, current, power and energy totals), from a BL0939;
 - one tactile button that cycles **on → off → auto**;
 - a multi-colour status LED for the mode, boot, Wi-Fi, pairing and faults;
 - control over MQTT through AWS IoT Core, using Martin's Fleet device service, with OTA

@@ -57,6 +57,12 @@ Decided on 2 Nov 2026, after asking seven models through `cabal` (6 votes to 1; 
   (VDE 0884-11 / IEC 60747-17), not optocouplers. Optocouplers wear out, and their LED current
   (2–5 mA per channel) strains a small supply. The narrow-body ISO6721 is rated only as basic
   insulation, so it doesn't qualify.
+- **Four channels (ISO7741DWR), not two** (decided 4 Nov 2026, PETRO-2). Three channels go from
+  mains to SELV: the BL0939's TX, its zero-cross output (for zero-cross switching) and its fast
+  over-current output (an interrupt for the trip; *unverified* that the BL0939 brings this out on
+  a pin, which is checked against the datasheet when its footprint is added; if not, the channel
+  carries its second zero-cross or CF output). One goes SELV to mains: the BL0939's RX. The
+  two-channel ISO7721 would have lost both extra lines.
 - **Order in the live:** fuse → MOV → shunt → relay → load. The fuse comes first, because the
   shunt isn't a fuse and won't fail safely. The shunt goes before the relay, so the BL0939 keeps its
   reference to live when the relay is open.
@@ -123,7 +129,7 @@ Figures marked *unverified* there have not been checked against a primary datash
 
 | Ref | Part | Maker | LCSC | Stock | Key rating | Notes |
 |---|---|---|---|---|---|---|
-| U_ISO | ISO7721DWR | TI | C524805 | 3,386 | Reinforced (VDE 0884-17); V_IORM 2121 Vpk; V_IOTM 8 kV; 8 mm creepage and clearance; outputs default high | **Never the ISO7721B**: it's rated as basic insulation only |
+| U_ISO | ISO7741DWR | TI | C571196 | 13,561 (4 Nov) | 4 channels (3 one way, 1 the other); reinforced; wide-body SOIC-16; 8 mm creepage and clearance; outputs default high | Replaces the 2-channel ISO7721DWR (C524805). **Never a B-grade part** (e.g. ISO7721B): those are rated as basic insulation only |
 
 ### SELV side
 
