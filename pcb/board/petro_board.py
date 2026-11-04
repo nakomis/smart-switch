@@ -357,7 +357,7 @@ AT = {
     "Q1": (66.0, 64.5, 0), "D3": (66.0, 68.0, 0), "R16": (70.0, 64.0, 90), "R17": (71.5, 64.0, 90),
     "TH1": (74.0, 66.0, 90), "R19": (75.8, 66.0, 90), "C23": (77.0, 68.5, 0),
     # SELV: PS1's output (below PS1)
-    "F3": (82.0, 67.5, 0), "D4": (89.0, 67.5, 0), "D5": (96.5, 67.5, 0), "C15": (101.5, 67.5, 90),
+    "F3": (82.0, 67.5, 0), "D4": (89.0, 67.5, 0), "D5": (96.5, 67.5, 0), "C15": (100.8, 67.5, 90),
     # SELV: USB
     "J5": (110.0, 50.0, 0), "U5": (106.0, 56.0, 0), "F4": (111.0, 56.0, 90), "D2": (115.0, 56.0, 90),
     "D6": (110.0, 60.0, 0), "R13": (116.5, 50.0, 90),
@@ -641,7 +641,30 @@ def silk(c, p):
     # the title, on the back under PS1 (no pads there)
     out += [("PETRO", 90.0, 50.5, 2.0, "B.SilkS"), ("230 V~ 10 A", 90.0, 53.5, 1.2, "B.SilkS"),
             ("nakomis 2026", 90.0, 55.7, 1.0, "B.SilkS")]
-    return out
+    return out + ref_labels(c, p, out)
+
+
+# Parts without a reference label: the test holes and debug pads (labelled with their signals)
+# and the mounting holes.
+UNLABELLED = tuple(TEST_HOLES) + ("TP1", "H1", "H2", "H3", "H4")
+
+
+def ref_labels(c, p, texts):
+    """Reference designators on the front, where they fit (board/refs.py), clear of 'texts'."""
+    from board.gnd import pad_boxes
+    from board.refs import place_refs
+    hard = [b[1:] for b in pad_boxes(c, p)] + [led_ring()]
+    hard += [(min(s.x1, s.x2) - s.width / 2, min(s.y1, s.y2) - s.width / 2,
+              max(s.x1, s.x2) + s.width / 2, max(s.y1, s.y2) + s.width / 2) for s in slots()]
+    hard += [(min(x0, x1) - 0.1, min(y0, y1) - 0.1, max(x0, x1) + 0.1, max(y0, y1) + 0.1)
+             for x0, y0, x1, y1, layer in boundary(c, p) if layer == "F.SilkS"]
+    # the fuses themselves (not parts: they sit in XF1/XF2 and XF3), placed first, on or by them
+    from board.placement import bbox
+    extra = [("F1 15 A", ("XF1", "XF2"), fuse_box(), 1.0), ("F2 T500 mA", ("XF3",), bbox(p, "XF3"), 0.8)]
+    labels, left = place_refs(c, p, skip=UNLABELLED, hard=hard, texts=texts, extra=extra)
+    if left:
+        raise ValueError(f"no room for the reference labels of {left}")
+    return labels
 
 
 def _clip(a, b, cuts):

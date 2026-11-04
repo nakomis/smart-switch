@@ -73,9 +73,11 @@ def test_the_boundary_keeps_off_pads_and_the_slot():
 
 
 def test_nothing_in_the_led_flange_ring():
+    from board.refs import text_box
     rx0, ry0, rx1, ry1 = pb.led_ring()
     for s in _texts("F.SilkS"):
-        assert not (rx0 - 1 < s[1] < rx1 + 1 and ry0 - 1 < s[2] < ry1 + 1), s
+        tx0, ty0, tx1, ty1 = text_box(s[0], s[1], s[2], s[3], s[5] if len(s) > 5 else 0)
+        assert tx1 <= rx0 or tx0 >= rx1 or ty1 <= ry0 or ty0 >= ry1, s
 
 
 @pytest.fixture(scope="module")
