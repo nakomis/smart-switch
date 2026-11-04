@@ -196,3 +196,18 @@ def test_test_holes_are_never_on_mains_or_island_nets():
         assert n not in MAINS, ref
         assert C.instances[ref].part.key == "TESTHOLE"
         assert C.net_of(ref, "1") == n
+
+
+def test_refs_number_from_one_without_gaps():
+    """C1, C2, … and U1…U5, as a fab and a reader expect. F is the exception: F1 and F2 are the
+    fuses themselves, in holders XF1/XF2 and XF3, so the PTCs are F3 and F4."""
+    import re
+    from collections import defaultdict
+    nums = defaultdict(list)
+    for ref in C.instances:
+        prefix, n = re.fullmatch(r"([A-Z]+)(\d+)", ref).groups()
+        nums[prefix].append(int(n))
+    for prefix, ns in nums.items():
+        if prefix != "F":
+            assert sorted(ns) == list(range(1, len(ns) + 1)), (prefix, sorted(ns))
+    assert sorted(nums["F"]) == [3, 4]
