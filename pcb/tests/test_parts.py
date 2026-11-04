@@ -171,5 +171,8 @@ def test_test_hole_is_one_bare_plated_hole_for_a_push_in_loop():
     assert p.lcsc is None and p.tht
     (pad,) = p.footprint.pads
     assert pad.kind == "thru_hole" and pad.number == "1"
-    assert 0.8 <= TESTHOLE_DRILL <= 1.0                   # the loop maker's 0.8-1.0 mm board hole
+    # Martin's calipers: two 0.3 mm legs, 1.2 mm across, sprung apart. Both go into one 0.8 mm
+    # hole, squeezed together (0.6 mm), so they push outwards on the barrel and hold.
+    assert TESTHOLE_DRILL == 0.8 and pad.drill == TESTHOLE_DRILL
+    assert 2 * 0.35 < TESTHOLE_DRILL < 1.2               # the drawing says 0.35 mm wire; worst case
     assert pad.w == pad.h and pad.w - TESTHOLE_DRILL >= 0.8   # an annular ring of at least 0.4 mm

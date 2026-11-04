@@ -78,9 +78,9 @@ _TABLE = {
     "MH": ("M3 hole", None, "MountingHole_M3_3.2mm_Pad6", None, False, 0),
     "MHN": ("M3 hole, unplated", None, "MountingHole_M3_3.2mm_NPTH", None, False, 0),
     # A bare plated hole for Martin's push-in ceramic test loops (inserted, never soldered).
-    "TESTHOLE": ("test hole", None, "TestHole_0.9mm", None, False, 0),
+    "TESTHOLE": ("test hole", None, "TestHole_0.8mm", None, False, 0),
 }
-TESTHOLE_DRILL = 0.9      # mm, provisional: the loop maker says 0.8-1.0; set from the measured legs
+TESTHOLE_DRILL = 0.8      # mm: both legs (0.3-0.35 mm wire, sprung 1.2 mm apart) squeezed into one hole
 
 # Manufacturer and part number for each assembled part, for PCBWay's BOM (JLCPCB's takes the LCSC
 # number alone). PCBWay buys parts anywhere, so the LCSC number goes in the notes as a source.
