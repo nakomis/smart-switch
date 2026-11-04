@@ -45,7 +45,7 @@ def test_module_body_includes_the_antenna():
 
 
 def test_led_and_new_part_pins():
-    assert part("LED").pins == {"DO": ["1"], "GND": ["2"], "DI": ["3"], "VDD": ["4"]}
+    assert part("LED").pins == {"VDD": ["1"], "DO": ["2"], "GND": ["3"], "DI": ["4"]}       # SK6812-EC20
     assert part("FET").pins == {"D": ["3"], "G": ["1"], "S": ["2"]}
     assert part("DIODE").pins == {"A": ["2"], "K": ["1"]}
     assert sorted(part("IO").pins, key=int) == [str(n) for n in range(1, 9)]
@@ -65,7 +65,7 @@ def test_local_footprints():
 def test_tht_flags():
     assert part("MH").tht and not part("ESP32").tht and not part("JST5").tht
     assert {k for k, p in PARTS.items() if p.tht and p.lcsc} == {
-        "IO", "IDC", "RELAY16", "PSU5W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT"}
+        "IO", "IDC", "RELAY16", "PSU5W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT", "RFUSE", "C4U7HV"}
 
 
 # --- Petro's parts against the makers' drawings (checked 4 Nov 2026) --------------------------
@@ -176,3 +176,39 @@ def test_test_hole_is_one_bare_plated_hole_for_a_push_in_loop():
     assert TESTHOLE_DRILL == 0.8 and pad.drill == TESTHOLE_DRILL
     assert 2 * 0.35 < TESTHOLE_DRILL < 1.2               # the drawing says 0.35 mm wire; worst case
     assert pad.w == pad.h and pad.w - TESTHOLE_DRILL >= 0.8   # an annular ring of at least 0.4 mm
+
+
+# --- revision B (non-isolated): the LNK306 supply, the 12 V -> 5 V buck, the SK6812 ---------------
+
+def test_lnk306_pins_match_power_integrations_figure_3():
+    """SO-8C (D package): 1 BP, 2 FB, 4 D, 5-8 S (pin 3 absent)."""
+    assert part("LNK306").pins == {"BP": ["1"], "FB": ["2"], "D": ["4"], "S": ["5", "6", "7", "8"]}
+
+
+def test_tps563201_pins_match_ti():
+    assert part("BUCK").pins == {"GND": ["1"], "SW": ["2"], "VIN": ["3"], "VFB": ["4"], "EN": ["5"],
+                                 "VBST": ["6"]}
+
+
+@pytest.mark.parametrize("key", ["C4U7HV", "C220U"])
+def test_electrolytics_are_polarised_pad_1_positive(key):
+    """Both footprints mark pad 1 positive (the silk '+', the chamfered base)."""
+    assert part(key).pins == {"+": ["1"], "-": ["2"]}
+
+
+@pytest.mark.parametrize("key", ["RECT", "ES1J", "S1G"])
+def test_diodes_name_anode_and_cathode(key):
+    assert set(part(key).pins) == {"A", "K"}
+
+
+def test_sk6812_keeps_the_led_pin_names():
+    """SK6812-EC20: 1 VDD, 2 DOUT, 3 GND, 4 DIN (not the WS2812B-2020's order), named as before."""
+    assert part("LED").pins == {"VDD": ["1"], "DO": ["2"], "GND": ["3"], "DI": ["4"]}
+    assert part("LED").lcsc == "C2909058"
+
+
+def test_fusible_resistor_is_the_local_axial_footprint():
+    p = part("RFUSE")
+    assert p.tht and p.lcsc == "C1394194" and len(p.footprint.pads) == 2
+    (a, b) = p.footprint.pads
+    assert abs(b.x - a.x) == pytest.approx(15.24) and a.drill == pytest.approx(1.0)

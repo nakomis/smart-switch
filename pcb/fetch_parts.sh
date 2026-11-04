@@ -44,6 +44,28 @@ PARTS=(
   C19077497 # TVS (SMF5.0A, preferred)
   C2925443  # TVS5 (SMAJ5.0A, preferred)
   C7420376  # ESD (SRV05-4, preferred: same SOT-23-6 layout as the USBLC6-2SC6)
+  # Revision B (non-isolated), 4 Nov 2026: PI's LNK306 high-side buck (datasheet Figure 5, 12 V),
+  # the 12 V -> 5 V converter (TI TPS563201, datasheet section 8.2), and the SK6812-EC20 LED
+  C34318    # LNK306DN-TL (SO-8C)
+  C1394194  # RF1: Yageo FKN2WSJT-52-10R, 10 R 2 W fusible flameproof (the 8.2 R C3405813 has no EasyEDA data)
+  C144860   # D3: Vishay S1M-E3, 1 A 1 kV rectifier
+  C112482   # C4/C5: AISHI EGW2GM4R7F12OT, 4.7 uF 400 V 105 C
+  C168102   # L2: 1 mH 350 mA pi-filter inductor
+  C232830   # D1: onsemi ES1J, 600 V 1 A ultrafast (35 ns)
+  C37485    # L1: SXN SMDRI127-102MT, 1 mH, Isat 1 A
+  C4747974  # C2: 220 uF 25 V
+  C14663    # 100 nF 0603 50 V (BYPASS, TPS563201 boot)
+  C13585    # 10 uF 50 V 1206 (feedback hold, buck input)
+  C85102    # D2: Diodes Inc S1G-13-F, glass passivated
+  C22797    # 13k 0603 (LNK feedback, top)
+  C22975    # 2k 0603 (LNK feedback, bottom)
+  C22978    # 3k3 0603 (LNK pre-load)
+  C116592   # TPS563201DDCR, 12 V -> 5 V
+  C23077    # 54k9 0603 (TPS563201 feedback, top)
+  C25804    # 10k 0603 (TPS563201 feedback, bottom)
+  C602030   # 3.3 uH 4x4 (TPS563201)
+  C12891    # 22 uF 25 V 1206 (TPS563201 output)
+  C2909058  # SK6812-EC20 LED
 )
 # easyeda.com's CloudFront returns 403 for easyeda2kicad's default User-Agent, so run it
 # through a one-line wrapper that sends a neutral UA instead.

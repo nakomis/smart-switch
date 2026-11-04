@@ -38,7 +38,9 @@ _TABLE = {
     "LDO": ("AP2112K-3.3TRG1", "C51118", "SOT-25-5_L2.9-W1.6-P0.95-LS2.8-BL", "AP2112K-3.3TRG1", True, 0),
     "PTC": ("500mA PTC", "C163512", "F1206", "1206L050YR", True, 0),
     "TVS": ("SMF5.0A", "C19077497", "SOD-123FL_L2.7-W1.8-LS3.8-RD", "SMF5.0A_C19077497", False, 0),
-    "LED": ("WS2812B-2020-V6", "C52917434", "LED-SMD_4P-L2.2-W2.0-P1.00_WS2815C-2020-4P", "WS2812B-2020-V6", True, 0),
+    # SK6812-EC20 (rev B): Economic-capable, MSL 3 (the WS2812B-2020 needed Standard and baking).
+    # Pins 1 VDD, 2 DOUT, 3 GND, 4 DIN: not the WS2812B's order; named DI/DO as before.
+    "LED": ("SK6812-EC20", "C2909058", "LED-SMD_4P-L2.0-W2.0-BR", "SK6812-EC20", True, 0),
     "FET": ("AO3400A", "C20917", "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR", "AO3400A", False, 0),
     "DIODE": ("1N4148W", "C81598", "SOD-123F_L2.7-W1.6-LS3.8-RD", "1N4148W_C81598", False, 0),
     "IO": ("DB125-3.5-8P-GN-S", "C5184954", "CONN-TH_8P-P3.50_DORABO_DB125-3.5-8P-GN-S", "DB125-3.5-8P-GN-S", True, 0),
@@ -76,6 +78,27 @@ _TABLE = {
     "R390K": ("390k", "C17933", "R1206", "1206W4F3903T5E", True, 0),
     "R470": ("470R", "C25117", "R0402", "0402WGF4700TCE", False, 0),      # 61 mV: any size
     "R1K": ("1k", "C11702", "R0402", "0402WGF1001TCE", False, 0),
+    # Revision B (non-isolated) supply: PI's LNK306 high-side buck (LNK302/304-306 datasheet,
+    # Figure 5 and Component Selection), 12 V, then TI's TPS563201 12 V -> 5 V (datasheet 8.2).
+    "LNK306": ("LNK306DN", "C34318", "SOIC-8_7P-L4.9-W3.9-P1.27-LS6.0-BL-PE3", "LNK306DN", True, 0),
+    "RFUSE": ("10R 2W fusible", "C1394194", "local:R_Axial_FKN2WS_P15.24mm", None, True, 0),
+    "RECT": ("S1M", "C144860", "SMA_L4.4-W2.8-LS5.4-RD", "S1M-E3_61T", True, 0),
+    "C4U7HV": ("4.7uF 400V", "C112482", "CAP-TH_BD8.0-P3.50-D0.6-FD", "EGW2GM4R7F12OT", True, 0),
+    "L1MF": ("1mH 350mA", "C168102", "IND-SMD_L6.0-W6.0_FNR60XXS", "FNR6045S102MT", True, 0),
+    "ES1J": ("ES1J", "C232830", "SMA_L4.3-W2.7-LS5.0-RD", "ES1J_C232830", True, 0),
+    "L1MO": ("1mH 1A", "C37485", "IND-SMD_L12.3-W12.3", "SMDRI127-102MT", True, 0),
+    "C220U": ("220uF 25V", "C4747974", "CAP-SMD_BD6.3-L6.6-W6.6-LS7.2-FD", "RST220UF25V019", True, 0),
+    "C100N6": ("100nF", "C14663", "C0603", "CC0603KRX7R9BB104", False, 0),
+    "C10U50": ("10uF 50V", "C13585", "C1206", "CL31A106KBHNNNE", False, 0),
+    "S1G": ("S1G", "C85102", "SMA_L4.3-W2.6-LS5.2-RD", "S1G-13-F", True, 0),
+    "R13K": ("13k", "C22797", "R0603", "0603WAF1302T5E", False, 0),
+    "R2K": ("2k", "C22975", "R0603", "0603WAF2001T5E", False, 0),
+    "R3K3": ("3k3", "C22978", "R0603", "0603WAF3301T5E", False, 0),
+    "BUCK": ("TPS563201", "C116592", "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BR", "TPS563201DDCR", True, 0),
+    "R54K9": ("54k9", "C23077", "R0603", "0603WAF5492T5E", True, 0),
+    "R10K6": ("10k", "C25804", "R0603", "0603WAF1002T5E", False, 0),
+    "L3U3": ("3.3uH", "C602030", "IND-SMD_L4.0-W4.0", "FHD4020S-3R3MT", True, 0),
+    "C22U": ("22uF 25V", "C12891", "C1206", "CL31A226KAHNNNE", False, 0),
     "C33N": ("33nF", "C21117", "C0603", "CL10B333KB8NNNC", False, 0),     # X7R, basic
     "DEBUG": ("Debug pads", None, "DebugPads_1x5_P2.54", None, False, 0),
     "MH": ("M3 hole", None, "MountingHole_M3_3.2mm_Pad6", None, False, 0),
@@ -91,7 +114,7 @@ MFR = {
     "ESP32": ("Espressif", "ESP32-S3-MINI-1-N8"), "JST5": ("JST", "SM05B-SRSS-G-TB(LF)(SN)"),
     "ESD": ("hongjiacheng", "SRV05-4"), "LDO": ("Diodes Inc", "AP2112K-3.3TRG1"),
     "PTC": ("Littelfuse", "1206L050YR"), "TVS": ("hongjiacheng", "SMF5.0A"),
-    "LED": ("Worldsemi", "WS2812B-2020-V6"), "FET": ("Alpha & Omega", "AO3400A"),
+    "LED": ("OPSCO", "SK6812-EC20"), "FET": ("Alpha & Omega", "AO3400A"),
     "DIODE": ("Semtech", "1N4148W"), "IO": ("DORABO", "DB125-3.5-8P-GN-S"),
     "IDC": ("ZHOURI", "DC3-2.54-16PAS"),
     "R4K7": ("UNI-ROYAL", "0402WGF4701TCE"),
@@ -109,6 +132,15 @@ MFR = {
     "TACT": ("XUNPU", "TS-1002-07026"), "NTC": ("KUU", "KNTC0603/10KF3950"),
     "R390K": ("UNI-ROYAL", "1206W4F3903T5E"), "R470": ("UNI-ROYAL", "0402WGF4700TCE"),
     "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Samsung", "CL10B333KB8NNNC"),
+    "LNK306": ("Power Integrations", "LNK306DN-TL"), "RFUSE": ("Yageo", "FKN2WSJT-52-10R"),
+    "RECT": ("Vishay", "S1M-E3/61T"), "C4U7HV": ("AISHI", "EGW2GM4R7F12OT"),
+    "L1MF": ("cjiang", "FNR6045S102MT"), "ES1J": ("onsemi", "ES1J"), "L1MO": ("SXN", "SMDRI127-102MT"),
+    "C220U": ("KNSCHA", "RST220UF25V019"), "C100N6": ("Yageo", "CC0603KRX7R9BB104"),
+    "C10U50": ("Samsung", "CL31A106KBHNNNE"), "S1G": ("Diodes Inc", "S1G-13-F"),
+    "R13K": ("UNI-ROYAL", "0603WAF1302T5E"), "R2K": ("UNI-ROYAL", "0603WAF2001T5E"),
+    "R3K3": ("UNI-ROYAL", "0603WAF3301T5E"), "BUCK": ("Texas Instruments", "TPS563201DDCR"),
+    "R54K9": ("UNI-ROYAL", "0603WAF5492T5E"), "R10K6": ("UNI-ROYAL", "0603WAF1002T5E"),
+    "L3U3": ("cjiang", "FHD4020S-3R3MT"), "C22U": ("Samsung", "CL31A226KAHNNNE"),
 }
 
 # fetched-name -> our-name, per key. The module symbol calls GPIOn "IOn" and spells the UART0 pins
@@ -127,6 +159,9 @@ ALIASES = {
     "TACT": {"1": "A", "2": "A", "3": "B", "4": "B"},
     # the preferred TVS diodes name their pins K/A; pad 1 is the cathode, as before
     "TVS": {"K": "1", "A": "2"}, "TVS5": {"K": "1", "A": "2"},
+    # rev B: the electrolytics' pad 1 is positive (silk '+', chamfered base); S1G calls its cathode C
+    "C4U7HV": {"1": "+", "2": "-"}, "C220U": {"1": "+", "2": "-"}, "S1G": {"C": "K"},
+    "LED": {"DIN": "DI", "DOUT": "DO"},
 }
 
 # Real extents where the footprint's courtyard is smaller than the part. The EasyEDA module
@@ -150,14 +185,11 @@ ESP32_ANTENNA = (-7.7, -12.8, 7.7, -7.75)
 
 # 3D models (fetch_models.sh puts them in footprints/lcsc.3dshapes). Each EasyEDA footprint names its
 # model and carries its offset and rotation; parts whose footprint names none get one here.
-# WS2812B-2020-V6 (C52917434) has no EasyEDA model: the WS2812B-2020 one (C965555) is the same
-# 2.0 x 2.0 x 0.8 mm package, and its footprint has the same pin 1-4 layout as ours to within
-# 0.05 mm, with zero model offset and rotation.
 LCSC_3D = HERE / "footprints" / "lcsc.3dshapes"
 # Assembled parts with no 3D model anywhere (EasyEDA has none, and nor does KiCad's library). The
 # STEP export shows them as bare pads; the case design (PETRO-6) takes their heights from DESIGN.md.
 NO_MODEL = {"FUSECLIP"}
-MODEL_OVERRIDE = {"LED":"LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020",
+MODEL_OVERRIDE = {
                   "SHUNT": "R2512_L6.3-W3.2-H0.6"}          # EasyEDA's (C4248455) on KiCad's footprint
 # Model offsets (x, y, z in mm, KiCad's model frame) that replace easyeda2kicad's where its are
 # wrong, found from top and side renders: the SOT-23-6 and C0603 offsets push the bodies off their

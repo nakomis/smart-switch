@@ -42,7 +42,7 @@ def test_bom_has_every_assembled_part_and_no_board_only_ones(tmp_path):
     refs = [r for row in rows for r in row["Designator"].split(",")]
     assert sorted(refs) == sorted(set(C.instances) - BOARD_ONLY)
     assert all(row["LCSC Part #"].startswith("C") for row in rows)
-    assert {"C265419", "C163512", "C51118", "C19702", "C1525", "C52917434", "C25104"} == {
+    assert {"C265419", "C163512", "C51118", "C19702", "C1525", "C2909058", "C25104"} == {
         row["LCSC Part #"] for row in rows}
 
 
