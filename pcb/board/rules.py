@@ -126,6 +126,12 @@ class Rules:
     # limit (IEC 62368-1 allows less than the table when a short causes no hazard): this spacing
     # to every other group replaces the table's
     reduced: dict = field(default_factory=dict)
+    # ref -> (mm, (net, net)): a part rated for the voltage across its own leads at its maker's
+    # pitch (C1/C2, 400 V electrolytics at 3.5 mm). Its own pads keep mm clearance from each
+    # other; creepage for its net pair drops to mm too, because KiCad's creepage check sees only
+    # nets. Everywhere else the pair keeps the full clearance, and with no slots in the board a
+    # surface path is never shorter than the straight gap, so that still holds the creepage.
+    own_leads: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.rest is not None and self.rest not in GROUPS:
@@ -213,6 +219,11 @@ class Rules:
         if self.high_current:
             rule("high-current track width", [f"track_width (min {HIGH_CURRENT_WIDTH}mm)"],
                  f"A.hasNetclass('{HIGH_CURRENT}')")
+        for ref, (mm, (n1, n2)) in self.own_leads.items():
+            rule(f"{ref} own leads ({mm:g} mm)", [f"clearance (min {mm:g}mm)"],
+                 f"A.memberOfFootprint('{ref}') && B.memberOfFootprint('{ref}')")
+            rule(f"{ref} own leads, creepage ({mm:g} mm)", [f"creepage (min {mm:g}mm)"],
+                 f"(A.NetName == '{n1}' && B.NetName == '{n2}') || (A.NetName == '{n2}' && B.NetName == '{n1}')")
         for ref in self.barriers:
             inside = f"A.memberOfFootprint('{ref}') && B.memberOfFootprint('{ref}')"
             rule(f"{ref} own pads, mains to SELV", [f"clearance (min {REINFORCED_CLEARANCE}mm)"],

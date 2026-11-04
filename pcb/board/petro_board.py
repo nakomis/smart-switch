@@ -88,7 +88,13 @@ BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on
 
 def rules():
     return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL", divider_top="LINE",
-                 reduced={"SWNODE": 1.0})
+                 reduced={"SWNODE": 1.0}, own_leads=OWN_LEADS)
+
+
+# The bulk capacitors are 400 V parts at their maker's 3.5 mm pitch: 1.9 mm between their own
+# pads, which their rating covers (IPC-2221 B4 asks 0.8 mm for 325 V, coated). Nothing else on
+# VBULK1/VBULK comes nearer GND than the 2.5 mm the matrix asks.
+OWN_LEADS = {"C1": (1.0, ("VBULK1", "GND")), "C2": (1.0, ("VBULK", "GND"))}
 
 
 def build_petro():
@@ -448,11 +454,15 @@ MAINS_POLYS = {
     "N_OUT": [(31.8, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (72.5, 8.6), (72.5, 12),
               (67, 12), (67, 8.6), (37.5, 8.6), (37.5, 10), (31.8, 10)],
     "L_IN": [(3, 21), (14, 21), (14, 25.4), (20, 25.4), (20, 28.5), (27, 28.5), (27, 35.5), (3, 35.5)],
+    # live after F1: one band under the relay's L_F pins (y 37.6-41.5, 2.5 mm below L_OUT and
+    # above the low-voltage area) joining the main block, the MOV's arm and XF3's column; each
+    # arm and corner at least MAINS_MIN_WIDTH across so the fill stays one piece
     "L_F": [(40, 17.5), (54, 17.5), (54, 13), (81, 13), (81, 19.5), (57, 19.5), (57, 32.5), (62, 32.5),
-            (62, 37.3), (77, 37.3), (77, 41.2), (81.5, 41.2), (81.5, 49.5), (76, 49.5), (76, 41.5),
-            (60, 41.5), (60, 38.5), (57, 38.5), (57, 35.5), (40, 35.5)],
-    "L_OUT": [(63, 26), (104, 26), (104, 20.5), (117, 20.5), (117, 38.5), (79, 38.5), (79, 36),
-              (63, 36)],
+            (62, 37.6), (81.5, 37.6), (81.5, 49.5), (76, 49.5), (76, 41.5), (57, 41.5), (57, 35.5),
+            (40, 35.5)],
+    # load: its bottom edge on the relay's L_OUT pins' lower edge (y 35.1), its left edge just past
+    # them, so the L_F band and column fit beneath and beside it
+    "L_OUT": [(64.5, 26), (104, 26), (104, 20.5), (117, 20.5), (117, 35.1), (64.5, 35.1)],
 }
 # The bottom layer's neutral stops short of the shunt's sense vias (the shunt joins N_IN and N_OUT
 # on the top layer, where its pads are).
@@ -567,10 +577,11 @@ def supply_tracks(c, p):
 
 def kelvin_route(c, p):
     """(tracks, vias): the shunt's sense pair. Each sense pad has a via beside it (GND below E1,
-    SENSE east of E2: the top layer's neutral stays at least MAINS_MIN_WIDTH wide past them) and
-    runs down on B.Cu into the metering corner, where the router and the GND pour take over."""
+    SENSE west of E2, over the gap between the two neutral pours, so neither necks the top layer's
+    N_OUT where it reaches I2; the bottom layer's neutral stops short of both) and runs down on
+    B.Cu into the metering corner, where the router and the GND pour take over."""
     (gx, gy), (sx, sy) = pad_xy(c, p, "RS1", "2"), pad_xy(c, p, "RS1", "3")
-    gv, sv = (gx, round(gy + 1.25, 3)), (round(sx + 1.45, 3), sy)
+    gv, sv = (gx, round(gy + 1.25, 3)), (round(sx - 1.95, 3), sy)
     t = _route("GND", "F.Cu", KELVIN_W, (gx, gy), gv)
     t += _route("GND", "B.Cu", KELVIN_W, gv, (gx, 11.2))
     t += _route("SENSE", "F.Cu", KELVIN_W, (sx, sy), sv)
@@ -592,7 +603,7 @@ def hand_wiring(c, p):
 # the mounting holes keep it off what the router can't see.
 def lv_area():
     return [(12.5, 9.0), (24.0, 9.0), (24.0, 10.6), (37.5, 10.6), (37.5, 38.0), (54.5, 38.0),
-            (54.5, 41.0), (57.5, 41.0), (57.5, 44.0), (73.5, 44.0), (73.5, 52.0), (84.0, 52.0),
+            (54.5, 44.0), (73.5, 44.0), (73.5, 52.0), (84.0, 52.0),
             (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (0.5, H - 0.5), (0.5, 38.0),
             (29.5, 38.0), (29.5, 26.0), (22.5, 26.0), (22.5, 22.9), (16.5, 22.9), (16.5, 18.5),
             (12.5, 18.5)]
@@ -615,6 +626,12 @@ def lv_keepouts(c, p, margin=0.1):
     hole = 3.2 / 2 + 3.0 + margin
     boxes += [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
     return [(layer, *b) for layer in CU for b in boxes]
+
+
+def gnd_pts():
+    """The GND pour's extent (both layers): the low-voltage area. The DRU keeps it 2.5 mm from
+    every mains, supply and divider pad and pour (1 mm from the converter's switching node)."""
+    return lv_area()
 
 
 def in_lv(x, y, keepouts=None):

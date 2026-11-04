@@ -92,6 +92,28 @@ def test_low_voltage_may_come_near_the_edge_but_live_may_not(tmp_path):
         tmp_path / "live", [Via("L_F", MAINS_EDGE - 0.1 + 0.3, 30.0)], rules=_rules())
 
 
+def test_a_part_rated_across_its_own_leads_keeps_its_own_pitch(tmp_path):
+    """C1/C2, 400 V electrolytics at the maker's 3.5 mm pitch (1.6 mm pads: 1.9 mm between them),
+    sit across VBULK and GND: the PSU-to-rest 2.5 mm fails between their own pads unless the part
+    is named in own_leads.
+
+    KiCad's creepage check sees only nets (memberOfFootprint never matches there), so the
+    exception is clearance between the footprint's own pads plus creepage for its net pair.
+    Elsewhere the pair keeps the full clearance, and on a board without slots creepage can't be
+    shorter than clearance, so a VBULK via 1.5 mm from a GND via still fails."""
+    cap = {"C1": ("C4U7HV", 60.0, 30.0, {"+": "VBULK", "-": "GND"})}
+    bad = _probe(tmp_path, [], rules=Rules(GROUPS_B, rest="NEUTRAL"), parts=cap)
+    assert ("creepage", "PSU to the rest (250 V)") in bad
+    (tmp_path / "ok").mkdir()
+    ok = Rules(GROUPS_B, rest="NEUTRAL", own_leads={"C1": (1.0, ("VBULK", "GND"))})
+    assert _probe(tmp_path / "ok", [], rules=ok, parts=cap) == set()
+    assert 'rule "C1 own leads (1 mm)"' in ok.dru()
+    (tmp_path / "elsewhere").mkdir()
+    near = [Via("VBULK", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 1.5, 30.0)]
+    assert ("clearance", "PSU to the rest (250 V)") in _probe(tmp_path / "elsewhere", near, rules=ok,
+                                                               parts=cap)
+
+
 def test_any_copper_near_a_mounting_hole_fails(tmp_path):
     """An unplated M3 hole (MHN, 3.2 mm) at (60, 30): a GND via 2 mm from its edge fails, 3.1 mm
     passes."""
