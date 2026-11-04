@@ -1,7 +1,8 @@
 """Petro's silkscreen: no reference designators (the component key PDF does that job), but
-labels where a person needs them: the mains terminals' L and N, 230 V warnings on both sides, the
-mains/SELV boundary dashed across the barrier, the connectors' pins and every test hole. The DRC
-of the placed board, with the silk, raises no silk warnings at all."""
+labels where a person needs them: the mains terminals' L and N, 230 V warnings on both sides, an
+"entire board live" warning on both sides (rev B is non-isolated: there is no boundary to draw),
+the connectors' pins and every test hole. The DRC of the placed board, with the silk, raises no
+silk warnings at all."""
 import json
 import subprocess
 
@@ -15,7 +16,6 @@ from conftest import KICAD_CLI
 C = pb.build_petro()
 P = pb.place_petro(C)
 SILK = pb.silk(C, P)
-LINES = pb.boundary(C, P)
 
 
 def _texts(layer=None):
@@ -30,7 +30,7 @@ def _nearest(ref, x, y):
 
 @pytest.mark.parametrize("ref", ["J1", "J2"])
 def test_mains_terminals_say_which_pin_is_live_and_which_neutral(ref):
-    want = {"L": {"L_IN", "L_OUT"}, "N": {"N"}}
+    want = {"L": {"L_IN", "L_OUT"}, "N": {"N_IN", "N_OUT"}}
     for text, net_names in want.items():
         hits = [s for s in _texts("F.SilkS") if s[0] == text
                 and abs(s[1] - P.at[ref][0]) < 6 and abs(s[2] - P.at[ref][1]) < 10]
@@ -43,33 +43,32 @@ def test_mains_warning_on_both_sides():
         assert any("230 V" in s[0] for s in _texts(layer)), layer
 
 
-def test_every_test_hole_is_labelled_with_its_signal():
+def test_the_whole_board_is_marked_live_on_both_sides():
+    for layer in ("F.SilkS", "B.SilkS"):
+        words = " ".join(s[0] for s in _texts(layer))
+        assert "ENTIRE BOARD" in words and "LIVE" in words and "GND = NEUTRAL" in words, layer
+
+
+def test_no_selv_or_boundary_markings_remain():
+    assert not any("SELV" in s[0] for s in SILK)
+    assert not hasattr(pb, "boundary")
+
+
+def test_every_test_hole_is_labelled_above_on_both_sides():
     for ref, net in pb.TEST_HOLES.items():
         x, y = pb.pad_xy(C, P, ref, "1")
-        near = [s for s in SILK if abs(s[1] - x) < 0.01 and abs(s[2] - y) < 2.2]
-        assert near and all(s[0] == pb.TEST_LABELS[net] for s in near), (ref, near)
+        for layer in ("F.SilkS", "B.SilkS"):
+            near = [s for s in _texts(layer) if abs(s[1] - x) < 0.01 and abs(s[2] - y) < 2.2]
+            assert len(near) == 1 and near[0][0] == pb.TEST_LABELS[net] and near[0][2] < y, (ref, layer, near)
 
 
-def test_the_boundary_is_drawn_on_both_sides_inside_the_barrier():
-    x0, x1, notch_y = pb.RELAY_NOTCH
+def test_test_hole_labels_do_not_overlap_each_other():
+    from board.refs import text_box
     for layer in ("F.SilkS", "B.SilkS"):
-        segs = [s for s in LINES if s[4] == layer]
-        assert sum(abs(s[2] - s[0]) + abs(s[3] - s[1]) for s in segs) > 50, layer      # broken under parts and at pads
-        for ax, ay, bx, by, _ in segs:
-            for x, y in ((ax, ay), (bx, by)):
-                top = notch_y if x0 - 4 <= x <= x1 + 4 else pb.MAINS_Y
-                assert top < y < pb.SELV_Y, (x, y)
-
-
-def test_the_boundary_keeps_off_pads_and_the_slot():
-    boxes = [b[1:] for b in gnd.pad_boxes(C, P)]
-    boxes += [(min(s.x1, s.x2) - s.width / 2, min(s.y1, s.y2) - s.width / 2,
-               max(s.x1, s.x2) + s.width / 2, max(s.y1, s.y2) + s.width / 2) for s in pb.slots()]
-    for ax, ay, bx, by, _ in LINES:
-        for bx0, by0, bx1, by1 in boxes:
-            m = 0.3
-            assert (max(ax, bx) < bx0 - m or min(ax, bx) > bx1 + m
-                    or max(ay, by) < by0 - m or min(ay, by) > by1 + m), ((ax, ay, bx, by), (bx0, by0, bx1, by1))
+        boxes = [text_box(s[0], s[1], s[2], s[3]) for s in _texts(layer) if s[0] in pb.TEST_LABELS.values()]
+        for i, a in enumerate(boxes):
+            for b in boxes[i + 1:]:
+                assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1], (layer, a, b)
 
 
 def test_nothing_in_the_led_flange_ring():
@@ -92,7 +91,7 @@ def drc(tmp_path_factory):
     write_board(C, P, board, layers=2, slots=pb.slots(), dru=r.dru(), netclasses=classes,
                 netclass_patterns=patterns, zones=pb.mains_zones(), vias=pb.stitch_vias(),
                 pad_extra=pb.mains_pad_extra(C), plane_pts=pb.gnd_pts(), silk=SILK + notes,
-                user_rects=rects, lines=LINES, hide_refs=set(C.instances), silk_avoid=pb.silk_avoid(C, P))
+                user_rects=rects, hide_refs=set(C.instances), silk_avoid=pb.silk_avoid(C, P))
     subprocess.run([KICAD_CLI, "pcb", "drc", "--format", "json", "--severity-all", "-o",
                     str(out / "drc.json"), str(board)], check=True, capture_output=True)
     return json.loads((out / "drc.json").read_text())

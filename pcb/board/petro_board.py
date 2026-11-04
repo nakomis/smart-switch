@@ -344,12 +344,13 @@ from board.rules import ipc2221_width  # noqa: E402
 W, H = 120.0, 85.0
 COPPER_OZ = 1
 MAINS_Y, SELV_Y = 38.5, 41.0            # the live chain's lower edge; the low-voltage side's top
-RELAY_NOTCH = (60.0, 78.0, 41.5)        # x0, x1, y: the live copper's extent under the relay
 HOLES = {"H1": (4.0, 4.0), "H2": (116.0, 4.0), "H3": (4.0, H - 4.0), "H4": (116.0, H - 4.0)}
 F1_CLIP_PITCH = 34.21 - 7.62            # clip centres for a 1 1/4 in fuse (Littelfuse "A")
 F1_Y = 32.0
 LED_RING = 2.0                          # mm of clear board round the LED (the light pipe's flange)
 DY = 15.0                               # the low-voltage side's move down from rev A
+TP_X, TP_PITCH, TP_ROWS = 27.5, 3.2, (46.5, 51.5, 56.5)    # the test holes' block
+TP_LABEL_DY = -1.9                      # each test hole's label, above it
 
 AT = {
     # mains: terminals, the live chain, F2 (hanging below L_F's stub), the MOV, the shunt
@@ -394,10 +395,11 @@ AT = {
     "R22": (71.5, 64.0 + DY, 90), "TH1": (74.0, 66.0 + DY, 90), "R24": (75.8, 66.0 + DY, 90),
     "C25": (77.0, 68.5 + DY, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
-    # test holes (TEST_HOLES): a row above J4, and a block above it beside the 5 V converter
-    **{f"TP{2 + k}": (41.0 + 2.54 * k, 50.2 + DY, 0) for k in range(5)},
-    **{f"TP{7 + k}": (44.0 + 2.54 * k, 59.8, 0) for k in range(3)},
-    **{f"TP{10 + k}": (44.0 + 2.54 * k, 62.34, 0) for k in range(4)},
+    # test holes (TEST_HOLES): three rows in the open ground left of the 5 V converter, 5 mm
+    # apart and on a 3.2 mm pitch so each hole's label fits above it, on both sides
+    **{f"TP{7 + k}": (TP_X + TP_PITCH * k, TP_ROWS[0], 0) for k in range(3)},
+    **{f"TP{10 + k}": (TP_X + TP_PITCH * k, TP_ROWS[1], 0) for k in range(4)},
+    **{f"TP{2 + k}": (TP_X + TP_PITCH * k, TP_ROWS[2], 0) for k in range(5)},
 }
 
 
@@ -685,8 +687,7 @@ DEBUG_LABELS = {"1": "EN", "2": "RX", "3": "TX", "4": "G", "5": "3V3"}
 IO_LABELS = {"1": "5V", "2": "G", "3": "3V3", "4": "SDA", "5": "SCL", "6": "4", "7": "5", "8": "6"}
 HDR_LABELS = {n: {"+3V3": "3V3", "+5V": "5V", "GND": "G"}.get(net, net.removeprefix("HDR_"))
               for n, net in HDR_PINS.items()}
-BOUNDARY_Y = (MAINS_Y + SELV_Y) / 2              # halfway across the 8 mm barrier
-BOUNDARY_NOTCH_Y = (RELAY_NOTCH[2] + SELV_Y) / 2
+LIVE_WARNING = (13.0, 45.0)     # the "entire board live" block, both sides: open ground left of the TPs
 
 
 def silk(c, p):
@@ -701,20 +702,17 @@ def silk(c, p):
     out += [("230 V AC", 8.5, 31.3, 1.2), ("MAINS", 8.5, 33.3, 1.2),
             ("230 V AC", 110.5, 31.0, 1.5), ("MAINS", 110.5, 33.6, 1.5),
             ("230 V AC", 95.0, 30.0, 2.0, "B.SilkS"), ("MAINS", 95.0, 33.5, 2.0, "B.SilkS")]
-    # either side of the boundary line, at the left end, on both sides
+    # rev B is non-isolated: no boundary to draw, so the warning is that all of it is live
+    wx, wy = LIVE_WARNING
     for layer in ("F.SilkS", "B.SilkS"):
-        out += [("MAINS", 12.0, BOUNDARY_Y - 1.4, 1.0, layer), ("SELV", 12.0, BOUNDARY_Y + 1.4, 1.0, layer)]
-    # test holes: the row under the isolator on the back, above the holes (C7-C10 and J4 leave
-    # no room in front, and J4's own labels are below);
-    # the block bottom right on both sides, the top row labelled above, the bottom row below
+        out += [("DANGER", wx, wy, 1.5, layer), ("ENTIRE BOARD", wx, wy + 2.4, 1.5, layer),
+                ("IS LIVE", wx, wy + 4.8, 1.5, layer), ("GND = NEUTRAL", wx, wy + 7.0, 1.0, layer),
+                ("UNPLUG BEFORE USB", wx, wy + 8.8, 1.0, layer)]
+    # test holes: the block left of the 5 V converter, each labelled above, on both sides
     for ref, net in TEST_HOLES.items():
         x, y = xy(ref, "1")
-        if y < 55:
-            out.append((TEST_LABELS[net], x, round(y - 1.8, 3), 0.8, "B.SilkS"))
-        else:
-            dy = -1.7 if y < 65 else 1.65
-            for layer in ("F.SilkS", "B.SilkS"):
-                out.append((TEST_LABELS[net], x, round(y + dy, 3), 0.8, layer))
+        for layer in ("F.SilkS", "B.SilkS"):
+            out.append((TEST_LABELS[net], x, round(y + TP_LABEL_DY, 3), 0.8, layer))
     # the debug pads (SMD, front only): beside each, turned to fit between the pads and U1
     for n, text in DEBUG_LABELS.items():
         x, y = xy("TP1", n)
@@ -727,9 +725,9 @@ def silk(c, p):
         x, y = xy("J4", n)
         out.append((text, x, round(y + (1.75 if int(n) % 2 else -1.75), 3), 0.8, "B.SilkS"))
     out.append(("USB", AT["J5"][0], 57.0, 0.8))                       # below J5
-    # the title, on the back under PS1 (no pads there)
-    out += [("PETRO", 90.0, 50.5, 2.0, "B.SilkS"), ("230 V~ 10 A", 90.0, 53.5, 1.2, "B.SilkS"),
-            ("nakomis 2026", 90.0, 55.7, 1.0, "B.SilkS")]
+    # the title, on the back under the warning
+    out += [("PETRO", wx, wy + 12.0, 2.0, "B.SilkS"), ("230 V~ 10 A", wx, wy + 14.5, 1.2, "B.SilkS"),
+            ("nakomis 2026", wx, wy + 16.3, 1.0, "B.SilkS")]
     return out + ref_labels(c, p, out)
 
 
@@ -745,8 +743,6 @@ def ref_labels(c, p, texts):
     hard = [b[1:] for b in pad_boxes(c, p)] + [led_ring()]
     hard += [(min(s.x1, s.x2) - s.width / 2, min(s.y1, s.y2) - s.width / 2,
               max(s.x1, s.x2) + s.width / 2, max(s.y1, s.y2) + s.width / 2) for s in slots()]
-    hard += [(min(x0, x1) - 0.1, min(y0, y1) - 0.1, max(x0, x1) + 0.1, max(y0, y1) + 0.1)
-             for x0, y0, x1, y1, layer in boundary(c, p) if layer == "F.SilkS"]
     # the fuses themselves (not parts: they sit in XF1/XF2 and XF3), placed first, on or by them
     from board.placement import bbox
     extra = [("F1 15 A", ("XF1", "XF2"), fuse_box(), 1.0), ("F2 T500 mA", ("XF3",), bbox(p, "XF3"), 0.8)]
@@ -754,46 +750,6 @@ def ref_labels(c, p, texts):
     if left:
         raise ValueError(f"no room for the reference labels of {left}")
     return labels
-
-
-def _clip(a, b, cuts):
-    """[a, b] minus the intervals in 'cuts', as a list of (lo, hi) longer than 0.5 mm."""
-    out, lo = [], a
-    for c0, c1 in sorted(cuts):
-        if c1 <= lo or c0 >= b:
-            continue
-        if c0 > lo:
-            out.append((lo, c0))
-        lo = max(lo, c1)
-    if lo < b:
-        out.append((lo, b))
-    return [(u, v) for u, v in out if v - u > 0.5]
-
-
-def boundary(c, p, margin=0.5):
-    """The mains/SELV boundary as dashed silk lines on both sides: halfway across the barrier,
-    dropping under the relay's notch, broken wherever it would cross a pad, the slot or a hole,
-    or (on the front) pass under a part, where it couldn't be seen and would cross the part's
-    own outline."""
-    from board.gnd import pad_boxes
-    from board.placement import bbox
-    x0, x1, _ = RELAY_NOTCH
-    path = [(0.6, BOUNDARY_Y), (x0 - 4, BOUNDARY_Y), (x0 - 4, BOUNDARY_NOTCH_Y),
-            (x1 + 4, BOUNDARY_NOTCH_Y), (x1 + 4, BOUNDARY_Y), (W - 0.6, BOUNDARY_Y)]
-    boxes = [b[1:] for b in pad_boxes(c, p)]
-    boxes += [(min(s.x1, s.x2) - s.width / 2, min(s.y1, s.y2) - s.width / 2,
-               max(s.x1, s.x2) + s.width / 2, max(s.y1, s.y2) + s.width / 2) for s in slots()]
-    bodies = [bbox(p, ref) for ref in c.instances]       # the parts are all on the front
-    out = []
-    for layer, avoid in (("F.SilkS", boxes + bodies), ("B.SilkS", boxes)):
-        for (ax, ay), (bx, by) in zip(path, path[1:]):
-            if ay == by:
-                cuts = [(b[0] - margin, b[2] + margin) for b in avoid if b[1] - margin < ay < b[3] + margin]
-                out += [(u, ay, v, ay, layer) for u, v in _clip(min(ax, bx), max(ax, bx), cuts)]
-            else:
-                cuts = [(b[1] - margin, b[3] + margin) for b in avoid if b[0] - margin < ax < b[2] + margin]
-                out += [(ax, u, ax, v, layer) for u, v in _clip(min(ay, by), max(ay, by), cuts)]
-    return out
 
 
 def silk_avoid(c, p, margin=0.1):
@@ -809,7 +765,8 @@ def fab_notes():
     """(text entries, user rectangles) on Dwgs.User: the antenna overhang, and the mains rule."""
     ux, uy, _ = AT["U1"]
     text = [("MODULE ANTENNA OVERHANGS THIS EDGE: INTENTIONAL", ux + 20, H + 1.5, 0.8, "Dwgs.User"),
-            ("230 V AC ABOVE THE DASHED LINE: 8 mm REINFORCED BARRIER", W / 2, -1.5, 0.8, "Dwgs.User")]
+            ("NON-ISOLATED: THE WHOLE BOARD IS AT MAINS POTENTIAL (GND = NEUTRAL)", W / 2, -1.5, 0.8,
+             "Dwgs.User")]
     return text, [(ux - 7.7, H, ux + 7.7, H + 5.05, "Dwgs.User")]
 
 
