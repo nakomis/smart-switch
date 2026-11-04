@@ -523,6 +523,121 @@ def divider_tracks(c, p):
     return out
 
 
+HV_W, SW_W, KELVIN_W = 0.5, 0.6, 0.25
+KELVIN_VIA = (0.6, 0.3)
+
+
+def _route(net, layer, width, *pts):
+    return [Track(net, layer, *a, *b, width) for a, b in zip(pts, pts[1:])]
+
+
+def supply_tracks(c, p):
+    """The LNK306 supply's high-voltage nets, by hand, on F.Cu (they keep 2.5 mm, SWNODE 1.0 mm,
+    from the low-voltage nets, which the router knows nothing about)."""
+    xy = lambda ref, n: pad_xy(c, p, ref, n)
+    t = []
+    x3 = xy("XF3", "2")
+    t += _route("L_PSU", "F.Cu", HV_W, x3, (x3[0], 51.0), xy("R1", "1"))
+    (rx, ry), (dx, dy) = xy("R1", "2"), xy("D7", "2")
+    t += _route("L_RF", "F.Cu", HV_W, (rx, ry), (dx, ry), (dx, dy))
+    k7, c1, l1a = xy("D7", "1"), xy("C1", "1"), xy("L1", "1")
+    t += _route("VBULK1", "F.Cu", HV_W, k7, (k7[0], c1[1]))
+    t += _route("VBULK1", "F.Cu", HV_W, (k7[0], 59.5), (l1a[0], 59.5), l1a)
+    l1b, c2, d = xy("L1", "2"), xy("C2", "1"), xy("U4", "4")
+    # Into C2's + pad short of its centre, and down to D along L1's pad edge: 2.5 mm from C2's
+    # GND pad and 1 mm from FB.
+    t += _route("VBULK", "F.Cu", HV_W, (l1b[0] + 2.6, l1b[1]), (l1b[0] + 3.9, c2[1]), (c2[0] - 0.25, c2[1]))
+    t += _route("VBULK", "F.Cu", HV_W, (d[0], l1b[1]), d)
+    bp, fb = xy("U4", "1"), xy("U4", "2")
+    t += _route("BP", "F.Cu", HV_W, bp, xy("C3", "1"))
+    r2fb, r3fb = xy("R2", "2"), xy("R3", "1")
+    t += _route("FB", "F.Cu", 0.3, fb, (fb[0], 68.9), (r2fb[0], 68.9), r2fb, r3fb)
+    r2h, c5h, d9k = xy("R2", "1"), xy("C5", "1"), xy("D9", "1")
+    t += _route("FBH", "F.Cu", 0.3, r2h, (c5h[0], r2h[1]), c5h, d9k)
+    s = sorted(xy("U4", n) for n in ("5", "6", "7", "8"))
+    c3s, r3s, c5s, l2s, d8k = xy("C3", "2"), xy("R3", "2"), xy("C5", "2"), xy("L2", "1"), xy("D8", "1")
+    bus = s[0][1]
+    t += _route("SW", "F.Cu", SW_W, *s, (c3s[0], bus), (r3s[0], bus), (l2s[0], bus), (l2s[0], 77.0))
+    t += _route("SW", "F.Cu", SW_W, (c3s[0], bus), c3s)
+    t += _route("SW", "F.Cu", SW_W, (r3s[0], bus), r3s)
+    t += _route("SW", "F.Cu", SW_W, (l2s[0], bus), (c5s[0], bus), c5s)
+    t += _route("SW", "F.Cu", SW_W, s[-1], (d8k[0], 78.6), d8k)
+    return t
+
+
+def kelvin_route(c, p):
+    """(tracks, vias): the shunt's sense pair. Each sense pad has a via beside it (GND below E1,
+    SENSE east of E2: the top layer's neutral stays at least MAINS_MIN_WIDTH wide past them) and
+    runs down on B.Cu into the metering corner, where the router and the GND pour take over."""
+    (gx, gy), (sx, sy) = pad_xy(c, p, "RS1", "2"), pad_xy(c, p, "RS1", "3")
+    gv, sv = (gx, round(gy + 1.25, 3)), (round(sx + 1.45, 3), sy)
+    t = _route("GND", "F.Cu", KELVIN_W, (gx, gy), gv)
+    t += _route("GND", "B.Cu", KELVIN_W, gv, (gx, 11.2))
+    t += _route("SENSE", "F.Cu", KELVIN_W, (sx, sy), sv)
+    t += _route("SENSE", "B.Cu", KELVIN_W, sv, (sv[0], 11.2))
+    return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA)]
+
+
+def hand_wiring(c, p):
+    """(tracks, vias) routed by hand: the divider chain, the supply's high-voltage nets, the
+    Kelvin pair."""
+    kt, kv = kelvin_route(c, p)
+    return divider_tracks(c, p) + supply_tracks(c, p) + kt, kv
+
+
+# --- the low-voltage router's area -----------------------------------------------------------------
+# One Freerouting pass for every low-voltage net (the rest group, at neutral), in this area: the
+# low-voltage side, the corridor under F1 and the metering corner, each edge 2.5 mm from the mains
+# pours. Keep-outs (lv_keepouts) round every pad of another group, the hand-routed supply tracks and
+# the mounting holes keep it off what the router can't see.
+def lv_area():
+    return [(12.5, 9.0), (24.0, 9.0), (24.0, 10.6), (37.5, 10.6), (37.5, 38.0), (54.5, 38.0),
+            (54.5, 41.0), (57.5, 41.0), (57.5, 44.0), (73.5, 44.0), (73.5, 52.0), (84.0, 52.0),
+            (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (0.5, H - 0.5), (0.5, 38.0),
+            (29.5, 38.0), (29.5, 26.0), (22.5, 26.0), (22.5, 22.9), (16.5, 22.9), (16.5, 18.5),
+            (12.5, 18.5)]
+
+
+def lv_keepouts(c, p, margin=0.1):
+    """(layer, x0, y0, x1, y1) on both layers: every pad of a group with a spacing to the rest,
+    grown by that spacing; every hand-routed supply track, likewise; the mounting holes."""
+    from board.gnd import pad_boxes
+    r = rules()
+    boxes = []
+    for net, x0, y0, x1, y1 in pad_boxes(c, p):
+        g = GROUPS.get(net) if net else None
+        s = r.spacing(g, r.rest) if g else 0.0
+        if s:
+            boxes.append((x0 - s - margin, y0 - s - margin, x1 + s + margin, y1 + s + margin))
+    for t in supply_tracks(c, p):
+        s = r.spacing(GROUPS[t.net], r.rest) + t.width / 2 + margin
+        boxes.append((min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
+    hole = 3.2 / 2 + 3.0 + margin
+    boxes += [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
+    return [(layer, *b) for layer in CU for b in boxes]
+
+
+def in_lv(x, y, keepouts=None):
+    keep = keepouts if keepouts is not None else _LV_KEEP_CACHE
+    return _in_poly(x, y, lv_area()) and not any(
+        x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in keep)
+
+
+def _lv_keep():
+    c = build_petro()
+    return lv_keepouts(c, place_petro(c))
+
+
+class _LazyKeep(list):
+    def __iter__(self):
+        if not self:
+            self.extend(_lv_keep())
+        return super().__iter__()
+
+
+_LV_KEEP_CACHE = _LazyKeep()
+
+
 def pad_extra(c):
     """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND pads, J3's and J4's
     GND pins and the GND test holes; U1's nine 1.2 mm centre GND pads get a -0.18 mm paste
