@@ -23,7 +23,10 @@ dependencies.lock
 *-backups/
 fp-info-cache
 \#auto_saved_files#
-pcb/**/out/
+# pcb/out/ is committed (the ordered board is tagged); pcb/.gitignore drops its scratch parts.
+
+# Claude Code worktrees
+.claude/worktrees/
 
 # Node / CDK (infra, once it exists)
 node_modules/
