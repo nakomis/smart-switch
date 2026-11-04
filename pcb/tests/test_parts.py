@@ -114,6 +114,15 @@ def test_irm01_matches_mean_well_drawing_with_unplated_centred_pegs():
         (-7.5, 0.0, "np_thru_hole", 4.5), (7.5, 0.0, "np_thru_hole", 4.5)]
 
 
+def test_tactile_switch_pairs_follow_the_circuit_diagram():
+    """XUNPU TS-1002: pads 6.5 mm apart are one terminal; the button joins the pairs."""
+    p = _pads("TACT")
+    pins = part("TACT").pins
+    assert {k: sorted(v) for k, v in pins.items()} == {"A": ["1", "2"], "B": ["3", "4"]}
+    assert abs(p["1"].x - p["2"].x) == pytest.approx(6.5) and p["1"].y == p["2"].y
+    assert abs(p["1"].y - p["3"].y) == pytest.approx(4.5)
+
+
 def test_f1_clip_matches_littelfuse_drawing():
     """Littelfuse 122 series (01220088Z, 30 A, for the 505 series fuse): one clip, two straight
     leads 7.62 mm apart on one net, 1.98 mm holes (drilled 2.0)."""

@@ -111,6 +111,9 @@ ALIASES = {
     "RELAY16": {"1": "COIL1", "2": "COIL2", "5": "COM", "6": "COM", "7": "NO", "8": "NO"},
     "SHUNT": {"1": "I1", "2": "E1", "3": "E2", "4": "I2"},
     "PSU5W": {"V+": "+V", "V-": "-V"},
+    # XUNPU TS-1002 circuit diagram: the pins 6.5 mm apart are joined inside; the button closes
+    # between the two pairs (4.5 mm apart).
+    "TACT": {"1": "A", "2": "A", "3": "B", "4": "B"},
 }
 
 # Real extents where the footprint's courtyard is smaller than the part. The EasyEDA module
