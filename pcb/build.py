@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Petro board generator: circuit -> placement -> mains pours -> (route) -> board + DRC.
 
-    ./.venv/bin/python build.py [--route] [--passes N] [--out DIR]
+    ./.venv/bin/python build.py [--route] [--passes N] [--out DIR] [--step]
 
 Routing is two Freerouting runs, each confined to one area so that the router (which knows only
 plain clearances) never comes near the barrier: the SELV strip, then the metering island. The
@@ -9,6 +9,10 @@ mains copper is pours (petro_board.mains_zones), and the divider chain and the s
 pair are routed by hand. Ground is pours too: a drop via beside every SMD GND/GND_M pad before
 routing, stitching vias after. DRC runs with the generated mains rules (board/rules.py) and
 refills the zones.
+
+Once the board passes, the fab outputs go beside it: gerbers and drill (zipped), the JLCPCB and
+PCBWay BOMs, the CPL (pick and place), renders, pins.h for the firmware and case-interface.json
+for the case (PETRO-6); --step adds the STEP model (fetching the 3D models first).
 
 Output goes to out/petro/ (the ordered build, once there is one); --out DIR writes elsewhere.
 Freerouting doesn't route the same way twice, so a rebuild changes the tracks."""
@@ -22,6 +26,7 @@ from board import gnd
 from board import petro_board as pb
 from board.checks import pour_problems
 from board.cleanup import prune
+from board.fab import export_step, fab, write_bom, write_bom_pcbway, write_cpl
 from board.kicad_pcb import PRO, write_board
 from board.netlist import check
 from board.route import route
@@ -84,6 +89,7 @@ def main():
     ap.add_argument("--route", action="store_true")
     ap.add_argument("--passes", type=int, default=100)
     ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--step", action="store_true", help="also export the STEP model")
     a = ap.parse_args()
     out = a.out.resolve()
     tmp = out / "tmp"
@@ -117,10 +123,12 @@ def main():
 
     dru, classes, patterns = netclasses()
     board = out / f"{STEM}.kicad_pcb"
+    notes, rects = pb.fab_notes()
     write_board(c, p, board, tracks, vias + pb.stitch_vias(), layers=LAYERS, mask=MASK, silkscreen=SILK,
                 slots=pb.slots(), zones=pb.mains_zones() + pb.island_zones(), dru=dru,
                 netclasses=classes, netclass_patterns=patterns, plane_pts=pb.gnd_pts(),
-                pad_extra=pb.pad_extra(c))
+                pad_extra=pb.pad_extra(c), silk=pb.silk(c, p) + notes, user_rects=rects,
+                lines=pb.boundary(c, p), hide_refs=set(c.instances), silk_avoid=pb.silk_avoid(c, p))
     d = drc(board, out)
     errors = [v for v in d["violations"] if v["severity"] == "error"]
     print(f"wrote {board}: {len(errors)} DRC errors {dict(Counter(v['type'] for v in errors))}, "
@@ -141,6 +149,20 @@ def main():
     if pours or creep:
         raise SystemExit("mains checks failed")
     print("mains pours whole on both layers; barrier creepage >= 8 mm")
+    silk = [v for v in d["violations"] if v["type"].startswith(("silk", "text"))]
+    print(f"silk warnings: {len(silk)}")
+
+    write_bom(c, out / "bom-jlcpcb.csv")
+    write_bom_pcbway(c, out / "bom-pcbway.csv")
+    write_cpl(c, p, out / "cpl.csv")
+    (out / "pins.h").write_text(pb.pins_h())
+    (out / "case-interface.json").write_text(pb.case_interface(c, p))
+    print(f"gerbers: {fab(board, out, layers=LAYERS)}")
+    if a.step:
+        subprocess.run([str(HERE / "fetch_models.sh")], check=True)     # resumable, skips fetched parts
+        print(f"STEP: {export_step(board, out)}")
+    print(f"BOMs, CPL, pins.h, case-interface.json and renders in {out}; "
+          f"order with solder mask {MASK}, silkscreen {SILK}")
 
 
 if __name__ == "__main__":
