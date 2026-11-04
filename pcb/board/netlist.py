@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from board.parts import part
 
 PREFIX = {"SW": "SW", "TOGGLE": "SW", "LED": "D", "DIODE": "D", "TVS": "D", "JST5": "J", "TERM": "J",
-          "RELAY": "K", "FET": "Q", "PTC": "F", "DEBUG": "TP", "MH": "H", "MHN": "H"}
+          "RELAY": "K", "FET": "Q", "PTC": "F", "DEBUG": "TP", "MH": "H", "MHN": "H",
+          "RECT": "D", "ES1J": "D", "S1G": "D", "L1MF": "L", "L1MO": "L", "L3U3": "L", "RFUSE": "R"}
 
 
 def _prefix(key):

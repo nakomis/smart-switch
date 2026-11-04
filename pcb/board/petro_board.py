@@ -1,21 +1,28 @@
-"""Petro: the netlist (PETRO-2, step 5).
+"""Petro: the netlist, revision B (non-isolated; PETRO-2).
 
-Mains side, in the order the live passes through it (docs/DESIGN.md §3):
-  J1 (line in) -> F1 (15 A HBC, in two clips XF1/XF2) -> MOV across to neutral -> the 1 mOhm shunt
-  RS1 -> the relay's COM; its NO -> J2 (load out). Neutral runs straight from J1 to J2.
-  After F1, F2 (T500 mA, holder XF3) feeds PS1 (IRM-05-5), which makes the SELV 5 V.
-  The metering island (the BL0939 U3 and side 2 of U4) floats on the live, with its ground at the
-  shunt's sense pad on F1's side, so no load current flows in it. It is powered across the barrier
-  by the ISOW7743's isolated converter, from the SELV 5 V (decided 4 Nov 2026: it replaces the
-  IRM-01-5 and the ISO7741, which did not fit).
-  The BL0939 measures the shunt (channel A for metering, channel B for its fast over-current
-  output I_leak) and the voltage through a 5 x 390k divider from neutral. Four lines cross the
-  ISOW7743 (reinforced): its UART both ways, zero cross and over-current.
+Martin's own device: no isolation. All the electronics are at mains potential, tied to neutral,
+and nothing conductive leaves the case (docs/DESIGN.md, the safety rules). Revision A, with a
+reinforced barrier, is branch 5v-240v-separation / tag 5v-240v-separation-v1.
 
-SELV side: as on the nakostat heatlink (STAT-75), so firmware and the reuse I/O carry over:
-  the ESP32-S3-MINI-1 module, its 3.3 V LDO, the house USB connector, the relay driver, the button
-  on GPIO0, the WS2812B LED, the debug pads, J3 (8-way terminal) and J4 (16-way IDC) with the
-  heatlink's exact pinouts. 5 V comes from PS1 or USB through a diode-OR.
+Mains side:
+  Live: J1 (line in) -> F1 (15 A HBC, in two clips XF1/XF2) -> the relay's COM; its NO -> J2.
+  The MOV across live and neutral after F1. F2 (T500 mA, holder XF3) feeds the supply.
+  Neutral: J1 -> the 1 mOhm Kelvin shunt RS1 -> J2. All the low-voltage circuitry's ground (GND)
+  is the shunt's sense pad on the supply side: the one place GND meets neutral (a star point), so
+  no load current flows in GND.
+
+Supply (all at mains potential): PI's LNK306 high-side buck (datasheet Figure 5; the neutral-leg
+  diode left out so its return is neutral): fusible resistor, half-wave rectifier, pi filter,
+  12 V out. TI's TPS563201 makes 5 V from it for the existing +5V rail (diode-OR with USB), and
+  the AP2112K 3.3 V from that.
+
+Metering: the BL0939 on GND, reading the shunt (channel A metering, channel B the fast
+  over-current I_leak) and the voltage through 5 x 390k from live; its UART, zero cross and
+  over-current wired straight to the ESP32.
+
+Low-voltage side, as on the nakostat heatlink (STAT-75): the ESP32-S3-MINI-1 module, the house USB
+  connector (reachable only with the case off), the relay driver, the button on GPIO0, the LED,
+  the debug pads, J3 and J4 with the heatlink's pinouts (internal only).
 """
 from board.netlist import Circuit
 from board.rules import HIGH_CURRENT_WIDTH, Rules
@@ -30,12 +37,11 @@ from board.rules import HIGH_CURRENT_WIDTH, Rules
 # is the NTC: it needs an ADC1 pin, and GPIO1-10 all go to J3/J4.
 GPIO = {"RELAY": 12, "LED": 15, "BUTTON": 0, "USB_DM": 19, "USB_DP": 20,
         "UART_TX": 43, "UART_RX": 44,
-        "BL_TX": 13,        # BL0939 TX -> isolator OUTA -> ESP RX (UART1)
-        "BL_RX": 14,        # ESP TX (UART1) -> isolator IND -> BL0939 RX
-        "ZX": 41,           # BL0939 zero cross, through the isolator
-        "OC": 42,           # BL0939 I_leak (channel B fast over-current), through the isolator
+        "BL_TX": 13,        # BL0939 TX -> ESP RX (UART1)
+        "BL_RX": 14,        # ESP TX (UART1) -> BL0939 RX
+        "ZX": 41,           # BL0939 zero cross
+        "OC": 42,           # BL0939 I_leak (channel B fast over-current)
         "NTC": 3,           # board temperature, ADC1_CH2
-        "ISO_FLT": 47,      # ISOW7743 EN/FLT: low if its isolated converter fails
         "IO_SDA": 1, "IO_SCL": 2, "IO_4": 4, "IO_5": 5, "IO_6": 6,
         **{f"HDR_{n}": n for n in (7, 8, 9, 10, 11, 16, 17, 18, 21, 38, 39, 40)}}
 STRAPPING = {0, 3, 45, 46}
@@ -48,41 +54,42 @@ def modpin(gpio):
 
 
 # --- connectors ----------------------------------------------------------------------------------
-# J1 / J2: line in and load out (Degson DG636, 7.62 mm). Earth does not touch the board.
-# Both turned so their wire openings face their end of the board (J1 left, J2 right), with
-# neutral on top on both.
-J1_PINS = {"1": "N", "2": "L_IN"}              # rotated 270: pad 1 on top
-J2_PINS = {"1": "L_OUT", "2": "N"}             # rotated 90: pad 2 on top
+# J1 / J2: line in and load out (Degson DG636, 7.62 mm). Earth does not touch the board. Both
+# turned so their wire openings face their end of the board (J1 left, J2 right), neutral on top.
+J1_PINS = {"1": "N_IN", "2": "L_IN"}           # rotated 270: pad 1 on top
+J2_PINS = {"1": "L_OUT", "2": "N_OUT"}         # rotated 90: pad 2 on top
 # J5: the house USB connector (tinycrypt's J1, as on the heatlink): 1 VBUS, 2 D-, 3 D+, 4 CC,
-# 5 GND; pads 6/7 are the shell tabs.
+# 5 GND; pads 6/7 are the shell tabs. Inside the case: reachable only with the case off.
 USB_PINS = {"1": "VBUS_IN", "2": "USB_DM", "3": "USB_DP", "4": "CC", "5": "GND"}
 DEBUG_PINS = {"1": "EN", "2": "UART_RX", "3": "UART_TX", "4": "GND", "5": "+3V3"}
 # J3 and J4: the heatlink's pinouts, exactly (see its DESIGN.md "IO terminal (J3)" and "IDC
-# header (J4)"). 5 V is this board's +5V rail (after the diode-OR).
+# header (J4)"). 5 V is this board's +5V rail (after the diode-OR). Internal only: everything on
+# them is at mains potential.
 IO_PINS = {"1": "+5V", "2": "GND", "3": "+3V3", "4": "IO_SDA", "5": "IO_SCL", "6": "IO_4", "7": "IO_5",
            "8": "IO_6"}
 HDR_PINS = {"1": "+3V3", "2": "GND", "3": "HDR_7", "4": "HDR_8", "5": "HDR_9", "6": "HDR_10",
             "7": "HDR_11", "8": "GND", "9": "HDR_16", "10": "HDR_17", "11": "HDR_18", "12": "HDR_21",
             "13": "HDR_38", "14": "HDR_39", "15": "HDR_40", "16": "+5V"}
 
-# --- the mains rules -----------------------------------------------------------------------------
-ISLAND = ("GND_M", "GISO_M", "3V3_M", "VISO_M", "VP", "SENSE", "IAP", "IAN", "IBP", "IBN",
-          "BL_TX_M", "BL_RX_M", "ZX_M", "OC_M")
-ISLAND_NC = ("VT", "CF", "SCLK", "VPP")      # the BL0939's unused pins, each on an NC_ net
-GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "L_SH": "LIVE", "L_PSU": "PSU", "N": "NEUTRAL",
-          "L_OUT": "LOAD", "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
-          **{n: "LIVE" for n in ISLAND}, **{f"NC_U3_{p}": "LIVE" for p in ISLAND_NC}}
-HIGH_CURRENT = {"L_IN", "L_F", "L_SH", "L_OUT", "N"}
-BARRIERS = ("U4", "K1", "PS1")          # isolator, relay, SELV PSU: their own pads cross the barrier
+# --- the mains rules (non-isolated mode: every other net sits at neutral) --------------------------
+# The supply's high-voltage nets are the PSU group: after F2, at the rectified live (the switching
+# node and the LNK306's BP/FB, which ride on it, included).
+PSU_NETS = ("L_PSU", "L_RF", "VBULK1", "VBULK", "SW", "BP", "FB", "FBH")
+GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "N_IN": "NEUTRAL", "N_OUT": "NEUTRAL", "L_OUT": "LOAD",
+          "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
+          **{n: "PSU" for n in PSU_NETS}}
+HIGH_CURRENT = {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
+BARRIERS = ()
+BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on an NC_ net
 
 
 def rules():
-    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS)
+    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL")
 
 
 def build_petro():
     c = Circuit()
-    gnd, v33, v5 = "GND", "+3V3", "+5V"
+    gnd, v33, v5, v12 = "GND", "+3V3", "+5V", "+12V"
 
     def part(key, ref):
         return c.add(key, ref)
@@ -93,102 +100,69 @@ def build_petro():
         c.connect(net2, (p, "2"))
         return p
 
-    # ---- mains: the live path -------------------------------------------------------------------
+    def pins(key, ref=None, **nets):
+        p = c.add(key, ref)
+        for pin, n in nets.items():
+            c.connect(n, (p, pin.replace("_plus", "+").replace("_minus", "-")))
+        return p
+
+    # ---- mains: live and neutral ---------------------------------------------------------------
     j1, j2 = part("MAINSTERM", "J1"), part("MAINSTERM", "J2")
-    for pad, net in J1_PINS.items():
-        c.connect(net, (j1, pad))
-    for pad, net in J2_PINS.items():
-        c.connect(net, (j2, pad))
+    for pad, n in J1_PINS.items():
+        c.connect(n, (j1, pad))
+    for pad, n in J2_PINS.items():
+        c.connect(n, (j2, pad))
     c.connect("L_IN", (part("FUSECLIP", "XF1"), "1"))           # F1's two clips
     c.connect("L_F", (part("FUSECLIP", "XF2"), "1"))
-    two("MOV", "RV1", "L_F", "N")                               # after F1: F1 clears a MOV short
-    rs = part("SHUNT", "RS1")
-    c.connect("L_F", (rs, "I1"))
-    c.connect("L_SH", (rs, "I2"))
-    c.connect("GND_M", (rs, "E1"))                              # Kelvin: the island's ground
-    c.connect("SENSE", (rs, "E2"))
+    two("MOV", "RV1", "L_F", "N_IN")                            # after F1: F1 clears a MOV short
     k1 = part("RELAY16", "K1")
-    c.connect("L_SH", (k1, "COM"))
+    c.connect("L_F", (k1, "COM"))
     c.connect("L_OUT", (k1, "NO"))
+    rs = part("SHUNT", "RS1")                                   # in the neutral, Kelvin
+    c.connect("N_IN", (rs, "I1"))
+    c.connect("N_OUT", (rs, "I2"))
+    c.connect(gnd, (rs, "E1"))                                  # the star point: GND meets N here
+    c.connect("SENSE", (rs, "E2"))
 
-    # ---- mains: the PSU branch ------------------------------------------------------------------
+    # ---- the supply: F2, then PI's LNK306 high-side buck (12 V) ----------------------------------
     two("FUSEHOLD", "XF3", "L_F", "L_PSU")                      # F2, T500 mA
-    ps1 = part("PSU5W", "PS1")
-    c.connect("L_PSU", (ps1, "AC/L"))
-    c.connect("N", (ps1, "AC/N"))
-    c.connect("VPSU", (ps1, "+V"))
-    c.connect(gnd, (ps1, "-V"))
+    two("RFUSE", None, "L_PSU", "L_RF")                         # fusible, flameproof: inrush and fault
+    pins("RECT", "D7", A="L_RF", K="VBULK1")                          # half-wave, in the live leg
+    pins("C4U7HV", _plus="VBULK1", _minus=gnd)                  # pi filter: C4, L2, C5
+    two("L1MF", None, "VBULK1", "VBULK")
+    pins("C4U7HV", _plus="VBULK", _minus=gnd)
+    u4 = part("LNK306", "U4")
+    c.connect("VBULK", (u4, "D"))
+    c.connect("SW", (u4, "S"))
+    c.connect("BP", (u4, "BP"))
+    c.connect("FB", (u4, "FB"))
+    two("C100N6", None, "BP", "SW")                             # BYPASS capacitor, to SOURCE
+    two("L1MO", None, "SW", v12)                                # output inductor
+    pins("ES1J", "D8", A=gnd, K="SW")                                 # freewheel (35 ns)
+    pins("C220U", _plus=v12, _minus=gnd)
+    pins("S1G", "D9", A=v12, K="FBH")                                 # feedback: samples the output...
+    two("C10U50", None, "FBH", "SW")                            # ...onto C3, across SOURCE
+    two("R13K", None, "FBH", "FB")                              # 1.65 V at FB: 12.4 V out
+    two("R2K", None, "FB", "SW")
+    two("R3K3", None, v12, gnd)                                 # pre-load (3.6 mA)
 
-    # ---- the metering island --------------------------------------------------------------------
-    # Powered across the barrier by the ISOW7743's isolated converter (3V3_M, below); its ground
-    # GND_M is the shunt's sense pad on F1's side, so it floats on the live.
-    u3 = part("BL0939", "U3")
-    c.connect("3V3_M", (u3, "VDD"))
-    c.connect("GND_M", (u3, "GND"), (u3, "SEL"))                 # SEL low: UART
-    two("C100N", None, "3V3_M", "GND_M")
-    # Current inputs: both channels read the shunt's sense pads through 1k / 33 nF (Belling's
-    # application circuit). Channel A meters; channel B drives I_leak, the fast over-current.
-    for ch, (p, n) in (("A", ("IAP", "IAN")), ("B", ("IBP", "IBN"))):
-        k = "1" if ch == "A" else "2"
-        rp, rn = c.add("R1K"), c.add("R1K")
-        c.connect("SENSE", (rp, "1"))
-        c.connect(p, (rp, "2"), (u3, f"IP{k}"))
-        c.connect("GND_M", (rn, "1"))
-        c.connect(n, (rn, "2"), (u3, f"IN{k}"))
-        two("C33N", None, p, "GND_M")
-        two("C33N", None, n, "GND_M")
-    # Voltage: neutral -> 5 x 390k (1206, 50 V each) -> VP -> 470R to the island's ground, so
-    # 61 mV rms at 253 V (the BL0939's maximum is 70 mV rms), with 33 nF across.
-    chain = ["N", "DIV1", "DIV2", "DIV3", "DIV4", "VP"]
-    for a, b in zip(chain, chain[1:]):
-        two("R390K", None, a, b)
-    two("R470", None, "VP", "GND_M")
-    two("C33N", None, "VP", "GND_M")
-    c.connect("VP", (u3, "VP"))
-    c.connect("BL_TX_M", (u3, "TX/SDO"))
-    c.connect("BL_RX_M", (u3, "RX/SDI"))
-    c.connect("ZX_M", (u3, "ZX"))
-    c.connect("OC_M", (u3, "I_leak"))
-    two("R10K", None, "BL_TX_M", "3V3_M")                       # TX needs a pull-up (datasheet)
-    # Unused pins (SCLK and VPP must float): each on its own NC_ net in the LIVE group, so the
-    # mains rules treat them as part of the island, not as touchable SELV copper.
-    for pin in ISLAND_NC:
-        c.connect(f"NC_U3_{pin}", (u3, pin))
+    # ---- 12 V -> 5 V: TI TPS563201 (datasheet 8.2, 5 V row) ------------------------------------
+    u5 = part("BUCK", "U5")
+    c.connect(v12, (u5, "VIN"), (u5, "EN"))
+    c.connect(gnd, (u5, "GND"))
+    c.connect("SW5", (u5, "SW"))
+    c.connect("BST5", (u5, "VBST"))
+    c.connect("FB5", (u5, "VFB"))
+    two("C10U50", None, v12, gnd)                               # input
+    two("C100N6", None, v12, gnd)
+    two("C100N6", None, "BST5", "SW5")                          # bootstrap
+    two("L3U3", None, "SW5", "VPSU")
+    two("R54K9", None, "VPSU", "FB5")                           # 0.768 V x (1 + 54.9/10) = 4.98 V
+    two("R10K6", None, "FB5", gnd)
+    two("C22U", None, "VPSU", gnd)
+    two("C22U", None, "VPSU", gnd)
 
-    # ---- the isolator with power: side 1 SELV (the power input), side 2 the island ---------------
-    # ISOW7743 (TI SLLSFK1C): power flows from side 1 to side 2, so side 1 is SELV. Channel A is
-    # the forward one (ESP32 TX -> BL0939 RX); B, C and D come back (TX, zero cross, over-current).
-    # Its converter (VDD 5 V -> VISOOUT 3.3 V with VSEL low, up to 140 mA) powers the island; TI's
-    # application circuit: beads VISOOUT->VISOIN and GND2->GISOIN, 10u+1u+100n on VDD and VISOOUT,
-    # 100n on VIO and VISOIN. EN/FLT: pulled up (converter on), and read on GPIO47 as a fault.
-    u4 = part("ISOW", "U4")
-    c.connect(v5, (u4, "VDD"))
-    c.connect(v33, (u4, "VIO"), (u4, "EN_IO1"))
-    c.connect(gnd, (u4, "GND1"), (u4, "GNDIO"))
-    c.connect("ISO_FLT", (u4, "EN/FLT"))
-    two("R10K", None, "ISO_FLT", v33)
-    for key in ("C10U", "C1U", "C100N"):
-        two(key, None, v5, gnd)
-    two("C100N", None, v33, gnd)
-    c.connect("3V3_M", (u4, "VISOOUT"))
-    c.connect("GND_M", (u4, "GND2"), (u4, "VSEL"))                # VSEL low: 3.3 V out
-    two("BEAD", "FB1", "3V3_M", "VISO_M")
-    two("BEAD", "FB2", "GND_M", "GISO_M")
-    c.connect("VISO_M", (u4, "VISOIN"), (u4, "EN_IO2"))
-    c.connect("GISO_M", (u4, "GISOIN"))
-    for key in ("C10U", "C1U", "C100N"):
-        two(key, None, "3V3_M", "GND_M")
-    two("C100N", None, "VISO_M", "GISO_M")
-    c.connect("BL_RX", (u4, "INA"))
-    c.connect("BL_RX_M", (u4, "OUTA"))
-    c.connect("BL_TX_M", (u4, "INB"))
-    c.connect("BL_TX", (u4, "OUTB"))
-    c.connect("ZX_M", (u4, "INC"))
-    c.connect("ZX", (u4, "OUTC"))
-    c.connect("OC_M", (u4, "IND"))
-    c.connect("OC", (u4, "OUTD"))
-
-    # ---- SELV 5 V: PS1 or USB, through a diode-OR ------------------------------------------------
+    # ---- 5 V: the supply or USB, through a diode-OR ----------------------------------------------
     two("PTC5", "F3", "VPSU", "VPSU_F")                          # 1.1 A hold
     two("TVS5", "D4", "VPSU_F", gnd)                             # pad 1 = cathode
     d5 = part("SS34", "D5")
@@ -196,8 +170,8 @@ def build_petro():
     c.connect(v5, (d5, "K"))
     two("C10U", None, "VPSU_F", gnd)
     j5 = part("JST5", "J5")
-    for pad, net in USB_PINS.items():
-        c.connect(net, (j5, pad))
+    for pad, n in USB_PINS.items():
+        c.connect(n, (j5, pad))
     c.connect(gnd, (j5, "6"), (j5, "7"))
     two("PTC", "F4", "VBUS_IN", "VBUS")                          # 500 mA hold
     two("TVS", "D2", "VBUS", gnd)                                # pad 1 = cathode
@@ -205,11 +179,43 @@ def build_petro():
     c.connect("VBUS", (d6, "A"))
     c.connect(v5, (d6, "K"))
     two("R5K1", None, "CC", gnd)                                 # Rd: chargers switch 5 V on
-    u5 = part("ESD", "U5")
-    c.connect("USB_DM", (u5, "1"), (u5, "6"))
-    c.connect("USB_DP", (u5, "3"), (u5, "4"))
-    c.connect("VBUS", (u5, "5"))
-    c.connect(gnd, (u5, "2"))
+    u6 = part("ESD", "U6")
+    c.connect("USB_DM", (u6, "1"), (u6, "6"))
+    c.connect("USB_DP", (u6, "3"), (u6, "4"))
+    c.connect("VBUS", (u6, "5"))
+    c.connect(gnd, (u6, "2"))
+
+    # ---- metering: the BL0939 on GND --------------------------------------------------------------
+    u3 = part("BL0939", "U3")
+    c.connect(v33, (u3, "VDD"))
+    c.connect(gnd, (u3, "GND"), (u3, "SEL"))                     # SEL low: UART
+    two("C100N", None, v33, gnd)
+    # Current inputs: both channels read the shunt's sense pads through 1k / 33 nF (Belling's
+    # application circuit). Channel A meters; channel B drives I_leak, the fast over-current.
+    for ch, (pn, nn) in (("A", ("IAP", "IAN")), ("B", ("IBP", "IBN"))):
+        k = "1" if ch == "A" else "2"
+        rp, rn = c.add("R1K"), c.add("R1K")
+        c.connect("SENSE", (rp, "1"))
+        c.connect(pn, (rp, "2"), (u3, f"IP{k}"))
+        c.connect(gnd, (rn, "1"))
+        c.connect(nn, (rn, "2"), (u3, f"IN{k}"))
+        two("C33N", None, pn, gnd)
+        two("C33N", None, nn, gnd)
+    # Voltage: live (after F1) -> 5 x 390k (1206, 50 V each) -> VP -> 470R to ground, so 61 mV rms
+    # at 253 V (the BL0939's maximum is 70 mV rms), with 33 nF across. DIV1 is next to VP.
+    chain = ["L_F", "DIV4", "DIV3", "DIV2", "DIV1", "VP"]
+    for a, b in zip(chain, chain[1:]):
+        two("R390K", None, a, b)
+    two("R470", None, "VP", gnd)
+    two("C33N", None, "VP", gnd)
+    c.connect("VP", (u3, "VP"))
+    c.connect("BL_TX", (u3, "TX/SDO"))
+    c.connect("BL_RX", (u3, "RX/SDI"))
+    c.connect("ZX", (u3, "ZX"))
+    c.connect("OC", (u3, "I_leak"))
+    two("R10K", None, "BL_TX", v33)                             # TX needs a pull-up (datasheet)
+    for pin in BL_NC:                                            # SCLK and VPP must float
+        c.connect(f"NC_U3_{pin}", (u3, pin))
 
     # ---- 3.3 V and the module (as the heatlink) --------------------------------------------------
     u2 = part("LDO", "U2")
@@ -228,7 +234,7 @@ def build_petro():
     c.connect("EN", (u1, "EN"))
     two("R10K", None, "EN", v33)
     two("C1U", None, "EN", gnd)
-    for k in ("USB_DM", "USB_DP", "BL_TX", "BL_RX", "ZX", "OC", "ISO_FLT", "UART_TX", "UART_RX"):
+    for k in ("USB_DM", "USB_DP", "BL_TX", "BL_RX", "ZX", "OC", "UART_TX", "UART_RX"):
         c.connect(k, (u1, modpin(GPIO[k])))
 
     # Button (on -> off -> auto) on GPIO0, 10k pull-up; the switch's terminals A and B.
@@ -248,7 +254,7 @@ def build_petro():
     two("R100K", None, "RELAY_G", gnd)
     c.connect("RELAY", (u1, modpin(GPIO["RELAY"])))
 
-    # LED: WS2812B-2020 on 3V3 with 100 nF, data through 330R.
+    # LED: SK6812-EC20 on 3V3 with 100 nF, data through 330R.
     d1 = part("LED", "D1")
     c.connect(v33, (d1, "VDD"))
     c.connect(gnd, (d1, "GND"))
@@ -266,36 +272,36 @@ def build_petro():
 
     # Debug pads.
     tp = part("DEBUG", "TP1")
-    for pad, net in DEBUG_PINS.items():
-        c.connect(net, (tp, pad))
+    for pad, n in DEBUG_PINS.items():
+        c.connect(n, (tp, pad))
 
-    # Reuse I/O: J3 and J4 as on the heatlink.
+    # Reuse I/O: J3 and J4 as on the heatlink (internal only).
     j3, j4 = part("IO", "J3"), part("IDC", "J4")
-    for pad, net in IO_PINS.items():
-        c.connect(net, (j3, pad))
+    for pad, n in IO_PINS.items():
+        c.connect(n, (j3, pad))
     for k in ("IO_SDA", "IO_SCL", "IO_4", "IO_5", "IO_6"):
         c.connect(k, (u1, modpin(GPIO[k])))
     two("R4K7", None, "IO_SDA", v33)
     two("R4K7", None, "IO_SCL", v33)
-    for pad, net in HDR_PINS.items():
-        c.connect(net, (j4, pad))
+    for pad, n in HDR_PINS.items():
+        c.connect(n, (j4, pad))
     for k in GPIO:
         if k.startswith("HDR_"):
             c.connect(k, (u1, modpin(GPIO[k])))
 
-    # Mounting holes near the corners: the two in the mains strip unplated, the two in the SELV
-    # strip plated, on GND.
-    part("MHN", "H1")
-    part("MHN", "H2")
-    c.connect(gnd, (part("MH", "H3"), "1"), (part("MH", "H4"), "1"))
+    # Mounting holes near the corners, all unplated: GND is at neutral, so a plated hole would put
+    # the screw at mains potential. All copper keeps 3 mm from them (rules: copper to mounting holes).
+    for ref in ("H1", "H2", "H3", "H4"):
+        part("MHN", ref)
 
-    # Test holes for push-in probe loops, SELV only (never the mains side or the island).
-    for ref, net in TEST_HOLES.items():
-        c.connect(net, (part("TESTHOLE", ref), "1"))
+    # Test holes for push-in probe loops: bench use only (a 5 V supply with mains disconnected, or
+    # a differential probe).
+    for ref, n in TEST_HOLES.items():
+        c.connect(n, (part("TESTHOLE", ref), "1"))
     return c
 
 
-# Test holes: the isolator's four signals in a row below it; the supplies and the relay drive,
+# Test holes: the BL0939's four signals in a row; the supplies and the relay drive,
 # each beside a GND hole one pitch (2.54 mm) away, with the LED data and button bottom right.
 TEST_HOLES = {"TP2": "BL_RX", "TP3": "BL_TX", "TP4": "ZX", "TP5": "OC", "TP6": "GND",
               "TP7": "+5V", "TP8": "GND", "TP9": "+3V3",
