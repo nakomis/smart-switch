@@ -50,12 +50,14 @@ _TABLE = {
     "C1U": ("1uF", "C52923", "C0402", "CL05A105KA5NQNC", False, 0),
     "C10U": ("10uF", "C19702", "C0603", "CL10A106KP8NNNC", False, 0),
     # Petro (PETRO-2). Footprints checked against the makers' drawings, 4 Nov 2026 (DESIGN.md
-    # §6.4). "local:" stems are in footprints/local.pretty: KiCad's 4-terminal WSK2512, and the
-    # IRM-01 with its peg holes unplated and centred (EasyEDA's are plated, zero ring, off centre).
+    # §6.4). "local:" stems are in footprints/local.pretty (KiCad's 4-terminal WSK2512, the F1 clip).
     "RELAY16": ("HF115F-I/005-1HS3A", "C2976795", "RELAY-TH_HF115F-XXX-1HS3", "HF115F-I_005-1HS3A", True, 0),
     "PSU5W": ("IRM-05-5", "C48603696", "PWRM-TH_IRM-05-5", "IRM-05-5", True, 0),
-    "PSU1W": ("IRM-01-5", "C5656515", "local:PWRM-TH_IRM-01_MeanWell", "IRM-01-5", True, 0),
-    "ISO": ("ISO7741DWR", "C571196", "SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL", "ISO7741DWR", True, 0),
+    # ISOW7743: 4 reinforced channels (1 forward, 3 reverse) and an isolated DC-DC that powers the
+    # metering island from the SELV side (TI SLLSFK1C). The LCSC stock is the F variant (outputs
+    # low on lost input); the non-F ISOW7743DFMR (outputs high) is preferred, same footprint.
+    "ISOW": ("ISOW7743", "C5216380", "SOIC-20_L12.8-W7.5-P1.27-LS10.3-BL", "ISOW7743FDFMR", True, 0),
+    "BEAD": ("330R@100MHz", "C596498", "L0402", "BLM15EX331SN1D", True, 0),
     "BL0939": ("BL0939", "C2836697", "SOP-16_L9.9-W3.9-P1.27-LS6.0-BL", "BL0939", True, 0),
     # F1: two clips per fuse, one footprint each (so the BOM counts two). EasyEDA has none.
     "FUSECLIP": ("6.35mm fuse clip 30A", "C206903", "local:FuseClip_Littelfuse_0122_6.35mm", None, True, 0),
@@ -92,7 +94,7 @@ MFR = {
     "R330": ("UNI-ROYAL", "0402WGF3300TCE"), "C100N": ("Samsung", "CL05B104KO5NNNC"),
     "C1U": ("Samsung", "CL05A105KA5NQNC"), "C10U": ("Samsung", "CL10A106KP8NNNC"),
     "RELAY16": ("Hongfa", "HF115F-I/005-1HS3A"), "PSU5W": ("Mean Well", "IRM-05-5"),
-    "PSU1W": ("Mean Well", "IRM-01-5"), "ISO": ("Texas Instruments", "ISO7741DWR"),
+    "ISOW": ("Texas Instruments", "ISOW7743DFMR"), "BEAD": ("Murata", "BLM15EX331SN1D"),
     "BL0939": ("Shanghai Belling", "BL0939"), "FUSEHOLD": ("Littelfuse", "65600001009"),
     "FUSECLIP": ("Littelfuse", "01220088Z"),
     "MOV": ("Littelfuse", "TMOV20RP275E"), "SHUNT": ("Vishay", "WSK25121L000FEA"),
@@ -131,7 +133,6 @@ BODY = {"ESP32": (-7.7, -12.8, 7.7, 7.7),
         # Mean Well drawings (pins located from the body edges, mirrored to the top view): the
         # IRM-05's body runs well past its pins on the -y side.
         "PSU5W": (-22.85, -16.57, 22.85, 8.83),   # 45.7 x 25.4
-        "PSU1W": (-16.85, -11.1, 16.85, 11.1),    # 33.7 x 22.2
         "RELAY16": (-14.5, -6.35, 14.5, 6.35),    # 29 x 12.7, pin field taken as centred (checked at placement)
         "MOV": (-11.5, -4.75, 11.5, 4.75)}        # 23 mm disc (max), 9.5 mm thick, standing on edge
 # The antenna strip of the module, in footprint coordinates (above the top pad row).

@@ -65,7 +65,7 @@ def test_local_footprints():
 def test_tht_flags():
     assert part("MH").tht and not part("ESP32").tht and not part("JST5").tht
     assert {k for k, p in PARTS.items() if p.tht and p.lcsc} == {
-        "IO", "IDC", "RELAY16", "PSU5W", "PSU1W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT"}
+        "IO", "IDC", "RELAY16", "PSU5W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT"}
 
 
 # --- Petro's parts against the makers' drawings (checked 4 Nov 2026) --------------------------
@@ -102,18 +102,6 @@ def test_irm05_matches_mean_well_drawing():
     assert part("PSU5W").body == (-22.85, -16.57, 22.85, 8.83)
 
 
-def test_irm01_matches_mean_well_drawing_with_unplated_centred_pegs():
-    fp = part("PSU1W").footprint
-    p = _pads("PSU1W")
-    assert part("PSU1W").pins == {"AC/L": ["1"], "AC/N": ["24"], "+V": ["12"], "-V": ["13"]}
-    assert abs(p["1"].y - p["24"].y) == pytest.approx(15.2)               # AC/L to AC/N
-    assert abs(p["12"].y - p["13"].y) == pytest.approx(7.6)               # +V to -V
-    assert p["24"].y == p["13"].y                                         # AC/N level with -V
-    pegs = [q for q in fp.pads if not q.number]
-    assert sorted((q.x, q.y, q.kind, q.drill) for q in pegs) == [
-        (-7.5, 0.0, "np_thru_hole", 4.5), (7.5, 0.0, "np_thru_hole", 4.5)]
-
-
 def test_tactile_switch_pairs_follow_the_circuit_diagram():
     """XUNPU TS-1002: pads 6.5 mm apart are one terminal; the button joins the pairs."""
     p = _pads("TACT")
@@ -137,12 +125,17 @@ F1_CLIP_PITCH = 34.21 - 7.62          # clip centre to clip centre for a 1 1/4 i
 
 
 def test_isolator_pad_rows_need_the_barrier_exception():
-    """The ISO7741DWR's standard land pattern leaves 7.1 mm between its two sides: above the
-    3.0 mm reinforced clearance, below the 8 mm rule, hence the barrier exception and the slot."""
-    p = _pads("ISO")
-    assert _gap(p["1"], p["16"]) == pytest.approx(7.1, abs=0.01)
-    assert part("ISO").pins["VCC1"] == ["1"] and part("ISO").pins["VCC2"] == ["16"]
-    assert part("ISO").pins["GND1"] == ["2", "8"] and part("ISO").pins["GND2"] == ["9", "15"]
+    """The ISOW7743's wide-body SOIC-20 leaves 7.1 mm between its two sides: above the 3.0 mm
+    reinforced clearance, below the 8 mm rule, hence the barrier exception and the slot. Pins as
+    TI's ISOW7743 column (SLLSFK1C): A forward, B/C/D reverse."""
+    p = _pads("ISOW")
+    assert _gap(p["1"], p["20"]) == pytest.approx(7.1, abs=0.01)
+    pins = part("ISOW").pins
+    assert {k: pins[k] for k in ("VIO", "INA", "OUTB", "OUTC", "OUTD", "VDD", "GND1",
+                                 "GND2", "VISOOUT", "VSEL", "IND", "INC", "INB", "OUTA", "VISOIN")} == {
+        "VIO": ["1"], "INA": ["2"], "OUTB": ["3"], "OUTC": ["4"], "OUTD": ["5"], "VDD": ["9"],
+        "GND1": ["10"], "GND2": ["11"], "VISOOUT": ["12"], "VSEL": ["13"], "IND": ["16"],
+        "INC": ["17"], "INB": ["18"], "OUTA": ["19"], "VISOIN": ["20"]}
 
 
 def test_shunt_is_four_terminal_with_diagonal_sense_pads():

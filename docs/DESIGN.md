@@ -22,23 +22,23 @@ safety tested or certified.
 ```
  L in ─┬─ F1 15 A ─┬─ MOV ─┐ (L–N)
        │           │       │
-       │           ├─ F2 T500 mA ─┬─ PSU1 IRM-05-5 ══╪══ 5 V SELV ─┬─ diode-OR ─ AP2112K 3V3 ─ ESP32-S3
-       │           │              │    (reinforced)   ║              │   (USB VBUS)              │  │
-       │           │              └─ PSU2 IRM-01-5 ──┐║              │                           │  ├ button, LED,
-       │           │                 (output tied to │║              └─ relay coil (AO3400A) ───┘  │ NTC, USB, debug
-       │           │                  live: mains)   │║                                            │
+       │           ├─ F2 T500 mA ── PSU1 IRM-05-5 ═══╪══ 5 V SELV ─┬─ diode-OR ─ AP2112K 3V3 ─ ESP32-S3
+       │           │                   (reinforced)    ║              │   (USB VBUS)              │  │
+       │           │                                   ║              │                           │  ├ button, LED,
+       │           │                                   ║              └─ relay coil (AO3400A) ───┘  │ NTC, USB, debug
+       │           │                                   ║                                            │
        │           └─ R_shunt 1 mΩ (Kelvin) ── K1 relay contact ── L out                         │
        │                  │                                                                       │
-       │              BL0939 ── LDO 3V3 ── PSU2           UART ═ U_iso (reinforced) ═════════════┘
-       │                  │ (V divider L–N)
+       │              BL0939 ═ 3V3 + UART, ZX, OC ═ U4 ISOW7743 (reinforced, isolated DC-DC) ════┘
+       │                  │ (V divider L–N)                 powered from the SELV 5 V
  N in ─┴──────────────────┴─────────────────────────────────────────────── N out
                                                      ═ / ║ : the 8 mm reinforced barrier
  Earth: not on the PCB (Wago 221 in the case).
 ```
 
 Three things cross the barrier, and each must be rated as reinforced insulation in its own right:
-**PSU1** (Mean Well, certified), **the relay** (coil to contact) and **the digital isolator**.
-PSU2's isolation does no safety work: its output is deliberately tied to live.
+**PSU1** (Mean Well, certified), **the relay** (coil to contact) and **the isolator with power**
+(the ISOW7743 carries both the signals and the island's supply).
 
 ## 3. Decisions
 
@@ -57,12 +57,19 @@ Decided on 2 Nov 2026, after asking seven models through `cabal` (6 votes to 1; 
   (VDE 0884-11 / IEC 60747-17), not optocouplers. Optocouplers wear out, and their LED current
   (2–5 mA per channel) strains a small supply. The narrow-body ISO6721 is rated only as basic
   insulation, so it doesn't qualify.
-- **Four channels (ISO7741DWR), not two** (decided 4 Nov 2026, PETRO-2). Three channels go from
-  mains to SELV: the BL0939's TX, its zero-cross output (for zero-cross switching) and its fast
-  over-current output (an interrupt for the trip; *unverified* that the BL0939 brings this out on
-  a pin, which is checked against the datasheet when its footprint is added; if not, the channel
-  carries its second zero-cross or CF output). One goes SELV to mains: the BL0939's RX. The
-  two-channel ISO7721 would have lost both extra lines.
+- **Four channels, not two** (decided 4 Nov 2026, PETRO-2). Three go from mains to SELV: the
+  BL0939's TX, its zero-cross output (for zero-cross switching) and its channel-B fast over-current
+  output I_leak (pin 10; an interrupt for the trip). One goes SELV to mains: the BL0939's RX.
+- **The isolator also powers the island: TI ISOW7743** (decided 4 Nov 2026, PETRO-2; TI
+  SLLSFK1C). It replaced the ISO7741 and PSU2 (an IRM-01-5 with its output tied to live), because
+  the 120 mm board could not hold PSU2 beside F1, the relay and PSU1 with the cables at opposite
+  ends. Its reinforced isolated converter (5 kV rms, 1000 V rms working, >8 mm creepage) takes the
+  SELV 5 V and makes the island's 3.3 V (up to 140 mA; the island draws about 10–20 mA). Power
+  flows from side 1 to side 2, so side 1 is SELV, hence the 7743 (1 forward, 3 reverse channels).
+  TI's two ferrite beads (BLM15EX331SN1D) and decoupling are fitted for low emissions. EN/FLT is
+  read on GPIO47. Prefer the non-F ISOW7743DFMR (outputs high on lost input, so a dead island
+  reads as over-current); the F variant (LCSC C5216380) is acceptable. Never a B (basic) part. A
+  bonus: the BL0939 is powered on USB alone, so Gate 2 can test its UART without mains.
 - **Order in the live:** fuse → MOV → shunt → relay → load. The fuse comes first, because the
   shunt isn't a fuse and won't fail safely. The shunt goes before the relay, so the BL0939 keeps its
   reference to live when the relay is open.
@@ -70,16 +77,14 @@ Decided on 2 Nov 2026, after asking seven models through `cabal` (6 votes to 1; 
   a tight pair, laid out symmetrically for temperature. 10 mm of 5 mm-wide 2 oz track is about
   0.17 mΩ, so sense taps on the current path would be off by 17 %.
 
-### 3.2 Power: two Mean Well modules
+### 3.2 Power: one Mean Well module
 
 - **PSU1, the IRM-05-5 (5 V, 1 A), for the SELV side.** The IRM-03-5's 600 mA was tight: the peak
   load is about 450 mA (Wi-Fi transmit about 340 mA, relay coil about 80 mA, LED). RS 135-8923.
-- **PSU2, the IRM-01-5 (5 V, 200 mA), for the mains-side metering.** Its output is tied to live,
-  and it feeds a 3.3 V LDO for the BL0939 and the isolator's mains side, which draw about 5–10 mA.
-  RS 135-9124. It replaces the capacitive dropper the brief suggested, which cabal favoured 5 votes
-  to 2 against. A dropper brings inrush, MOV placement, X2-capacitor ageing and its return current
-  flowing through the shunt, and it would need sizing for about 5 mA, not 1 mA. The fallback, if the
-  IRM-01 is out of stock, is a second IRM-05-5.
+- **The metering island is powered by the ISOW7743 (§3.1), not from the mains.** PSU2 (an
+  IRM-01-5) was dropped on 4 Nov 2026 for space. A capacitive dropper was rejected earlier (cabal,
+  5 votes to 2): inrush, MOV placement, X2-capacitor ageing and its return current through the
+  shunt.
 - **A non-isolated supply for the SELV side is never acceptable.**
 - **Protection on PSU1's output:** a polyfuse and a TVS, so that a failed module can't drive
   raw faults into the SELV rail.
@@ -113,23 +118,21 @@ Figures marked *unverified* there have not been checked against a primary datash
 | K1 | HF115F-I/005-1HS3A | Hongfa | C2976795 | 25 | 16 A 250 VAC; 5 V coil, 80 mA; coil–contact 5 kV, 10 mm creepage, reinforced (VDE) | Coil and contact pins about 20 mm apart, so no slot needed. **Not** the plain HF115F/005-1HS3 (C81373), which is VDE-rated only 10 A at 70 °C. Fallback: Omron G5RL-1A-E-HR (not on LCSC) |
 | F1 | 0505015.MXP (15 A, 6.3×32 mm ceramic, sand-filled, high breaking capacity) | Littelfuse | C3165450 | 65 | **50 kA** breaking at 500 VAC | Decided in §5.1. Fallback: 0215015.MXP (5×20, 15 A, only 500 A breaking, C720202) in 01000056Z clips (15 A, C151074) |
 | F1 clips | 01220088Z (×2, 122 series PCB clips for ¼" fuses, beryllium copper, tin-plated, with ears) | Littelfuse | C206903 | 4,484 | 30 A; 505 series listed as compatible | Corrected 4 Nov 2026 (PETRO-2): the Keystone 3557-2 first listed here is an automotive blade-fuse holder and cannot hold this fuse. Clip centres 26.59 mm apart (outer holes 34.21 mm, Littelfuse's "A" for 1¼"). No barrier: the closed case covers that |
-| F2 | 0215.500MXP (T500mA 5×20 ceramic) | Littelfuse | C142839 | 2,052 | 1.5 kA breaking | Feeds both PSUs. Not a TR5 (35 A breaking only) |
+| F2 | 0215.500MXP (T500mA 5×20 ceramic) | Littelfuse | C142839 | 2,052 | 1.5 kA breaking | Feeds PSU1. Not a TR5 (35 A breaking only) |
 | F2 holder | 65600001009 (656 series) | Littelfuse | C187510 | 55 (+199 of the `.J` variant) | 10 A, 250 V, UL94 V-0 | Open holder |
 | RV1 | TMOV20RP275E | Littelfuse | C187710 | 440 | 275 VAC, thermally protected | TMOV14RP275E (C1528070) is the smaller option, but only 3 are in stock |
 | R_SH | WSK25121L000FEA (1 mΩ, 4-terminal, 2512) | Vishay | C4248455 | 4,000 | Kelvin terminals | 0.1 W at 10 A |
 | J1, J2 | DG636-7.62-02P | Degson | C2827897 | 933 | 32 A, 630 V, 7.62 mm pitch | L in/N in and L out/N out; wire entry to the side |
 | PSU1 | IRM-05-5 | Mean Well | (RS 135-8923) | RS: in stock | 5 V 1 A, reinforced | 45.7 × 25.4 × 21.5 mm; inrush 40 A at 230 V |
-| PSU2 | IRM-01-5 | Mean Well | (RS 135-9124) | RS: in stock | 5 V 200 mA | 33.7 × 22.2 × 15 mm; output tied to live; inrush 10 A |
 | U_M | BL0939 (SOP-16) | Belling | C2836697 | 2,684 | 2 current channels, 1 voltage, ZX, UART 4800 | SSOP-20 C2841044: 6,789 in stock |
-| R_V | 5 × 390 kΩ (1206) over 510 Ω | | | | ≈ 3825:1 | The Belling/Tuya reference divider; re-check the headroom for the chosen chip |
-| U_LDO_M | AP2112K-3.3TRG1 | Diodes | C51118 | 7,985 | 600 mA | The mains-side 3.3 V |
+| R_V | 5 × 390 kΩ (1206, C17933) over 470 Ω (C4502) | UNI-ROYAL | | | ≈ 4150:1 | 61 mV rms at 253 V against the BL0939's 70 mV maximum (13 % headroom; 510 Ω gave 6 %). 50 V across each 390 kΩ, whose 1206 pads are 1.75 mm apart (1.2 mm needed) |
 | Q1, D1 | AO3400A, 1N4148W | | | | | Relay driver and flyback, as on the heatlink |
 
 ### Across the barrier
 
 | Ref | Part | Maker | LCSC | Stock | Key rating | Notes |
 |---|---|---|---|---|---|---|
-| U_ISO | ISO7741DWR | TI | C571196 | 13,561 (4 Nov) | 4 channels (3 one way, 1 the other); reinforced; wide-body SOIC-16; 8 mm creepage and clearance; outputs default high | Replaces the 2-channel ISO7721DWR (C524805). **Never a B-grade part** (e.g. ISO7721B): those are rated as basic insulation only |
+| U4 | ISOW7743DFMR (preferred) or ISOW7743FDFMR | TI | C5216380 (F) | 48 (F) | Reinforced, 5 kV rms, isolated DC-DC 0.55 W; 1 forward + 3 reverse channels; SOIC-20 wide body, >8 mm creepage | Replaces the ISO7741 and PSU2 (§3.1). Never a B (basic) part. With TI's beads (BLM15EX331SN1D, C596498) |
 
 ### SELV side
 

@@ -29,7 +29,7 @@ def test_check_is_clean():
 def test_every_mains_net_exists_and_every_other_net_is_selv():
     assert MAINS <= set(C.nets)
     # every net touching an island or mains-only part is a mains net
-    mains_only = {"J1", "J2", "XF1", "XF2", "XF3", "RV1", "RS1", "PS2", "U3", "U5"}
+    mains_only = {"J1", "J2", "XF1", "XF2", "XF3", "RV1", "RS1", "U3", "FB1", "FB2"}
     for ref in mains_only:
         assert nets_of(ref) <= MAINS, (ref, nets_of(ref) - MAINS)
 
@@ -50,10 +50,18 @@ def test_selv_psu_input_is_mains_and_output_selv():
 
 
 def test_isolator_sides():
-    side1 = {"VCC1", "GND1", "INA", "INB", "INC", "OUTD", "EN1"}
-    side2 = {"VCC2", "GND2", "OUTA", "OUTB", "OUTC", "IND", "EN2"}
-    assert {net("U4", p) for p in side1} <= MAINS
-    assert not {net("U4", p) for p in side2} & MAINS
+    """ISOW7743: pads 1-10 are side 1 (the power input, SELV), 11-20 side 2 (the island)."""
+    side1 = {C.net_of("U4", str(n)) for n in range(1, 11)}
+    side2 = {C.net_of("U4", str(n)) for n in range(11, 21)}
+    assert not side1 & MAINS and side2 <= MAINS
+    assert net("U4", "VDD") == "+5V" and net("U4", "VSEL") == "GND_M"   # 5 V in, 3.3 V out
+
+
+def test_island_is_powered_only_by_the_isolator():
+    """No mains PSU feeds the island: 3V3_M comes from VISOOUT alone."""
+    sources = {(r, p) for r, p in C.nets["3V3_M"] if C.instances[r].part.key not in ("C10U", "C1U", "C100N", "R10K", "BEAD")}
+    assert sources == {("U4", "12"), ("U3", "1")}                   # VISOOUT and the BL0939's VDD
+    assert "PSU1W" not in {i.part.key for i in C.instances.values()}
 
 
 @pytest.mark.parametrize("island, selv, mains_to_selv", [
@@ -77,7 +85,7 @@ def test_live_path_order():
     assert {net("RV1", "1"), net("RV1", "2")} == {"L_F", "N"}
     assert net("RS1", "I2") == net("K1", "COM") == "L_SH"
     assert net("K1", "NO") == net("J2", "1") == "L_OUT"
-    assert net("XF3", "2") == net("PS1", "AC/L") == net("PS2", "AC/L") == "L_PSU"
+    assert net("XF3", "2") == net("PS1", "AC/L") == "L_PSU"
     assert net("J1", "2") == net("J2", "2") == "N"
 
 
@@ -93,7 +101,7 @@ def test_kelvin_shunt():
     assert {r for r, _ in C.nets["SENSE"]} - {"RS1"} == {
         r for r in C.instances if C.instances[r].part.key == "R1K" and "SENSE" in nets_of(r)}
     assert len({r for r, _ in C.nets["SENSE"]}) == 3                # the shunt and two 1k
-    assert net("PS2", "-V") == "GND_M"                              # the island floats on the live
+    assert net("U4", "GND2") == "GND_M" and net("U4", "VISOOUT") == "3V3_M"   # powered across the barrier
 
 
 def test_both_current_channels_read_the_shunt():

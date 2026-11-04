@@ -17,8 +17,7 @@ PARTS=(
   # LCSC numbers are for the footprints and for parts the fab may place.
   C2976795  # RELAY16 (Hongfa HF115F-I/005-1HS3A, 16 A, reinforced coil-contact)
   C48603696 # PSU5W (Mean Well IRM-05-5)
-  C5656515  # PSU1W (Mean Well IRM-01-5)
-  C571196   # ISO (TI ISO7741DWR)
+  C5216380  # ISOW (TI ISOW7743FDFMR; the non-F ISOW7743DFMR shares the footprint and is preferred)
   C2836697  # BL0939 (SOP-16)
   C187510   # FUSEHOLD (Littelfuse 656 holder, 65600001009, for F2)
   C187710   # MOV (Littelfuse TMOV20RP275E)
@@ -30,6 +29,7 @@ PARTS=(
   C455095   # TACT (TS-1002, 7 mm)
   C2892547  # NTC (10 k, 0603)
   C17933    # R390K (1206, 200 V: the voltage divider, five in series)
+  C596498   # BEAD (Murata BLM15EX331SN1D, 330 R at 100 MHz, 700 mA: TI's ISOW774x beads)
   C11702    # R1K (0402: the BL0939 input filters)
   C507072   # C33N (0402: the BL0939 input filters)
   C4502     # R470 (1206: the divider's bottom resistor; 61 mV rms at 253 V, under the BL0939's 70)

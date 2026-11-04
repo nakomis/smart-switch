@@ -3,13 +3,14 @@
 Mains side, in the order the live passes through it (docs/DESIGN.md §3):
   J1 (line in) -> F1 (15 A HBC, in two clips XF1/XF2) -> MOV across to neutral -> the 1 mOhm shunt
   RS1 -> the relay's COM; its NO -> J2 (load out). Neutral runs straight from J1 to J2.
-  After F1, F2 (T500 mA, holder XF3) feeds both Mean Well modules.
-  PS1 (IRM-05-5) makes the SELV 5 V. PS2 (IRM-01-5) makes a 5 V whose -V is tied to live: the
-  metering island (LDO U5, the BL0939 U3, side 1 of the isolator U4) floats on the live, with its
-  ground at the shunt's sense pad on F1's side, so no load current flows in it.
+  After F1, F2 (T500 mA, holder XF3) feeds PS1 (IRM-05-5), which makes the SELV 5 V.
+  The metering island (the BL0939 U3 and side 2 of U4) floats on the live, with its ground at the
+  shunt's sense pad on F1's side, so no load current flows in it. It is powered across the barrier
+  by the ISOW7743's isolated converter, from the SELV 5 V (decided 4 Nov 2026: it replaces the
+  IRM-01-5 and the ISO7741, which did not fit).
   The BL0939 measures the shunt (channel A for metering, channel B for its fast over-current
   output I_leak) and the voltage through a 5 x 390k divider from neutral. Four lines cross the
-  ISO7741DWR (reinforced): its UART both ways, zero cross and over-current.
+  ISOW7743 (reinforced): its UART both ways, zero cross and over-current.
 
 SELV side: as on the nakostat heatlink (STAT-75), so firmware and the reuse I/O carry over:
   the ESP32-S3-MINI-1 module, its 3.3 V LDO, the house USB connector, the relay driver, the button
@@ -34,6 +35,7 @@ GPIO = {"RELAY": 12, "LED": 15, "BUTTON": 0, "USB_DM": 19, "USB_DP": 20,
         "ZX": 41,           # BL0939 zero cross, through the isolator
         "OC": 42,           # BL0939 I_leak (channel B fast over-current), through the isolator
         "NTC": 3,           # board temperature, ADC1_CH2
+        "ISO_FLT": 47,      # ISOW7743 EN/FLT: low if its isolated converter fails
         "IO_SDA": 1, "IO_SCL": 2, "IO_4": 4, "IO_5": 5, "IO_6": 6,
         **{f"HDR_{n}": n for n in (7, 8, 9, 10, 11, 16, 17, 18, 21, 38, 39, 40)}}
 STRAPPING = {0, 3, 45, 46}
@@ -62,7 +64,7 @@ HDR_PINS = {"1": "+3V3", "2": "GND", "3": "HDR_7", "4": "HDR_8", "5": "HDR_9", "
             "13": "HDR_38", "14": "HDR_39", "15": "HDR_40", "16": "+5V"}
 
 # --- the mains rules -----------------------------------------------------------------------------
-ISLAND = ("GND_M", "5V_M", "3V3_M", "VP", "SENSE", "IAP", "IAN", "IBP", "IBN",
+ISLAND = ("GND_M", "GISO_M", "3V3_M", "VISO_M", "VP", "SENSE", "IAP", "IAN", "IBP", "IBN",
           "BL_TX_M", "BL_RX_M", "ZX_M", "OC_M")
 GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "L_SH": "LIVE", "L_PSU": "PSU", "N": "NEUTRAL",
           "L_OUT": "LOAD", "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
@@ -108,23 +110,15 @@ def build_petro():
 
     # ---- mains: the PSU branch ------------------------------------------------------------------
     two("FUSEHOLD", "XF3", "L_F", "L_PSU")                      # F2, T500 mA
-    ps1, ps2 = part("PSU5W", "PS1"), part("PSU1W", "PS2")
-    for ps in (ps1, ps2):
-        c.connect("L_PSU", (ps, "AC/L"))
-        c.connect("N", (ps, "AC/N"))
+    ps1 = part("PSU5W", "PS1")
+    c.connect("L_PSU", (ps1, "AC/L"))
+    c.connect("N", (ps1, "AC/N"))
     c.connect("VPSU", (ps1, "+V"))
     c.connect(gnd, (ps1, "-V"))
-    c.connect("5V_M", (ps2, "+V"))
-    c.connect("GND_M", (ps2, "-V"))                             # the island floats on the live
 
     # ---- the metering island --------------------------------------------------------------------
-    u5 = part("LDO", "U5")
-    c.connect("5V_M", (u5, "VIN"), (u5, "EN"))
-    c.connect("GND_M", (u5, "GND"))
-    c.connect("3V3_M", (u5, "VOUT"))
-    c.no_connect(u5, "NC")
-    two("C10U", "C20", "5V_M", "GND_M")
-    two("C10U", "C21", "3V3_M", "GND_M")
+    # Powered across the barrier by the ISOW7743's isolated converter (3V3_M, below); its ground
+    # GND_M is the shunt's sense pad on F1's side, so it floats on the live.
     u3 = part("BL0939", "U3")
     c.connect("3V3_M", (u3, "VDD"))
     c.connect("GND_M", (u3, "GND"), (u3, "SEL"))                 # SEL low: UART
@@ -156,22 +150,38 @@ def build_petro():
     for pin in ("VT", "CF", "SCLK", "VPP"):                      # unused; SCLK and VPP float
         c.no_connect(u3, pin)
 
-    # ---- the isolator: side 1 on the island, side 2 SELV ----------------------------------------
-    u4 = part("ISO", "U4")
-    c.connect("3V3_M", (u4, "VCC1"), (u4, "EN1"))
-    c.connect("GND_M", (u4, "GND1"))
-    c.connect(v33, (u4, "VCC2"), (u4, "EN2"))
-    c.connect(gnd, (u4, "GND2"))
-    two("C100N", None, "3V3_M", "GND_M")
+    # ---- the isolator with power: side 1 SELV (the power input), side 2 the island ---------------
+    # ISOW7743 (TI SLLSFK1C): power flows from side 1 to side 2, so side 1 is SELV. Channel A is
+    # the forward one (ESP32 TX -> BL0939 RX); B, C and D come back (TX, zero cross, over-current).
+    # Its converter (VDD 5 V -> VISOOUT 3.3 V with VSEL low, up to 140 mA) powers the island; TI's
+    # application circuit: beads VISOOUT->VISOIN and GND2->GISOIN, 10u+1u+100n on VDD and VISOOUT,
+    # 100n on VIO and VISOIN. EN/FLT: pulled up (converter on), and read on GPIO47 as a fault.
+    u4 = part("ISOW", "U4")
+    c.connect(v5, (u4, "VDD"))
+    c.connect(v33, (u4, "VIO"), (u4, "EN_IO1"))
+    c.connect(gnd, (u4, "GND1"), (u4, "GNDIO"))
+    c.connect("ISO_FLT", (u4, "EN/FLT"))
+    two("R10K", None, "ISO_FLT", v33)
+    for key in ("C10U", "C1U", "C100N"):
+        two(key, None, v5, gnd)
     two("C100N", None, v33, gnd)
-    c.connect("BL_TX_M", (u4, "INA"))
-    c.connect("BL_TX", (u4, "OUTA"))
-    c.connect("ZX_M", (u4, "INB"))
-    c.connect("ZX", (u4, "OUTB"))
-    c.connect("OC_M", (u4, "INC"))
-    c.connect("OC", (u4, "OUTC"))
-    c.connect("BL_RX", (u4, "IND"))
-    c.connect("BL_RX_M", (u4, "OUTD"))
+    c.connect("3V3_M", (u4, "VISOOUT"))
+    c.connect("GND_M", (u4, "GND2"), (u4, "VSEL"))                # VSEL low: 3.3 V out
+    two("BEAD", "FB1", "3V3_M", "VISO_M")
+    two("BEAD", "FB2", "GND_M", "GISO_M")
+    c.connect("VISO_M", (u4, "VISOIN"), (u4, "EN_IO2"))
+    c.connect("GISO_M", (u4, "GISOIN"))
+    for key in ("C10U", "C1U", "C100N"):
+        two(key, None, "3V3_M", "GND_M")
+    two("C100N", None, "VISO_M", "GISO_M")
+    c.connect("BL_RX", (u4, "INA"))
+    c.connect("BL_RX_M", (u4, "OUTA"))
+    c.connect("BL_TX_M", (u4, "INB"))
+    c.connect("BL_TX", (u4, "OUTB"))
+    c.connect("ZX_M", (u4, "INC"))
+    c.connect("ZX", (u4, "OUTC"))
+    c.connect("OC_M", (u4, "IND"))
+    c.connect("OC", (u4, "OUTD"))
 
     # ---- SELV 5 V: PS1 or USB, through a diode-OR ------------------------------------------------
     two("PTC5", "F3", "VPSU", "VPSU_F")                          # 1.1 A hold
@@ -213,7 +223,7 @@ def build_petro():
     c.connect("EN", (u1, "EN"))
     two("R10K", None, "EN", v33)
     two("C1U", None, "EN", gnd)
-    for k in ("USB_DM", "USB_DP", "BL_TX", "BL_RX", "ZX", "OC", "UART_TX", "UART_RX"):
+    for k in ("USB_DM", "USB_DP", "BL_TX", "BL_RX", "ZX", "OC", "ISO_FLT", "UART_TX", "UART_RX"):
         c.connect(k, (u1, modpin(GPIO[k])))
 
     # Button (on -> off -> auto) on GPIO0, 10k pull-up; the switch's terminals A and B.
