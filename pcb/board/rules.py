@@ -59,11 +59,12 @@ CREEPAGE_PD2_MG3 = ((10, 0.40), (12.5, 0.42), (16, 0.45), (20, 0.48), (25, 0.50)
 # Each scenario gives every group its potential as a fraction of the supply, from line live (0) to
 # neutral (1). A blown fuse lets everything after it be pulled to neutral (through the load or a
 # PSU's input), so a fuse's two sides see the full supply.
-GROUPS = ("LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4")
+GROUPS = ("LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "SWNODE")
 
 
 def _scenario(live, psu, load, divider_top="LIVE"):
-    p = {"LINE": 0.0, "LIVE": live, "PSU": psu, "NEUTRAL": 1.0, "LOAD": load}
+    # SWNODE: a non-isolated buck's switching node (and what rides on it), at the bus's potential
+    p = {"LINE": 0.0, "LIVE": live, "PSU": psu, "NEUTRAL": 1.0, "LOAD": load, "SWNODE": psu}
     top = p[divider_top]
     for k in range(1, 5):                     # DIVk is k fifths of the way from neutral to the top
         p[f"DIV{k}"] = 1.0 + (top - 1.0) * k / 5
@@ -99,6 +100,13 @@ def creepage(volts):
     return round(math.ceil(round(mm / 0.05, 6)) * 0.05, 2)
 
 
+def ipc2221_width(amps, oz, rise=20.0):
+    """Track width (mm) for 'amps' on an external layer of 'oz' copper at a 'rise' C temperature
+    rise: IPC-2221's I = 0.048 dT^0.44 A^0.725, A in mil^2 (1 oz = 1.378 mil thick)."""
+    area = (amps / (0.048 * rise ** 0.44)) ** (1 / 0.725)
+    return area / (1.378 * oz) * 0.0254
+
+
 def working_voltage(g1, g2, divider_top="LIVE"):
     """Worst-case working voltage (V rms) between two mains groups, over every scenario."""
     return round(V_RATED * max(abs(p[g1] - p[g2]) for p in scenarios(divider_top).values()), 6)
@@ -114,6 +122,10 @@ class Rules:
     barriers: tuple = ()
     rest: str | None = None          # non-isolated: the group every unnamed net belongs to
     divider_top: str = "LIVE"        # the group the voltage divider hangs from
+    # group -> mm: functional insulation inside a converter, where a short only trips its current
+    # limit (IEC 62368-1 allows less than the table when a short causes no hazard): this spacing
+    # to every other group replaces the table's
+    reduced: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.rest is not None and self.rest not in GROUPS:
@@ -128,14 +140,24 @@ class Rules:
     def used(self):
         return sorted(set(self.groups.values()), key=GROUPS.index)
 
+    def spacing(self, a, b):
+        """Required clearance and creepage (mm) between groups a and b: the table's for their
+        working voltage, or a reduced group's own figure."""
+        if a == b:
+            v = working_voltage(a, b, self.divider_top)
+            return creepage(v) if v else 0.0
+        if a in self.reduced or b in self.reduced:
+            return max(self.reduced.get(a, 0.0), self.reduced.get(b, 0.0))
+        v = working_voltage(a, b, self.divider_top)
+        return creepage(v) if v else 0.0
+
     def matrix(self):
-        """{(g1, g2): (working voltage, creepage mm)} for every pair of groups in use, both ways
-        round, including a group with itself (different nets within one group)."""
+        """{(g1, g2): (working voltage, mm)} for every pair of groups in use, both ways round,
+        including a group with itself (different nets within one group)."""
         out = {}
         for a in self.used():
             for b in self.used():
-                v = working_voltage(a, b, self.divider_top)
-                out[(a, b)] = (v, creepage(v) if v else 0.0)
+                out[(a, b)] = (working_voltage(a, b, self.divider_top), self.spacing(a, b))
         return out
 
     def netclasses(self, base):
@@ -168,16 +190,17 @@ class Rules:
                 rule(f"{g} to SELV", [f"clearance (min {REINFORCED}mm)", f"creepage (min {REINFORCED}mm)"],
                      f"A.hasNetclass('{g}') && {selv('B')}")
                 continue
-            v = working_voltage(g, self.rest, self.divider_top)
-            if v:
-                mm = creepage(v)
-                rule(f"{g} to the rest ({v:g} V)", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
+            v, mm = working_voltage(g, self.rest, self.divider_top), self.spacing(g, self.rest)
+            if mm:
+                label = f"{mm:g} mm" if g in self.reduced else f"{v:g} V"
+                rule(f"{g} to the rest ({label})", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
                      f"A.hasNetclass('{g}') && {selv('B')}")
         for (a, b), (v, mm) in self.matrix().items():
             if a > b or not mm:
                 continue                          # each pair once; nothing between equal potentials
             same = "A.Net != B.Net && " if a == b else ""
-            rule(f"{a} to {b} ({v:g} V)", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
+            label = f"{mm:g} mm" if a in self.reduced or b in self.reduced else f"{v:g} V"
+            rule(f"{a} to {b} ({label})", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
                  f"{same}A.hasNetclass('{a}') && B.hasNetclass('{b}')")
         rule("mains to edge", [f"edge_clearance (min {MAINS_EDGE}mm)"], mains("A"))
         # Holes not on a mains net (mounting holes, SELV vias and pins); mains-to-mains spacing is

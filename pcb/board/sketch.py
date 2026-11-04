@@ -10,7 +10,8 @@ from PIL import Image, ImageDraw
 from board.placement import rotate
 
 COLOURS = {"LINE": (220, 40, 40), "LIVE": (240, 120, 30), "PSU": (200, 0, 200), "NEUTRAL": (40, 90, 230),
-           "LOAD": (150, 70, 0), "DIV": (0, 160, 160), "SELV": (40, 160, 40), None: (130, 130, 130)}
+           "LOAD": (150, 70, 0), "DIV": (0, 160, 160), "SELV": (40, 160, 40), "SWNODE": (255, 120, 220),
+           None: (130, 130, 130)}
 S = 10                                  # pixels per mm
 
 

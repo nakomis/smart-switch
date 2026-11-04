@@ -74,17 +74,21 @@ HDR_PINS = {"1": "+3V3", "2": "GND", "3": "HDR_7", "4": "HDR_8", "5": "HDR_9", "
 # --- the mains rules (non-isolated mode: every other net sits at neutral) --------------------------
 # The supply's high-voltage nets are the PSU group: after F2, at the rectified live (the switching
 # node and the LNK306's BP/FB, which ride on it, included).
-PSU_NETS = ("L_PSU", "L_RF", "VBULK1", "VBULK", "SW", "BP", "FB", "FBH")
+PSU_NETS = ("L_PSU", "L_RF", "VBULK1", "VBULK")
+# The LNK306's switching node and what rides on it (BYPASS, FEEDBACK, the sampled output): functional
+# insulation inside the converter, where a short only trips its current limit: 1.0 mm (rules.reduced).
+SWNODE_NETS = ("SW", "BP", "FB", "FBH")
 GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "N_IN": "NEUTRAL", "N_OUT": "NEUTRAL", "L_OUT": "LOAD",
           "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
-          **{n: "PSU" for n in PSU_NETS}}
+          **{n: "PSU" for n in PSU_NETS}, **{n: "SWNODE" for n in SWNODE_NETS}}
 HIGH_CURRENT = {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
 BARRIERS = ()
 BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on an NC_ net
 
 
 def rules():
-    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL", divider_top="LINE")
+    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL", divider_top="LINE",
+                 reduced={"SWNODE": 1.0})
 
 
 def build_petro():
@@ -138,7 +142,7 @@ def build_petro():
     c.connect("BP", (u4, "BP"))
     c.connect("FB", (u4, "FB"))
     two("C100N6", None, "BP", "SW")                             # BYPASS capacitor, to SOURCE
-    two("L1MO", None, "SW", v12)                                # output inductor
+    two("L680U", None, "SW", v12)                               # output inductor, 680 uH (>= 0.5 mH, PI MDCM)
     pins("ES1J", "D8", A=gnd, K="SW")                                 # freewheel (35 ns)
     pins("C220U", _plus=v12, _minus=gnd)
     pins("S1G", "D9", A=v12, K="FBH")                                 # feedback: samples the output...
@@ -310,74 +314,84 @@ TEST_HOLES = {"TP2": "BL_RX", "TP3": "BL_TX", "TP4": "ZX", "TP5": "OC", "TP6": "
               "TP10": "COIL", "TP11": "GND", "TP12": "LED_DIN", "TP13": "BUTTON"}
 
 
-# --- placement (step 6) --------------------------------------------------------------------------
-# Board 120 x 70 mm, in Martin's own printed case (PETRO-6). Mains along the top long edge, SELV
-# along the bottom; cables enter at opposite ends (J1 left, J2 right).
-#   Mains strip, y <= MAINS_Y: a neutral band along the top edge; a middle row (the metering
-#   island, the MOV, F2); a bottom row with the live chain J1 -> F1 -> shunt -> relay COM.
-#   Under the relay the mains strip goes down to RELAY_NOTCH's y, so L_SH can reach COM below NO.
-#   Barrier: no copper between MAINS_Y and SELV_Y, except the barrier parts' own pads (the relay's
-#   coil-to-contact gap is 17.8 mm, PS1's 38.5 mm, the ISOW7743's 7.1 mm with a slot under it).
-#   SELV strip, y >= SELV_Y: the ESP32 module (antenna overhanging the bottom edge), J3 on the
-#   bottom edge (a side-wall slot in the case), J4, the button and LED (through the lid), USB, the
-#   relay driver, PS1's output protection.
-from board.kicad_pcb import S, Slot, Track, Via, Zone, solid_pads  # noqa: E402
-from board.placement import Placement, rotate  # noqa: E402
+# --- placement (rev B) ---------------------------------------------------------------------------
+# Board 120 x 85 mm (15 mm taller than rev A, for the mains supply), in Martin's own printed case
+# (PETRO-6). Mains along the top, low voltage along the bottom; cables enter at opposite ends.
+#   The neutral strip along the top edge, split by the shunt RS1 above the metering corner: N_IN
+#   to the west (J1), N_OUT to the east (the MOV, J2). The strip deepens to y = 10 round the shunt,
+#   whose sense pads have vias in pad, so the 3.5 mm per-layer minimum holds past them.
+#   The live chain J1 -> F1 -> K1 -> J2 across the middle (L_IN, L_F, L_OUT pours), with the MOV
+#   above L_F's right-hand arm and F2's holder hanging below L_F's stub over the supply block.
+#   The metering corner (the BL0939, its filters, the divider from L_IN) sits under the shunt,
+#   between L_IN and L_F; its only copper link to the rest of the low-voltage side is the corridor
+#   under F1's glass, between the clips (no mains copper there).
+#   The supply (PI's LNK306 buck) in a block on the right, its high-voltage nets hand-routed.
+#   Low voltage below: the ESP32 module (antenna overhanging the bottom edge), J3/J4 (internal
+#   only), the button and LED (through the lid), USB (J5, facing the right-hand edge, reachable
+#   only with the case off), the relay driver, the 5 V converter, the test holes.
+import math  # noqa: E402
 
-W, H = 120.0, 70.0
-MAINS_Y, SELV_Y = 38.5, 46.5
-RELAY_NOTCH = (60.0, 78.0, 41.5)            # x0, x1, y: the mains strip's extent under the relay
-HOLES = {"H1": (4.0, 4.0), "H2": (116.0, 4.0), "H3": (4.0, 66.0), "H4": (116.0, 66.0)}
-F1_CLIP_PITCH = 34.21 - 7.62                # clip centres for a 1 1/4 in fuse (Littelfuse "A")
+from board.kicad_pcb import S, Slot, Track, Via, Zone, solid_pads  # noqa: E402,F401
+from board.placement import Placement, rotate  # noqa: E402
+from board.rules import ipc2221_width  # noqa: E402
+
+W, H = 120.0, 85.0
+COPPER_OZ = 1
+MAINS_Y, SELV_Y = 38.5, 41.0            # the live chain's lower edge; the low-voltage side's top
+RELAY_NOTCH = (60.0, 78.0, 41.5)        # x0, x1, y: the live copper's extent under the relay
+HOLES = {"H1": (4.0, 4.0), "H2": (116.0, 4.0), "H3": (4.0, H - 4.0), "H4": (116.0, H - 4.0)}
+F1_CLIP_PITCH = 34.21 - 7.62            # clip centres for a 1 1/4 in fuse (Littelfuse "A")
 F1_Y = 32.0
-ISO_AT = (33.5, 42.5)
-LED_RING = 2.0                              # mm of clear board round the LED (the light pipe's flange)
+LED_RING = 2.0                          # mm of clear board round the LED (the light pipe's flange)
+DY = 15.0                               # the low-voltage side's move down from rev A
 
 AT = {
-    # mains: terminals, the live chain, F2, the MOV
+    # mains: terminals, the live chain, F2 (hanging below L_F's stub), the MOV, the shunt
     "J1": (8.0, 19.5, 270), "J2": (112.0, 19.5, 90),
     "XF1": (20.0, F1_Y, 0), "XF2": (20.0 + F1_CLIP_PITCH, F1_Y, 0),
-    "RS1": (57.0, 33.5, 0), "K1": (69.0, 46.5, 90), "PS1": (86.0, 42.0, 270),
-    "XF3": (62.0, 22.0, 0), "RV1": (62.0, 12.0, 180),
-    # the metering island: the divider column, the BL0939 and its filters
-    "R5": (18.0, 10.0, 270), "R6": (18.0, 14.8, 270), "R7": (18.0, 19.6, 270), "R8": (18.0, 24.4, 270),
-    "R9": (22.0, 26.0, 0), "R10": (24.5, 13.0, 0), "C6": (24.5, 16.0, 0),
-    "U3": (31.0, 19.0, 180),
-    "R1": (29.05, 10.6, 90), "R2": (30.85, 10.6, 90), "R3": (32.65, 10.6, 90), "R4": (34.45, 10.6, 90),
-    "C2": (29.05, 13.2, 90), "C3": (30.85, 13.2, 90), "C4": (32.65, 13.2, 90), "C5": (34.45, 13.2, 90),
-    "C1": (37.5, 16.0, 90), "R11": (37.5, 21.5, 90),
-    # the isolator and its island-side parts (between F1's clips, under the fuse body)
-    "U4": (ISO_AT[0], ISO_AT[1], 0),
-    "FB1": (29.0, 34.0, 90), "FB2": (30.5, 34.0, 90), "C11": (33.0, 34.5, 0), "C12": (36.5, 34.5, 0),
-    "C13": (36.5, 32.6, 0), "C14": (33.0, 32.3, 0),
-    # the isolator's SELV-side parts
-    "C7": (43.0, 48.2, 0), "C8": (46.0, 48.2, 0), "C9": (48.0, 48.2, 0), "C10": (50.0, 48.2, 0),
-    "R12": (52.0, 48.2, 0),
-    # SELV: the module and its supply
-    "U1": (16.0, 62.25, 180), "U2": (25.5, 49.0, 0),
-    "C16": (17.5, 51.5, 0), "C17": (21.0, 51.5, 0), "C18": (21.0, 49.0, 0),
-    "TP1": (6.0, 52.5, 0), "R14": (2.0, 49.0, 90), "C21": (3.5, 49.0, 90), "C19": (2.0, 53.0, 90),
-    "C20": (3.5, 53.0, 90), "R20": (2.0, 57.0, 90), "R21": (3.5, 57.0, 90),
-    # SELV: reuse I/O
-    "J3": (40.0, 66.0, 0), "J4": (39.0, 56.0, 0),
-    # SELV: button, LED
-    "SW1": (57.9, 52.8, 0), "D1": (58.0, 59.5, 0), "C22": (56.0, 65.5, 90), "R18": (58.5, 65.5, 90),
-    "R15": (61.0, 65.5, 90),
-    # SELV: relay driver and NTC (below the relay)
-    "Q1": (66.0, 64.5, 0), "D3": (66.0, 68.0, 0), "R16": (70.0, 64.0, 90), "R17": (71.5, 64.0, 90),
-    "TH1": (74.0, 66.0, 90), "R19": (75.8, 66.0, 90), "C23": (77.0, 68.5, 0),
-    # SELV: PS1's output (below PS1)
-    "F3": (82.0, 67.5, 0), "D4": (88.5, 67.6, 0), "D5": (96.5, 67.6, 0), "C15": (100.8, 67.5, 90),
-    # SELV: USB
-    # J5 (side entry, mouth opposite its signal pads) turned to face the right-hand edge, the
-    # protection to its left: U5 by D-/D+, F4 then D2 on VBUS, D6 to +5V below, R13 on CC
-    "J5": (116.5, 51.5, 90), "U5": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
-    "D6": (108.5, 58.5, 0), "R13": (112.5, 55.5, 90),
+    "K1": (69.0, 46.5, 90), "RV1": (74.0, 12.0, 180), "RS1": (31.0, 6.5, 0),
+    "XF3": (90.0, 45.6, 0),
+    # the metering corner: the divider column from L_IN, the BL0939 and its filters
+    "R12": (18.0, 25.0, 90), "R13": (18.0, 20.3, 90), "R14": (18.0, 15.6, 90), "R15": (20.6, 11.6, 0),
+    "R16": (24.2, 14.0, 270),
+    "U3": (31.0, 20.5, 180),
+    "R8": (29.05, 12.1, 90), "R9": (30.85, 12.1, 90), "R10": (32.65, 12.1, 90), "R11": (34.45, 12.1, 90),
+    "C13": (29.05, 14.7, 90), "C14": (30.85, 14.7, 90), "C15": (32.65, 14.7, 90), "C16": (34.45, 14.7, 90),
+    "C17": (24.6, 18.0, 90), "R17": (23.0, 18.0, 90), "C12": (37.0, 17.6, 90), "R18": (24.4, 24.4, 90),
+    # the supply block: F2 holder, fusible resistor, rectifier, pi filter, LNK306 buck
+    "R1": (91.0, 53.8, 180), "D7": (79.6, 56.0, 90),
+    "C1": (81.5, 64.0, 0), "L1": (89.6, 64.0, 270), "C2": (97.5, 64.0, 0),
+    "U4": (89.0, 73.0, 180), "C3": (92.4, 72.4, 270), "R2": (94.0, 69.4, 180), "R3": (94.0, 72.4, 270),
+    "C5": (98.0, 70.8, 180), "D8": (89.0, 79.4, 180),
+    "L2": (98.5, 78.9, 0), "D9": (102.9, 68.6, 90), "C4": (107.6, 77.0, 90), "R4": (108.0, 83.0, 0),
+    # the 5 V converter and its output (bottom right)
+    "U5": (48.0, 47.5, 0), "C6": (48.0, 44.0, 0), "C7": (52.0, 44.0, 0), "C8": (44.5, 47.5, 90),
+    "L3": (53.6, 47.5, 0), "R5": (47.6, 51.0, 0), "R6": (50.6, 51.0, 0),
+    "C9": (56.0, 51.2, 0), "C10": (56.0, 53.8, 0),
+    "F3": (44.4, 53.2, 0), "D4": (57.6, 57.6, 0), "D5": (49.6, 56.0, 0), "C11": (44.0, 57.4, 90),
+    # USB (J5 facing the right-hand edge, its protection to its left)
+    "J5": (116.5, 51.5, 90), "U6": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
+    "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
+    # the module and its supply (rev A's, DY lower)
+    "U1": (16.0, H - 7.75, 180), "U2": (25.5, 49.0 + DY, 0),
+    "C18": (17.5, 51.5 + DY, 0), "C19": (21.0, 51.5 + DY, 0), "C20": (21.0, 49.0 + DY, 0),
+    "TP1": (6.0, 52.5 + DY, 0), "R19": (2.0, 49.0 + DY, 90), "C23": (3.5, 49.0 + DY, 90),
+    "C21": (2.0, 53.0 + DY, 90), "C22": (3.5, 53.0 + DY, 90), "R25": (2.0, 57.0 + DY, 90),
+    "R26": (3.5, 57.0 + DY, 90),
+    # reuse I/O (internal only)
+    "J3": (40.0, 66.0 + DY, 0), "J4": (39.0, 56.0 + DY, 0),
+    # button, LED
+    "SW1": (57.9, 52.8 + DY, 0), "D1": (58.0, 59.5 + DY, 0), "C24": (56.0, 65.5 + DY, 90),
+    "R23": (58.5, 65.5 + DY, 90), "R20": (61.0, 65.5 + DY, 90),
+    # relay driver and NTC (below the relay)
+    "Q1": (66.0, 64.5 + DY, 0), "D3": (66.0, 68.0 + DY, 0), "R21": (70.0, 64.0 + DY, 90),
+    "R22": (71.5, 64.0 + DY, 90), "TH1": (74.0, 66.0 + DY, 90), "R24": (75.8, 66.0 + DY, 90),
+    "C25": (77.0, 68.5 + DY, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
-    # test holes (TEST_HOLES): a row under the isolator, and a 4 x 2 block bottom right
-    **{f"TP{2 + k}": (41.0 + 2.54 * k, 50.2, 0) for k in range(5)},
-    **{f"TP{7 + k}": (104.0 + 2.54 * k, 64.2, 0) for k in range(3)},
-    **{f"TP{10 + k}": (104.0 + 2.54 * k, 66.74, 0) for k in range(4)},
+    # test holes (TEST_HOLES): a row above J4, and a block above it beside the 5 V converter
+    **{f"TP{2 + k}": (41.0 + 2.54 * k, 50.2 + DY, 0) for k in range(5)},
+    **{f"TP{7 + k}": (44.0 + 2.54 * k, 59.8, 0) for k in range(3)},
+    **{f"TP{10 + k}": (44.0 + 2.54 * k, 62.34, 0) for k in range(4)},
 }
 
 
@@ -391,10 +405,8 @@ def place_petro(c):
 
 
 def slots():
-    """A slot under the isolator, between its two pad rows and longer than the part, so that
-    the creepage round it is more than 8 mm (checked by rules.barrier_creepage)."""
-    x, y = ISO_AT
-    return [Slot(x - 9.0, y, x + 9.0, y, 1.5)]
+    """None on rev B: there is no barrier to lengthen."""
+    return []
 
 
 def fuse_box():
@@ -415,48 +427,61 @@ def keep_boxes():
 
 
 def sketch_lines():
-    x0, x1, ny = RELAY_NOTCH
-    return [((0, MAINS_Y, x0, MAINS_Y), (220, 0, 0)), ((x0, MAINS_Y, x0, ny), (220, 0, 0)),
-            ((x0, ny, x1, ny), (220, 0, 0)), ((x1, ny, x1, MAINS_Y), (220, 0, 0)),
-            ((x1, MAINS_Y, W, MAINS_Y), (220, 0, 0)), ((0, SELV_Y, W, SELV_Y), (0, 160, 0))]
+    """The mains pours' outlines, for the placement sketch."""
+    out = []
+    for net, pts in MAINS_POLYS.items():
+        colour = (40, 90, 230) if net.startswith("N") else (220, 40, 40)
+        out += [((a[0], a[1], b[0], b[1]), colour) for a, b in zip(pts, pts[1:] + pts[:1])]
+    return out
 
 
 # --- the mains copper ----------------------------------------------------------------------------
-# Each mains net is a solid pour on both layers, drawn as a generous polygon over its own stretch of
-# the mains strip; KiCad's fill then keeps the DRU's clearances to every other net, the edges and
-# the holes. Neutral is a band along the top edge with spurs down to J1, RV1, PS1 and J2; the live
-# chain runs along the bottom of the strip: J1 -> F1 (XF1..XF2) -> RS1 -> K1 -> J2. Each layer's
-# pour is at least half the IPC-2221 width at its narrowest (MAINS_MIN_WIDTH: KiCad's
-# min_thickness drops anything thinner), so the two stitched layers together carry 16 A.
-MAINS_MIN_WIDTH = HIGH_CURRENT_WIDTH / 2
+# Each high-current net is a solid pour on both layers over its own stretch, stitched. At 1 oz,
+# each layer must be at least MAINS_MIN_WIDTH wide everywhere (KiCad's min_thickness drops
+# anything thinner): IPC-2221's width for half the 16 A design current, so the two layers in
+# parallel carry 16 A at a 20 C rise (the unit is rated 10 A).
+MAINS_MIN_WIDTH = round(math.ceil(ipc2221_width(16 / 2, COPPER_OZ) / 0.05) * 0.05, 2)    # 3.5 mm
 CU = ("F.Cu", "B.Cu")
 MAINS_POLYS = {
-    "N": [(3, 3), (117, 3), (117, 19), (106, 19), (106, 8.2), (96, 8.2), (96, 23.9), (87, 23.9),
-          (87, 8.2), (61, 8.2), (61, 12), (54, 12), (54, 8.2), (12, 8.2), (12, 19), (3, 19)],
-    "L_IN": [(3, 21), (14, 21), (14, 28.5), (27, 28.5), (27, 35.5), (3, 35.5)],
-    "L_F": [(40, 17.5), (54, 17.5), (54, 13), (69, 13), (69, 19), (57, 19), (57, 35.5), (40, 35.5)],
-    "L_SH": [(57, 32.5), (62, 32.5), (62, 37.3), (77, 37.3), (77, 41.5), (60, 41.5), (60, 38.5),
-             (57, 38.5)],
+    # neutral: deepened to y = 10 round the shunt (x 24.5-37.5)
+    "N_IN": [(3, 3), (30.2, 3), (30.2, 10), (24.5, 10), (24.5, 8.6), (12, 8.6), (12, 19), (3, 19)],
+    "N_OUT": [(31.8, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (72.5, 8.6), (72.5, 12),
+              (67, 12), (67, 8.6), (37.5, 8.6), (37.5, 10), (31.8, 10)],
+    "L_IN": [(3, 21), (14, 21), (14, 25.4), (20, 25.4), (20, 28.5), (27, 28.5), (27, 35.5), (3, 35.5)],
+    "L_F": [(40, 17.5), (54, 17.5), (54, 13), (81, 13), (81, 19.5), (57, 19.5), (57, 32.5), (62, 32.5),
+            (62, 37.3), (77, 37.3), (77, 41.2), (81.5, 41.2), (81.5, 49.5), (76, 49.5), (76, 41.5),
+            (60, 41.5), (60, 38.5), (57, 38.5), (57, 35.5), (40, 35.5)],
     "L_OUT": [(63, 26), (104, 26), (104, 20.5), (117, 20.5), (117, 38.5), (79, 38.5), (79, 36),
               (63, 36)],
-    "L_PSU": [(71, 19.5), (84, 19.5), (84, 25), (71, 25)],
+}
+# The bottom layer's neutral stops short of the shunt's sense vias (the shunt joins N_IN and N_OUT
+# on the top layer, where its pads are).
+MAINS_POLYS_BCU = {
+    "N_IN": [(3, 3), (25.6, 3), (25.6, 8.6), (12, 8.6), (12, 19), (3, 19)],
+    "N_OUT": [(36.4, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (72.5, 8.6), (72.5, 12),
+              (67, 12), (67, 8.6), (36.4, 8.6)],
 }
 STITCH = {
-    "N": [(14, 5.6), (24, 5.6), (34, 5.6), (44, 5.6), (50, 5.6), (66, 5.6), (76, 5.6), (84, 5.6),
-          (100, 5.6), (9, 10), (9, 12.5), (91.5, 12), (91.5, 18), (110, 7.5), (109, 12)],
+    "N_IN": [(9, 10), (9, 13), (14, 5.6), (21, 5.6), (24, 5.6)],
+    "N_OUT": [(38, 5.6), (44, 5.6), (52, 5.6), (60, 5.6), (66, 5.6), (84, 5.6), (100, 5.6),
+              (110, 7.5), (109, 12)],
     "L_IN": [(6, 28), (11, 27), (11, 32), (20, 32), (8, 33)],
-    "L_F": [(46.6, 32), (45, 24), (52, 27), (44, 19.5), (62, 16.5)],
-    "L_SH": [(59, 37), (68.9, 39.6), (75.5, 40)],
+    "L_F": [(46.6, 32), (45, 24), (52, 27), (44, 19.5), (62, 16.5), (59, 37), (68.9, 39.6),
+            (75.5, 40), (79.5, 15.5), (80.3, 48.3)],
     "L_OUT": [(69, 33.9), (69, 29), (85, 32), (95, 32), (105, 32), (113, 28), (110, 34)],
 }
-STITCH_VIA = (1.2, 0.6)                    # size, drill
+STITCH_VIA = (1.2, 0.6)                 # size, drill
 
 
 def mains_zones():
-    """The mains pours: every high-current net, and L_PSU (F2 to PS1), on both layers, solid."""
-    return [Zone(net, CU, pts, solid=True, priority=1, clearance=0.2,
-                 min_width=MAINS_MIN_WIDTH if net in HIGH_CURRENT else 0.5)
-            for net, pts in MAINS_POLYS.items()]
+    """The mains pours: every high-current net on both layers, solid, at least MAINS_MIN_WIDTH."""
+    out = []
+    for net, pts in MAINS_POLYS.items():
+        bcu = MAINS_POLYS_BCU.get(net)
+        layers = [(CU, pts)] if bcu is None else [(("F.Cu",), pts), (("B.Cu",), bcu)]
+        for lay, poly in layers:
+            out.append(Zone(net, lay, poly, solid=True, priority=1, clearance=0.2, min_width=MAINS_MIN_WIDTH))
+    return out
 
 
 def stitch_vias():
@@ -464,68 +489,17 @@ def stitch_vias():
     return [Via(net, x, y, size, drill) for net, pts in STITCH.items() for x, y in pts]
 
 
-def gnd_pts():
-    """The SELV ground pour's extent (both layers): the SELV strip only, so there is no ground
-    pour anywhere in the mains area. The DRU keeps it 8 mm from every mains pad and pour."""
-    return [(0.5, SELV_Y), (W - 0.5, SELV_Y), (W - 0.5, H - 0.5), (0.5, H - 0.5)]
-
-
 def mains_pad_extra(c):
     """Every pad on a mains pour joins it solidly (no thermal relief)."""
     return solid_pads(c, set(MAINS_POLYS))
 
 
-# --- routing (step 8) ----------------------------------------------------------------------------
-# Freerouting runs twice, each time confined to one area: the SELV strip, then the metering
-# island. Neither area comes within 8 mm of the other side's copper, so the router (which knows
-# only plain clearances) can't break the barrier; KiCad's DRC with the generated rules checks
-# it all afterwards. The divider chain and the shunt's Kelvin pair are routed by hand.
 def pad_xy(c, p, ref, number):
     """Board position of a pad's centre."""
     x, y, rot = p.at[ref]
     pad = next(q for q in c.instances[ref].part.footprint.pads if q.number == number)
     dx, dy = rotate(pad.x, pad.y, rot)
     return round(x + dx, 4), round(y + dy, 4)
-
-
-SELV_TOP = 45.2      # 8 mm (and a track's half-width) below the Kelvin pair's run at KELVIN_Y
-
-
-def selv_area():
-    """The SELV router's area. On the left it starts at SELV_TOP (8 mm below the Kelvin pair,
-    which runs under the fuse at y = 36.9); past x = 51 it steps down round the L_SH pour's corner
-    at (57, 38.5), and under the relay it keeps 8 mm below L_SH's bottom edge (41.5).
-    selv_keepouts() adds the isolator's band."""
-    e = 0.45
-    return [(e, SELV_TOP), (51.0, SELV_TOP), (54.0, 47.0), (55.5, 49.55), (83.5, 49.55), (84.5, 47.0),
-            (W - e, 47.0), (W - e, H - e), (e, H - e)]
-
-
-def selv_keepouts():
-    """(layer, x0, y0, x1, y1): no SELV track within 8 mm of the isolator's island-side pads
-    (y <= 38.95). Its own SELV pads (from y = 46.05) are reached from below: Freerouting lets a
-    track leave a pin in any direction, even out of its area, so the band must be explicit."""
-    return [(layer, 19.5, SELV_TOP, 47.5, 46.75) for layer in CU]
-
-
-def island_area():
-    """The island router's area: the BL0939 and its filters, the isolator's island side. It keeps
-    8 mm above the isolator's SELV pads (y = 38.05), clear of the divider column on the left, and
-    2.5 mm (LINE to LIVE) plus a track from F1's right-hand L_IN clip pad under the fuse."""
-    return [(21.2, 9.0), (39.9, 9.0), (39.9, 38.05), (27.2, 38.05), (27.2, 36.4), (28.2, 36.4),
-            (28.2, 27.75), (22.4, 27.75), (22.4, 23.8), (21.2, 23.8)]
-
-
-def island_keepouts():
-    """(layer, x0, y0, x1, y1): no island track below the isolator's island-side pad centres,
-    towards the slot and the SELV side (the pads themselves reach y = 38.95); nor out of the
-    area's lower-left edges towards F1's L_IN clip (LINE to LIVE needs 2.5 mm, and Freerouting
-    lets a track leave a pad in any direction: one left FB1 westwards, 2.25 mm from the clip)."""
-    boxes = [(26.0, 38.25, 41.5, 43.0),           # below the isolator
-             (19.0, 27.75, 28.2, 35.3),           # left of the area's lower part, down to FB1
-             (19.0, 35.3, 27.2, 38.25),           # then clear of U4's pad 20 (x 27.8)
-             (19.0, 23.8, 22.4, 27.75)]           # beside the step at x = 22.4
-    return [(layer, *b) for layer in CU for b in boxes]
 
 
 def _in_poly(x, y, poly):
@@ -536,21 +510,11 @@ def _in_poly(x, y, poly):
     return hit
 
 
-def in_selv(x, y):
-    return _in_poly(x, y, selv_area()) and not any(
-        x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in selv_keepouts())
-
-
-def in_island(x, y):
-    return _in_poly(x, y, island_area())
-
-
 DIV_W = 0.4
-KELVIN_W = 0.25
 
 
 def divider_tracks(c, p):
-    """R5..R9 in a chain: each DIV net straight from one resistor's pad to the next's, F.Cu."""
+    """R12..R16 in a chain: each DIV net straight from one resistor's pad to the next's, F.Cu."""
     out = []
     for net in ("DIV1", "DIV2", "DIV3", "DIV4"):
         (a, b) = sorted(c.nets[net])
@@ -559,45 +523,18 @@ def divider_tracks(c, p):
     return out
 
 
-KELVIN_X, KELVIN_Y, KELVIN_END = 40.4, 36.9, (38.8, 14.0)
-
-
-def kelvin_route(c, p):
-    """(tracks, vias): the shunt's sense pair, stacked. GND_M leaves pad 2 (E1, bottom left) on
-    F.Cu; SENSE leaves pad 3 (E2, top right), drops to B.Cu just above it, runs back under the
-    shunt between its current pads and joins GND_M's path from below. From there they run
-    together (F.Cu over B.Cu) under the fuse, up the gap between the island and F1's right clip,
-    and into the island, where the router finishes them."""
-    gx, gy = pad_xy(c, p, "RS1", "2")
-    sx, sy = pad_xy(c, p, "RS1", "3")
-    via = (sx, round(sy - 1.13, 4))
-    mid = 57.0                                   # between the shunt's current pads
-    common = [(gx, KELVIN_Y), (KELVIN_X, KELVIN_Y), (KELVIN_X, KELVIN_END[1]), KELVIN_END]
-    seg = lambda net, layer, pts: [Track(net, layer, *a, *b, KELVIN_W) for a, b in zip(pts, pts[1:])]
-    tracks = seg("SENSE", "F.Cu", [(sx, sy), via])
-    tracks += seg("SENSE", "B.Cu", [via, (mid, via[1]), (mid, KELVIN_Y)] + common)
-    tracks += seg("GND_M", "F.Cu", [(gx, gy)] + common)
-    return tracks, [Via("SENSE", *via)]
-
-
-def island_zones():
-    """GND_M on both layers over the island area, below the mains pours in priority."""
-    return [Zone("GND_M", CU, island_area(), priority=0, clearance=0.2, min_width=0.25)]
-
-
 def pad_extra(c):
-    """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND and GND_M pads, the
-    plated mounting holes, J3's and J4's GND pins and the GND test holes (as on the heatlink,
-    where tracks otherwise leave them on one-spoke islands); U1's nine 1.2 mm centre GND pads
-    get a -0.18 mm paste margin (Espressif: a full thermal pad lifts the module)."""
+    """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND pads, J3's and J4's
+    GND pins and the GND test holes; U1's nine 1.2 mm centre GND pads get a -0.18 mm paste
+    margin (Espressif: a full thermal pad lifts the module)."""
     def make(ref):
         def f(pad):
             net = c.net_of(ref, pad.number)
             extra = []
             if ref == "U1" and net == "GND" and abs(pad.w - 1.2) < 1e-6:
                 extra.append([S("solder_paste_margin"), -0.18])
-            if net in MAINS_POLYS or (net == "GND_M" and pad.kind == "smd") or (net == "GND" and (
-                    pad.kind == "smd" or ref in ("H3", "H4", "J3", "J4") or ref in TEST_HOLES)):
+            if net in MAINS_POLYS or (net == "GND" and (
+                    pad.kind == "smd" or ref in ("J3", "J4") or ref in TEST_HOLES)):
                 extra.append([S("zone_connect"), 2])
             return extra
         return f

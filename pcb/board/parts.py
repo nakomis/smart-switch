@@ -86,7 +86,7 @@ _TABLE = {
     "C4U7HV": ("4.7uF 400V", "C112482", "CAP-TH_BD8.0-P3.50-D0.6-FD", "EGW2GM4R7F12OT", True, 0),
     "L1MF": ("1mH 350mA", "C168102", "IND-SMD_L6.0-W6.0_FNR60XXS", "FNR6045S102MT", True, 0),
     "ES1J": ("ES1J", "C232830", "SMA_L4.3-W2.7-LS5.0-RD", "ES1J_C232830", True, 0),
-    "L1MO": ("1mH 1A", "C37485", "IND-SMD_L12.3-W12.3", "SMDRI127-102MT", True, 0),
+    "L680U": ("680uH 1A", "C48934988", "IND-SMD_L10.0-W10.0_ABG10A50M4R7", "NR1050M681N", True, 0),
     "C220U": ("220uF 25V", "C4747974", "CAP-SMD_BD6.3-L6.6-W6.6-LS7.2-FD", "RST220UF25V019", True, 0),
     "C100N6": ("100nF", "C14663", "C0603", "CC0603KRX7R9BB104", False, 0),
     "C10U50": ("10uF 50V", "C13585", "C1206", "CL31A106KBHNNNE", False, 0),
@@ -134,7 +134,7 @@ MFR = {
     "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Samsung", "CL10B333KB8NNNC"),
     "LNK306": ("Power Integrations", "LNK306DN-TL"), "RFUSE": ("Yageo", "FKN2WSJT-52-10R"),
     "RECT": ("Vishay", "S1M-E3/61T"), "C4U7HV": ("AISHI", "EGW2GM4R7F12OT"),
-    "L1MF": ("cjiang", "FNR6045S102MT"), "ES1J": ("onsemi", "ES1J"), "L1MO": ("SXN", "SMDRI127-102MT"),
+    "L1MF": ("cjiang", "FNR6045S102MT"), "ES1J": ("onsemi", "ES1J"), "L680U": ("COILANK", "NR1050M681N"),
     "C220U": ("KNSCHA", "RST220UF25V019"), "C100N6": ("Yageo", "CC0603KRX7R9BB104"),
     "C10U50": ("Samsung", "CL31A106KBHNNNE"), "S1G": ("Diodes Inc", "S1G-13-F"),
     "R13K": ("UNI-ROYAL", "0603WAF1302T5E"), "R2K": ("UNI-ROYAL", "0603WAF2001T5E"),
@@ -184,7 +184,7 @@ BODY = {"ESP32": (-7.7, -12.8, 7.7, 7.7),
         "FUSEHOLD": (-12.5, -4.95, 12.5, 4.95),   # Littelfuse 656 holder, 25 x 9.9
         "C4U7HV": (-4.0, -4.0, 4.0, 4.0),         # 8 mm can
         "C220U": (-4.45, -3.4, 4.45, 3.4),        # 6.6 mm base, pads to +-4.45
-        "L1MO": (-7.15, -6.2, 7.15, 6.2)}         # 12.3 mm square, pads to +-7.15
+        "L680U": (-5.55, -5.0, 5.55, 5.0)}        # 10 mm square, pads to +-5.55
 # The antenna strip of the module, in footprint coordinates (above the top pad row).
 ESP32_ANTENNA = (-7.7, -12.8, 7.7, -7.75)
 

@@ -32,6 +32,30 @@ def test_a_divider_from_line_keeps_its_taps_when_f1_blows():
     assert r.matrix()[("DIV4", "LINE")][0] == 50
 
 
+def test_ipc2221_width_matches_the_published_formula():
+    """External layers, 20 C rise: rev A's 4.5 mm is 16 A at 2 oz; at 1 oz each of two parallel
+    layers needs 3.47 mm for 8 A (the formula is sublinear, so two layers beat one wide one)."""
+    from board.rules import ipc2221_width
+    assert ipc2221_width(16, 2) == pytest.approx(4.52, abs=0.01)
+    assert ipc2221_width(8, 1) == pytest.approx(3.47, abs=0.01)
+    assert ipc2221_width(16, 1) > 2 * ipc2221_width(8, 1)
+
+
+def test_the_switching_node_keeps_a_reduced_functional_spacing(tmp_path):
+    """SWNODE (the LNK306's source node and the BP/FB parts riding on it): functional insulation
+    inside the converter, where a short only trips its current limit. 1.0 mm to everything (IPC-2221
+    B4, coated, 301-500 V: 0.8 mm), via Rules.reduced; the DC bus (PSU) keeps the table's 2.5 mm."""
+    r = Rules({**GROUPS_B, "SW": "SWNODE"}, rest="NEUTRAL", reduced={"SWNODE": 1.0})
+    assert r.spacing("SWNODE", "NEUTRAL") == 1.0 and r.spacing("SWNODE", "PSU") == 1.0
+    assert r.spacing("PSU", "NEUTRAL") == 2.5
+    rules = r
+    ok = _probe(tmp_path, [Via("SW", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 1.05, 30.0)], rules=rules)
+    assert ok == set()
+    (tmp_path / "bad").mkdir()
+    bad = _probe(tmp_path / "bad", [Via("SW", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 0.9, 30.0)], rules=rules)
+    assert ("clearance", "SWNODE to the rest (1 mm)") in bad
+
+
 def test_rest_must_be_a_group():
     with pytest.raises(ValueError):
         Rules(GROUPS_B, rest="NOPE")

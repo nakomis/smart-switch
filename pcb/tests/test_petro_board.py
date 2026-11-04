@@ -98,7 +98,7 @@ def test_lnk306_high_side_buck():
     assert net(u, "D") == "VBULK" and net(u, "S") == "SW"
     bp = [r for r in by_key("C100N6") if nets_of(r) == {"BP", "SW"}]
     assert net(u, "BP") == "BP" and len(bp) == 1
-    assert nets_of(by_key("L1MO")[0]) == {"SW", "+12V"}
+    assert nets_of(by_key("L680U")[0]) == {"SW", "+12V"}
     d1 = by_key("ES1J")[0]
     assert (net(d1, "A"), net(d1, "K")) == ("GND", "SW")
     d2 = by_key("S1G")[0]
@@ -136,8 +136,11 @@ def test_diode_or_feeds_5v_from_the_supply_or_usb():
 
 
 def test_supply_high_voltage_nets_are_the_psu_group():
-    for n in ("L_PSU", "L_RF", "VBULK1", "VBULK", "SW", "BP", "FB", "FBH"):
+    for n in ("L_PSU", "L_RF", "VBULK1", "VBULK"):
         assert pb.GROUPS[n] == "PSU", n
+    for n in ("SW", "BP", "FB", "FBH"):
+        assert pb.GROUPS[n] == "SWNODE", n
+    assert pb.rules().spacing("SWNODE", "NEUTRAL") == 1.0 and pb.rules().spacing("PSU", "NEUTRAL") == 2.5
 
 
 # --- metering ------------------------------------------------------------------------------------------
