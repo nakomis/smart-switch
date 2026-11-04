@@ -311,8 +311,8 @@ TEST_HOLES = {"TP2": "BL_RX", "TP3": "BL_TX", "TP4": "ZX", "TP5": "OC", "TP6": "
 #   SELV strip, y >= SELV_Y: the ESP32 module (antenna overhanging the bottom edge), J3 on the
 #   bottom edge (a side-wall slot in the case), J4, the button and LED (through the lid), USB, the
 #   relay driver, PS1's output protection.
-from board.kicad_pcb import Slot, Via, Zone, solid_pads  # noqa: E402
-from board.placement import Placement  # noqa: E402
+from board.kicad_pcb import S, Slot, Track, Via, Zone, solid_pads  # noqa: E402
+from board.placement import Placement, rotate  # noqa: E402
 
 W, H = 120.0, 70.0
 MAINS_Y, SELV_Y = 38.5, 46.5
@@ -351,7 +351,7 @@ AT = {
     # SELV: reuse I/O
     "J3": (40.0, 66.0, 0), "J4": (39.0, 56.0, 0),
     # SELV: button, LED
-    "SW1": (57.9, 52.0, 0), "D1": (58.0, 59.5, 0), "C43": (56.0, 65.5, 90), "R18": (58.5, 65.5, 90),
+    "SW1": (57.9, 52.8, 0), "D1": (58.0, 59.5, 0), "C43": (56.0, 65.5, 90), "R18": (58.5, 65.5, 90),
     "R15": (61.0, 65.5, 90),
     # SELV: relay driver and NTC (below the relay)
     "Q1": (66.0, 64.5, 0), "D3": (66.0, 68.0, 0), "R16": (70.0, 64.0, 90), "R17": (71.5, 64.0, 90),
@@ -461,3 +461,126 @@ def gnd_pts():
 def mains_pad_extra(c):
     """Every pad on a mains pour joins it solidly (no thermal relief)."""
     return solid_pads(c, set(MAINS_POLYS))
+
+
+# --- routing (step 8) ----------------------------------------------------------------------------
+# Freerouting runs twice, each time confined to one area: the SELV strip, then the metering
+# island. Neither area comes within 8 mm of the other side's copper, so the router (which knows
+# only plain clearances) can't break the barrier; KiCad's DRC with the generated rules checks
+# it all afterwards. The divider chain and the shunt's Kelvin pair are routed by hand.
+def pad_xy(c, p, ref, number):
+    """Board position of a pad's centre."""
+    x, y, rot = p.at[ref]
+    pad = next(q for q in c.instances[ref].part.footprint.pads if q.number == number)
+    dx, dy = rotate(pad.x, pad.y, rot)
+    return round(x + dx, 4), round(y + dy, 4)
+
+
+SELV_TOP = 45.2      # 8 mm (and a track's half-width) below the Kelvin pair's run at KELVIN_Y
+
+
+def selv_area():
+    """The SELV router's area. On the left it starts at SELV_TOP (8 mm below the Kelvin pair,
+    which runs under the fuse at y = 36.9); past x = 51 it steps down round the L_SH pour's corner
+    at (57, 38.5), and under the relay it keeps 8 mm below L_SH's bottom edge (41.5).
+    selv_keepouts() adds the isolator's band."""
+    e = 0.45
+    return [(e, SELV_TOP), (51.0, SELV_TOP), (54.0, 47.0), (55.5, 49.55), (83.5, 49.55), (84.5, 47.0),
+            (W - e, 47.0), (W - e, H - e), (e, H - e)]
+
+
+def selv_keepouts():
+    """(layer, x0, y0, x1, y1): no SELV track within 8 mm of the isolator's island-side pads
+    (y <= 38.95). Its own SELV pads (from y = 46.05) are reached from below: Freerouting lets a
+    track leave a pin in any direction, even out of its area, so the band must be explicit."""
+    return [(layer, 19.5, SELV_TOP, 47.5, 46.75) for layer in CU]
+
+
+def island_area():
+    """The island router's area: the BL0939 and its filters, the isolator's island side. It keeps
+    8 mm above the isolator's SELV pads (y = 38.05), clear of the divider column on the left, and
+    2.5 mm (LINE to LIVE) plus a track from F1's right-hand L_IN clip pad under the fuse."""
+    return [(21.2, 9.0), (39.9, 9.0), (39.9, 38.05), (27.2, 38.05), (27.2, 36.4), (28.2, 36.4),
+            (28.2, 27.75), (22.4, 27.75), (22.4, 23.8), (21.2, 23.8)]
+
+
+def island_keepouts():
+    """(layer, x0, y0, x1, y1): no island track below the isolator's island-side pad centres,
+    towards the slot and the SELV side (the pads themselves reach y = 38.95)."""
+    return [(layer, 26.0, 38.25, 41.5, 43.0) for layer in CU]
+
+
+def _in_poly(x, y, poly):
+    hit = False
+    for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1]):
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            hit = not hit
+    return hit
+
+
+def in_selv(x, y):
+    return _in_poly(x, y, selv_area()) and not any(
+        x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in selv_keepouts())
+
+
+def in_island(x, y):
+    return _in_poly(x, y, island_area())
+
+
+DIV_W = 0.4
+KELVIN_W = 0.25
+
+
+def divider_tracks(c, p):
+    """R5..R9 in a chain: each DIV net straight from one resistor's pad to the next's, F.Cu."""
+    out = []
+    for net in ("DIV1", "DIV2", "DIV3", "DIV4"):
+        (a, b) = sorted(c.nets[net])
+        (x1, y1), (x2, y2) = pad_xy(c, p, *a), pad_xy(c, p, *b)
+        out.append(Track(net, "F.Cu", x1, y1, x2, y2, DIV_W))
+    return out
+
+
+KELVIN_X, KELVIN_Y, KELVIN_END = 40.4, 36.9, (38.8, 14.0)
+
+
+def kelvin_route(c, p):
+    """(tracks, vias): the shunt's sense pair, stacked. GND_M leaves pad 2 (E1, bottom left) on
+    F.Cu; SENSE leaves pad 3 (E2, top right), drops to B.Cu just above it, runs back under the
+    shunt between its current pads and joins GND_M's path from below. From there they run
+    together (F.Cu over B.Cu) under the fuse, up the gap between the island and F1's right clip,
+    and into the island, where the router finishes them."""
+    gx, gy = pad_xy(c, p, "RS1", "2")
+    sx, sy = pad_xy(c, p, "RS1", "3")
+    via = (sx, round(sy - 1.13, 4))
+    mid = 57.0                                   # between the shunt's current pads
+    common = [(gx, KELVIN_Y), (KELVIN_X, KELVIN_Y), (KELVIN_X, KELVIN_END[1]), KELVIN_END]
+    seg = lambda net, layer, pts: [Track(net, layer, *a, *b, KELVIN_W) for a, b in zip(pts, pts[1:])]
+    tracks = seg("SENSE", "F.Cu", [(sx, sy), via])
+    tracks += seg("SENSE", "B.Cu", [via, (mid, via[1]), (mid, KELVIN_Y)] + common)
+    tracks += seg("GND_M", "F.Cu", [(gx, gy)] + common)
+    return tracks, [Via("SENSE", *via)]
+
+
+def island_zones():
+    """GND_M on both layers over the island area, below the mains pours in priority."""
+    return [Zone("GND_M", CU, island_area(), priority=0, clearance=0.2, min_width=0.25)]
+
+
+def pad_extra(c):
+    """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND and GND_M pads, the
+    plated mounting holes, J3's and J4's GND pins and the GND test holes (as on the heatlink,
+    where tracks otherwise leave them on one-spoke islands); U1's nine 1.2 mm centre GND pads
+    get a -0.18 mm paste margin (Espressif: a full thermal pad lifts the module)."""
+    def make(ref):
+        def f(pad):
+            net = c.net_of(ref, pad.number)
+            extra = []
+            if ref == "U1" and net == "GND" and abs(pad.w - 1.2) < 1e-6:
+                extra.append([S("solder_paste_margin"), -0.18])
+            if net in MAINS_POLYS or (net == "GND_M" and pad.kind == "smd") or (net == "GND" and (
+                    pad.kind == "smd" or ref in ("H3", "H4", "J3", "J4") or ref in TEST_HOLES)):
+                extra.append([S("zone_connect"), 2])
+            return extra
+        return f
+    return {ref: make(ref) for ref in c.instances}

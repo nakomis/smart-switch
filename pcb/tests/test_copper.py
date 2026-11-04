@@ -46,7 +46,7 @@ def filled(tmp_path_factory):
         for fp in find_all(z, "filled_polygon"):
             pts = [(float(p[1]), float(p[2])) for p in find_all(find(fp, "pts"), "xy")]
             polys[(find(z, "net")[1], find(fp, "layer")[1])].append(pts)
-    return json.loads((out / "drc.json").read_text()), polys
+    return json.loads((out / "drc.json").read_text()), polys, board
 
 
 def test_every_high_current_net_pours_on_both_layers_solidly():
@@ -84,7 +84,7 @@ def test_every_high_current_net_is_stitched_inside_its_own_pour():
 
 
 def test_drc_is_clean_apart_from_unrouted_signals(filled):
-    drc, _ = filled
+    drc, _, _ = filled
     ignore = {"silk_overlap", "silk_over_copper", "silk_edge_clearance", "text_height", "text_thickness",
               "lib_footprint_mismatch", "lib_footprint_issues"}
     bad = [v for v in drc["violations"] if v["type"] not in ignore
@@ -93,7 +93,7 @@ def test_drc_is_clean_apart_from_unrouted_signals(filled):
 
 
 def test_the_pours_connect_every_mains_pad(filled):
-    drc, _ = filled
+    drc, _, _ = filled
     mains = set(pb.MAINS_POLYS)
     stray = [u for u in drc["unconnected_items"]
              if any(f"[{n}]" in i["description"] for n in mains for i in u["items"])]
@@ -104,7 +104,7 @@ def test_the_pours_connect_every_mains_pad(filled):
 def test_each_layer_alone_is_one_piece_reaching_every_through_hole_pad(filled, net):
     """So the two layers really are in parallel all the way, and neither depends on the vias.
     With min_thickness at half the IPC width, each is at least that wide everywhere."""
-    _, polys = filled
+    _, polys, _ = filled
     for layer in ("F.Cu", "B.Cu"):
         pieces = polys[(net, layer)]
         assert len(pieces) == 1, (net, layer, len(pieces))
@@ -116,7 +116,23 @@ def test_each_layer_alone_is_one_piece_reaching_every_through_hole_pad(filled, n
 
 
 def test_no_pour_reaches_into_the_selv_strip(filled):
-    _, polys = filled
+    _, polys, _ = filled
     for (net, layer), pieces in polys.items():
         if net in pb.GROUPS:
             assert max(y for pts in pieces for _, y in pts) <= pb.RELAY_NOTCH[2] + 1e-6, (net, layer)
+
+
+def test_build_check_agrees(filled):
+    """board.checks.pour_problems (which build.py runs on the routed board) passes here..."""
+    from board.checks import pour_problems
+    _, _, board = filled
+    assert pour_problems(C, P, board, pb.HIGH_CURRENT) == []
+
+
+def test_build_check_catches_a_missing_pad(filled, monkeypatch):
+    """...and fails when a pour misses a through-hole pad of its net."""
+    from board import checks
+    _, _, board = filled
+    real = checks.inside
+    monkeypatch.setattr(checks, "inside", lambda pt, poly: False if pt[0] > 100 else real(pt, poly))
+    assert any("misses J2" in s for s in checks.pour_problems(C, P, board, {"N"}))

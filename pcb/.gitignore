@@ -6,6 +6,8 @@ out/*/gerbers/
 # placement scratch (board.sketch, and the unrouted board DRC'd while placing)
 out/sketch.png
 out/placed/
+# development builds (build.py --out out/dev): out/petro/ is the ordered one
+out/dev/
 *.dsn
 *.ses
 *.kicad_prl
