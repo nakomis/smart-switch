@@ -146,3 +146,22 @@ def test_island_has_its_own_ground_pour():
     assert set(z.layers) == {"F.Cu", "B.Cu"}
     assert z.pts == pb.island_area()
     assert z.priority < min(m.priority for m in MAINS_HC)
+
+
+def test_island_keepouts_stop_tracks_escaping_towards_the_l_in_clip():
+    """Freerouting lets a track leave a pad in any direction, out of its area too (a VISO_M track
+    left FB1 westwards, 2.25 mm from XF1's L_IN clip). Every point up to 1 mm outside the island
+    area that is nearer than 2.5 mm plus half a track to an L_IN pad is in an island keep-out."""
+    from board.gnd import pad_boxes
+    lin = [b for b in pad_boxes(C, P) if b[0] == "L_IN"]
+    area, keep = pb.island_area(), pb.island_keepouts()
+    x0 = min(x for x, _ in area) - 1.0
+    for i in range(int((max(x for x, _ in area) + 1.0 - x0) / 0.2)):
+        for j in range(int((max(y for _, y in area) + 1.0 - 8.0) / 0.2)):
+            pt = (x0 + i * 0.2, 8.0 + j * 0.2)
+            if _inside(pt, area) or _poly_dist(pt, area) > 1.0:
+                continue
+            near = any(math.hypot(max(b[1] - pt[0], 0, pt[0] - b[3]), max(b[2] - pt[1], 0, pt[1] - b[4]))
+                       < 2.5 + 0.15 for b in lin)
+            if near:
+                assert any(kx0 <= pt[0] <= kx1 and ky0 <= pt[1] <= ky1 for _, kx0, ky0, kx1, ky1 in keep), pt

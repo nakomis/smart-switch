@@ -506,8 +506,14 @@ def island_area():
 
 def island_keepouts():
     """(layer, x0, y0, x1, y1): no island track below the isolator's island-side pad centres,
-    towards the slot and the SELV side (the pads themselves reach y = 38.95)."""
-    return [(layer, 26.0, 38.25, 41.5, 43.0) for layer in CU]
+    towards the slot and the SELV side (the pads themselves reach y = 38.95); nor out of the
+    area's lower-left edges towards F1's L_IN clip (LINE to LIVE needs 2.5 mm, and Freerouting
+    lets a track leave a pad in any direction: one left FB1 westwards, 2.25 mm from the clip)."""
+    boxes = [(26.0, 38.25, 41.5, 43.0),           # below the isolator
+             (19.0, 27.75, 28.2, 36.4),           # left of the area's lower part
+             (19.0, 36.4, 27.2, 38.25),           # and below its bottom-left corner
+             (19.0, 23.8, 22.4, 27.75)]           # beside the step at x = 22.4
+    return [(layer, *b) for layer in CU for b in boxes]
 
 
 def _in_poly(x, y, poly):
