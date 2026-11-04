@@ -161,9 +161,12 @@ gland was found. That leaves a **board of about 120 × 60 mm** on the box's boss
 - **The copper, terminals and relay are sized for 16 A.** The relay is already 16 A and the
   terminals 32 A, and the `Mains16A` net class's minimum width is set for 16 A.
 - **F1 is a 15 A high-breaking-capacity fuse** (0505015.MXP, 6.3×32 mm, 50 kA) in 30 A clips
-  (Littelfuse 01220088Z). A replacement must be a 6.3×32 mm ceramic 15 A fast-acting fuse rated
-  at least 250 V AC, with its breaking capacity stated at 250 V AC or above, from an authorised
-  distributor; never a glass fuse. It
+  (Littelfuse 01220088Z). A replacement must be a 6.3×32 mm ceramic fast-acting (F) fuse of 15 or
+  16 A (not above the 16 A the copper is sized for), rated at least 250 V AC, with a breaking
+  capacity of **at least 1.5 kA at 250 V AC or above** stated on its datasheet, from an authorised
+  distributor. Never a glass fuse, and not Littelfuse's 314 series: its 10 kA is at 125 V only,
+  750 A at 250 V AC. The RS PRO F16A HBC (RS 209-9298) is an acceptable spare, but its datasheet
+  gives no figure (HBC conventionally means 1.5 kA). It
   protects against short circuits. 15 A, not 16 A: 16 A comes in neither the high-breaking range
   nor 15 A clips, and 10 A is 67 % of 15 A. A 5×20 15 A fuse breaks only about 500 A, which is low
   for a UK socket's prospective fault current, hence the 6.3×32.
