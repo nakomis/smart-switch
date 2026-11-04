@@ -21,6 +21,17 @@ def _pair(tmp_path, a, b, gap):
     return _probe(tmp_path, [Via(a, 30.0, 30.0), Via(b, 30.0 + 0.6 + gap, 30.0)], rules=_rules())
 
 
+def test_a_divider_from_line_keeps_its_taps_when_f1_blows():
+    """Rev B's divider hangs from L_IN (before F1): DIVk is k fifths of the way from neutral to
+    LINE in every scenario, so with F1 blown DIV4 still sits 200 V from neutral."""
+    from board.rules import working_voltage
+    assert working_voltage("DIV4", "NEUTRAL", divider_top="LINE") == 200
+    assert working_voltage("DIV4", "LINE", divider_top="LINE") == 50
+    assert working_voltage("DIV4", "LIVE", divider_top="LINE") == 200      # F1 blown: LIVE at neutral
+    r = Rules(GROUPS_B, rest="NEUTRAL", divider_top="LINE")
+    assert r.matrix()[("DIV4", "LINE")][0] == 50
+
+
 def test_rest_must_be_a_group():
     with pytest.raises(ValueError):
         Rules(GROUPS_B, rest="NOPE")

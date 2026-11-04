@@ -17,7 +17,7 @@ Supply (all at mains potential): PI's LNK306 high-side buck (datasheet Figure 5;
   the AP2112K 3.3 V from that.
 
 Metering: the BL0939 on GND, reading the shunt (channel A metering, channel B the fast
-  over-current I_leak) and the voltage through 5 x 390k from live; its UART, zero cross and
+  over-current I_leak) and the voltage through 5 x 390k from L_IN; its UART, zero cross and
   over-current wired straight to the ESP32.
 
 Low-voltage side, as on the nakostat heatlink (STAT-75): the ESP32-S3-MINI-1 module, the house USB
@@ -84,7 +84,7 @@ BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on
 
 
 def rules():
-    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL")
+    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL", divider_top="LINE")
 
 
 def build_petro():
@@ -114,7 +114,8 @@ def build_petro():
         c.connect(n, (j2, pad))
     c.connect("L_IN", (part("FUSECLIP", "XF1"), "1"))           # F1's two clips
     c.connect("L_F", (part("FUSECLIP", "XF2"), "1"))
-    two("MOV", "RV1", "L_F", "N_IN")                            # after F1: F1 clears a MOV short
+    two("MOV", "RV1", "L_F", "N_OUT")       # after F1 (F1 clears a MOV short); on N_OUT: a surge crosses
+                                            # the 1 mR shunt (~0.02 J, within its pulse rating)
     k1 = part("RELAY16", "K1")
     c.connect("L_F", (k1, "COM"))
     c.connect("L_OUT", (k1, "NO"))
@@ -201,9 +202,10 @@ def build_petro():
         c.connect(nn, (rn, "2"), (u3, f"IN{k}"))
         two("C33N", None, pn, gnd)
         two("C33N", None, nn, gnd)
-    # Voltage: live (after F1) -> 5 x 390k (1206, 50 V each) -> VP -> 470R to ground, so 61 mV rms
+    # Voltage: L_IN (before F1: rev A hung it from the unfused neutral; the BL0939 still sees the
+    # mains with F1 blown) -> 5 x 390k (1206, 50 V each) -> VP -> 470R to ground, so 61 mV rms
     # at 253 V (the BL0939's maximum is 70 mV rms), with 33 nF across. DIV1 is next to VP.
-    chain = ["L_F", "DIV4", "DIV3", "DIV2", "DIV1", "VP"]
+    chain = ["L_IN", "DIV4", "DIV3", "DIV2", "DIV1", "VP"]
     for a, b in zip(chain, chain[1:]):
         two("R390K", None, a, b)
     two("R470", None, "VP", gnd)

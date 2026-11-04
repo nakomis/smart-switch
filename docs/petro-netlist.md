@@ -9,8 +9,8 @@ mains potential: nothing on it may leave the case.
 
 | Group | Net | Pins |
 |---|---|---|
-| LINE | `L_IN` | J1.2, XF1.1 |
-| LIVE | `L_F` | K1.COM, R12.1, RV1.1, XF2.1, XF3.1 |
+| LINE | `L_IN` | J1.2, R12.1, XF1.1 |
+| LIVE | `L_F` | K1.COM, RV1.1, XF2.1, XF3.1 |
 | PSU | `BP` | C3.1, U4.BP |
 | PSU | `FB` | R2.2, R3.1, U4.FB |
 | PSU | `FBH` | C5.1, D9.K, R2.1 |
@@ -19,8 +19,8 @@ mains potential: nothing on it may leave the case.
 | PSU | `SW` | C3.2, C5.2, D8.K, L2.1, R3.2, U4.S |
 | PSU | `VBULK` | C2.+, L1.2, U4.D |
 | PSU | `VBULK1` | C1.+, D7.K, L1.1 |
-| NEUTRAL | `N_IN` | J1.1, RS1.I1, RV1.2 |
-| NEUTRAL | `N_OUT` | J2.2, RS1.I2 |
+| NEUTRAL | `N_IN` | J1.1, RS1.I1 |
+| NEUTRAL | `N_OUT` | J2.2, RS1.I2, RV1.2 |
 | LOAD | `L_OUT` | J2.1, K1.NO |
 | DIV1 | `DIV1` | R15.2, R16.1 |
 | DIV2 | `DIV2` | R14.2, R15.1 |

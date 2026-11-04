@@ -62,20 +62,27 @@ CREEPAGE_PD2_MG3 = ((10, 0.40), (12.5, 0.42), (16, 0.45), (20, 0.48), (25, 0.50)
 GROUPS = ("LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4")
 
 
-def _scenario(live, psu, load):
+def _scenario(live, psu, load, divider_top="LIVE"):
     p = {"LINE": 0.0, "LIVE": live, "PSU": psu, "NEUTRAL": 1.0, "LOAD": load}
-    for k in range(1, 5):                     # DIVk is k fifths of the way from neutral to LIVE
-        p[f"DIV{k}"] = 1.0 + (live - 1.0) * k / 5
+    top = p[divider_top]
+    for k in range(1, 5):                     # DIVk is k fifths of the way from neutral to the top
+        p[f"DIV{k}"] = 1.0 + (top - 1.0) * k / 5
     return p
 
 
-SCENARIOS = {
-    "relay closed": _scenario(live=0.0, psu=0.0, load=0.0),
-    "relay open": _scenario(live=0.0, psu=0.0, load=1.0),
-    "F1 blown": _scenario(live=1.0, psu=1.0, load=1.0),
-    "F2 blown, relay closed": _scenario(live=0.0, psu=1.0, load=0.0),
-    "F2 blown, relay open": _scenario(live=0.0, psu=1.0, load=1.0),
-}
+def scenarios(divider_top="LIVE"):
+    """Every scenario's potentials. divider_top: the group the voltage divider hangs from (LIVE,
+    after F1, on rev A; LINE, before it, on rev B)."""
+    return {
+        "relay closed": _scenario(0.0, 0.0, 0.0, divider_top),
+        "relay open": _scenario(0.0, 0.0, 1.0, divider_top),
+        "F1 blown": _scenario(1.0, 1.0, 1.0, divider_top),
+        "F2 blown, relay closed": _scenario(0.0, 1.0, 0.0, divider_top),
+        "F2 blown, relay open": _scenario(0.0, 1.0, 1.0, divider_top),
+    }
+
+
+SCENARIOS = scenarios()
 
 
 def creepage(volts):
@@ -92,9 +99,9 @@ def creepage(volts):
     return round(math.ceil(round(mm / 0.05, 6)) * 0.05, 2)
 
 
-def working_voltage(g1, g2):
+def working_voltage(g1, g2, divider_top="LIVE"):
     """Worst-case working voltage (V rms) between two mains groups, over every scenario."""
-    return round(V_RATED * max(abs(p[g1] - p[g2]) for p in SCENARIOS.values()), 6)
+    return round(V_RATED * max(abs(p[g1] - p[g2]) for p in scenarios(divider_top).values()), 6)
 
 
 @dataclass
@@ -106,6 +113,7 @@ class Rules:
     high_current: set = field(default_factory=set)
     barriers: tuple = ()
     rest: str | None = None          # non-isolated: the group every unnamed net belongs to
+    divider_top: str = "LIVE"        # the group the voltage divider hangs from
 
     def __post_init__(self):
         if self.rest is not None and self.rest not in GROUPS:
@@ -126,7 +134,7 @@ class Rules:
         out = {}
         for a in self.used():
             for b in self.used():
-                v = working_voltage(a, b)
+                v = working_voltage(a, b, self.divider_top)
                 out[(a, b)] = (v, creepage(v) if v else 0.0)
         return out
 
@@ -160,7 +168,7 @@ class Rules:
                 rule(f"{g} to SELV", [f"clearance (min {REINFORCED}mm)", f"creepage (min {REINFORCED}mm)"],
                      f"A.hasNetclass('{g}') && {selv('B')}")
                 continue
-            v = working_voltage(g, self.rest)
+            v = working_voltage(g, self.rest, self.divider_top)
             if v:
                 mm = creepage(v)
                 rule(f"{g} to the rest ({v:g} V)", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],

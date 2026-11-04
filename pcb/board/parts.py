@@ -177,9 +177,14 @@ BODY = {"ESP32": (-7.7, -12.8, 7.7, 7.7),
         # IRM-05's body runs well past its pins on the -y side.
         "PSU5W": (-22.85, -16.57, 22.85, 8.83),   # 45.7 x 25.4
         "RELAY16": (-14.5, -6.35, 14.5, 6.35),    # 29 x 12.7, pin field taken as centred (checked at placement)
-        "MOV": (-11.5, -4.75, 11.5, 4.75),
+        "MOV": (-11.5, -4.75, 11.5, 4.75),        # 23 mm disc (max), 9.5 mm thick, standing on edge
         # Degson DG636, from its silk outline: the wire openings are on the +y side
-        "MAINSTERM": (-7.62, -4.6, 7.62, 7.9)}        # 23 mm disc (max), 9.5 mm thick, standing on edge
+        "MAINSTERM": (-7.62, -4.6, 7.62, 7.9),
+        # rev B supply, from the footprints' silk outlines (EasyEDA's courtyards are the pad fields)
+        "FUSEHOLD": (-12.5, -4.95, 12.5, 4.95),   # Littelfuse 656 holder, 25 x 9.9
+        "C4U7HV": (-4.0, -4.0, 4.0, 4.0),         # 8 mm can
+        "C220U": (-4.45, -3.4, 4.45, 3.4),        # 6.6 mm base, pads to +-4.45
+        "L1MO": (-7.15, -6.2, 7.15, 6.2)}         # 12.3 mm square, pads to +-7.15
 # The antenna strip of the module, in footprint coordinates (above the top pad row).
 ESP32_ANTENNA = (-7.7, -12.8, 7.7, -7.75)
 

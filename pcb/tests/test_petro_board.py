@@ -54,7 +54,7 @@ def test_live_path_order():
     """J1 -> F1 -> (MOV) -> relay -> J2 on the live; the supply branch after F2, which is after F1."""
     assert net("J1", "2") == net("XF1", "1") == "L_IN"
     assert net("XF2", "1") == net("K1", "COM") == net("XF3", "1") == "L_F"
-    assert {net("RV1", "1"), net("RV1", "2")} == {"L_F", "N_IN"}
+    assert {net("RV1", "1"), net("RV1", "2")} == {"L_F", "N_OUT"}
     assert net("K1", "NO") == net("J2", "1") == "L_OUT"
     assert net("XF3", "2") == "L_PSU"
 
@@ -149,10 +149,12 @@ def test_both_current_channels_read_the_shunt_against_ground():
         assert "SENSE" in nets_of(rp) and "GND" in nets_of(rn)
 
 
-def test_voltage_divider_from_live():
-    """Five 390k from live (after F1) to VP, 470R to ground: 61 mV at 253 V. DIV1 is next to VP,
-    so DIVk sits k fifths of the way from neutral to live (rules.py's scenarios)."""
-    chain = ["VP", "DIV1", "DIV2", "DIV3", "DIV4", "L_F"]
+def test_voltage_divider_from_line():
+    """Five 390k from L_IN (before F1, like rev A's from the unfused neutral) to VP, 470R to ground:
+    61 mV at 253 V; the BL0939 still sees the mains with F1 blown. DIV1 is next to VP,
+    so DIVk sits k fifths of the way from neutral to LINE (rules: divider_top="LINE")."""
+    chain = ["VP", "DIV1", "DIV2", "DIV3", "DIV4", "L_IN"]
+    assert pb.rules().divider_top == "LINE"
     rs = by_key("R390K")
     assert len(rs) == 5
     pairs = sorted((tuple(sorted(nets_of(r), key=chain.index)) for r in rs), key=lambda p: chain.index(p[0]))
