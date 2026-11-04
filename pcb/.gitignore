@@ -3,6 +3,9 @@
 __pycache__/
 out/tmp/
 out/*/gerbers/
+# placement scratch (board.sketch, and the unrouted board DRC'd while placing)
+out/sketch.png
+out/placed/
 *.dsn
 *.ses
 *.kicad_prl

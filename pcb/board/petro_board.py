@@ -50,7 +50,7 @@ def modpin(gpio):
 # --- connectors ----------------------------------------------------------------------------------
 # J1 / J2: line in and load out (Degson DG636, 7.62 mm). Earth does not touch the board.
 J1_PINS = {"1": "L_IN", "2": "N"}
-J2_PINS = {"1": "L_OUT", "2": "N"}
+J2_PINS = {"1": "N", "2": "L_OUT"}             # rotated 270: neutral on top, as on J1
 # J5: the house USB connector (tinycrypt's J1, as on the heatlink): 1 VBUS, 2 D-, 3 D+, 4 CC,
 # 5 GND; pads 6/7 are the shell tabs.
 USB_PINS = {"1": "VBUS_IN", "2": "USB_DM", "3": "USB_DP", "4": "CC", "5": "GND"}
@@ -66,9 +66,10 @@ HDR_PINS = {"1": "+3V3", "2": "GND", "3": "HDR_7", "4": "HDR_8", "5": "HDR_9", "
 # --- the mains rules -----------------------------------------------------------------------------
 ISLAND = ("GND_M", "GISO_M", "3V3_M", "VISO_M", "VP", "SENSE", "IAP", "IAN", "IBP", "IBN",
           "BL_TX_M", "BL_RX_M", "ZX_M", "OC_M")
+ISLAND_NC = ("VT", "CF", "SCLK", "VPP")      # the BL0939's unused pins, each on an NC_ net
 GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "L_SH": "LIVE", "L_PSU": "PSU", "N": "NEUTRAL",
           "L_OUT": "LOAD", "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
-          **{n: "LIVE" for n in ISLAND}}
+          **{n: "LIVE" for n in ISLAND}, **{f"NC_U3_{p}": "LIVE" for p in ISLAND_NC}}
 HIGH_CURRENT = {"L_IN", "L_F", "L_SH", "L_OUT", "N"}
 BARRIERS = ("U4", "K1", "PS1")          # isolator, relay, SELV PSU: their own pads cross the barrier
 
@@ -147,8 +148,10 @@ def build_petro():
     c.connect("ZX_M", (u3, "ZX"))
     c.connect("OC_M", (u3, "I_leak"))
     two("R10K", None, "BL_TX_M", "3V3_M")                       # TX needs a pull-up (datasheet)
-    for pin in ("VT", "CF", "SCLK", "VPP"):                      # unused; SCLK and VPP float
-        c.no_connect(u3, pin)
+    # Unused pins (SCLK and VPP must float): each on its own NC_ net in the LIVE group, so the
+    # mains rules treat them as part of the island, not as touchable SELV copper.
+    for pin in ISLAND_NC:
+        c.connect(f"NC_U3_{pin}", (u3, pin))
 
     # ---- the isolator with power: side 1 SELV (the power input), side 2 the island ---------------
     # ISOW7743 (TI SLLSFK1C): power flows from side 1 to side 2, so side 1 is SELV. Channel A is
@@ -278,9 +281,114 @@ def build_petro():
         if k.startswith("HDR_"):
             c.connect(k, (u1, modpin(GPIO[k])))
 
-    # Mounting holes (the Hammond 1591XXDBK's bosses): the two in the mains strip unplated, the
-    # two in the SELV strip plated, on GND.
+    # Mounting holes near the corners: the two in the mains strip unplated, the two in the SELV
+    # strip plated, on GND.
     part("MHN", "H1")
     part("MHN", "H2")
     c.connect(gnd, (part("MH", "H3"), "1"), (part("MH", "H4"), "1"))
     return c
+
+
+# --- placement (step 6) --------------------------------------------------------------------------
+# Board 120 x 70 mm, in Martin's own printed case (PETRO-6). Mains along the top long edge, SELV
+# along the bottom; cables enter at opposite ends (J1 left, J2 right).
+#   Mains strip, y <= MAINS_Y: a neutral band along the top edge; a middle row (the metering
+#   island, the MOV, F2); a bottom row with the live chain J1 -> F1 -> shunt -> relay COM.
+#   Under the relay the mains strip goes down to RELAY_NOTCH's y, so L_SH can reach COM below NO.
+#   Barrier: no copper between MAINS_Y and SELV_Y, except the barrier parts' own pads (the relay's
+#   coil-to-contact gap is 17.8 mm, PS1's 38.5 mm, the ISOW7743's 7.1 mm with a slot under it).
+#   SELV strip, y >= SELV_Y: the ESP32 module (antenna overhanging the bottom edge), J3 on the
+#   bottom edge (a side-wall slot in the case), J4, the button and LED (through the lid), USB, the
+#   relay driver, PS1's output protection.
+from board.kicad_pcb import Slot  # noqa: E402
+from board.placement import Placement  # noqa: E402
+
+W, H = 120.0, 70.0
+MAINS_Y, SELV_Y = 38.5, 46.5
+RELAY_NOTCH = (60.0, 78.0, 41.5)            # x0, x1, y: the mains strip's extent under the relay
+HOLES = {"H1": (4.0, 4.0), "H2": (116.0, 4.0), "H3": (4.0, 66.0), "H4": (116.0, 66.0)}
+F1_CLIP_PITCH = 34.21 - 7.62                # clip centres for a 1 1/4 in fuse (Littelfuse "A")
+F1_Y = 32.0
+ISO_AT = (33.5, 42.5)
+LED_RING = 2.0                              # mm of clear board round the LED (the light pipe's flange)
+
+AT = {
+    # mains: terminals, the live chain, F2, the MOV
+    "J1": (8.0, 19.5, 90), "J2": (113.0, 19.5, 270),
+    "XF1": (20.0, F1_Y, 0), "XF2": (20.0 + F1_CLIP_PITCH, F1_Y, 0),
+    "RS1": (57.0, 33.5, 0), "K1": (69.0, 46.5, 90), "PS1": (86.0, 42.0, 270),
+    "XF3": (62.0, 22.0, 0), "RV1": (62.0, 12.0, 180),
+    # the metering island: the divider column, the BL0939 and its filters
+    "R5": (18.0, 10.0, 270), "R6": (18.0, 14.8, 270), "R7": (18.0, 19.6, 270), "R8": (18.0, 24.4, 270),
+    "R9": (22.0, 26.0, 0), "R10": (24.5, 13.0, 0), "C27": (24.5, 16.0, 0),
+    "U3": (31.0, 19.0, 180),
+    "R1": (29.5, 11.5, 90), "R2": (31.0, 11.5, 90), "R3": (32.5, 11.5, 90), "R4": (34.0, 11.5, 90),
+    "C23": (29.5, 13.6, 90), "C24": (31.0, 13.6, 90), "C25": (32.5, 13.6, 90), "C26": (34.0, 13.6, 90),
+    "C22": (37.5, 16.0, 90), "R11": (37.5, 21.5, 90),
+    # the isolator and its island-side parts (between F1's clips, under the fuse body)
+    "U4": (ISO_AT[0], ISO_AT[1], 0),
+    "FB1": (29.0, 34.0, 90), "FB2": (30.5, 34.0, 90), "C32": (33.0, 34.5, 0), "C33": (36.5, 34.5, 0),
+    "C34": (36.5, 32.6, 0), "C35": (33.0, 32.3, 0),
+    # the isolator's SELV-side parts
+    "C28": (43.0, 48.2, 0), "C29": (46.0, 48.2, 0), "C30": (48.0, 48.2, 0), "C31": (50.0, 48.2, 0),
+    "R12": (52.0, 48.2, 0),
+    # SELV: the module and its supply
+    "U1": (16.0, 62.25, 180), "U2": (25.5, 49.0, 0),
+    "C37": (17.5, 51.5, 0), "C38": (21.0, 51.5, 0), "C39": (21.0, 49.0, 0),
+    "TP1": (6.0, 52.5, 0), "R14": (2.0, 49.0, 90), "C42": (3.5, 49.0, 90), "C40": (2.0, 53.0, 90),
+    "C41": (3.5, 53.0, 90), "R20": (2.0, 57.0, 90), "R21": (3.5, 57.0, 90),
+    # SELV: reuse I/O
+    "J3": (40.0, 66.0, 0), "J4": (39.0, 56.0, 0),
+    # SELV: button, LED
+    "SW1": (57.9, 52.0, 0), "D1": (58.0, 59.5, 0), "C43": (56.0, 65.5, 90), "R18": (58.5, 65.5, 90),
+    "R15": (61.0, 65.5, 90),
+    # SELV: relay driver and NTC (below the relay)
+    "Q1": (66.0, 64.5, 0), "D3": (66.0, 68.0, 0), "R16": (70.0, 64.0, 90), "R17": (71.5, 64.0, 90),
+    "TH1": (74.0, 66.0, 90), "R19": (75.8, 66.0, 90), "C44": (77.0, 68.5, 0),
+    # SELV: PS1's output (below PS1)
+    "F3": (82.0, 67.5, 0), "D4": (89.0, 67.5, 0), "D5": (96.5, 67.5, 0), "C36": (101.5, 67.5, 90),
+    # SELV: USB
+    "J5": (110.0, 50.0, 0), "U6": (106.0, 56.0, 0), "F4": (111.0, 56.5, 90), "D2": (115.0, 56.5, 90),
+    "D6": (110.0, 60.5, 0), "R13": (116.5, 50.0, 90),
+    **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
+}
+
+
+def place_petro(c):
+    missing = set(c.instances) - set(AT)
+    if missing:
+        raise KeyError(f"no placement for {sorted(missing)}")
+    p = Placement((0.0, 0.0, W, H), {r: AT[r] for r in c.instances})
+    p.courtyards = {r: i.part.body for r, i in c.instances.items()}
+    return p
+
+
+def slots():
+    """A slot under the isolator, between its two pad rows and longer than the part, so that
+    the creepage round it is more than 8 mm (checked by rules.barrier_creepage)."""
+    x, y = ISO_AT
+    return [Slot(x - 9.0, y, x + 9.0, y, 1.5)]
+
+
+def fuse_box():
+    """F1's fuse body between its clips: 6.35 x 31.75 mm, held above the board by the clips."""
+    cx = AT["XF1"][0] + F1_CLIP_PITCH / 2
+    return (cx - 31.75 / 2, F1_Y - 3.2, cx + 31.75 / 2, F1_Y + 3.2)
+
+
+def led_ring():
+    from board.parts import part
+    x, y, _ = AT["D1"]
+    b = part("LED").body
+    return (x + b[0] - LED_RING, y + b[1] - LED_RING, x + b[2] + LED_RING, y + b[3] + LED_RING)
+
+
+def keep_boxes():
+    return [(fuse_box(), (200, 0, 0)), (led_ring(), (0, 120, 255))]
+
+
+def sketch_lines():
+    x0, x1, ny = RELAY_NOTCH
+    return [((0, MAINS_Y, x0, MAINS_Y), (220, 0, 0)), ((x0, MAINS_Y, x0, ny), (220, 0, 0)),
+            ((x0, ny, x1, ny), (220, 0, 0)), ((x1, ny, x1, MAINS_Y), (220, 0, 0)),
+            ((x1, MAINS_Y, W, MAINS_Y), (220, 0, 0)), ((0, SELV_Y, W, SELV_Y), (0, 160, 0))]

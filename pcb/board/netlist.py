@@ -79,7 +79,7 @@ class Circuit:
 def check(c):
     problems = list(c._conflicts)
     for net, pads in c.nets.items():
-        if len(pads) < 2:
+        if len(pads) < 2 and not net.startswith("NC_"):      # NC_ nets have one pad on purpose
             problems.append(f"net {net} has only one pad")
         outs = [k for k in pads if c.instances[k[0]].part.pin_types.get(k[1]) == "output"]
         if len(outs) > 1:
