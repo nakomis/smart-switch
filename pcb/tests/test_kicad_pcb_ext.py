@@ -178,3 +178,24 @@ def test_defaults_unchanged(tmp_path):
     assert pcb.with_suffix(".kicad_dru").read_text() == DRU
     assert not [g for g in _edge(parse(pcb.read_text())) if g[0] == "gr_arc"]
 
+
+
+def test_dashed_silk_lines(tmp_path):
+    """lines: (x0, y0, x1, y1, layer) as dashed graphic lines, for the mains boundary."""
+    _, _, pcb = _mini(tmp_path, lines=[(1.0, 2.0, 11.0, 2.0, "F.SilkS"), (1.0, 3.0, 1.0, 9.0, "B.SilkS")])
+    got = [(tuple(find(g, "start")[1:]), tuple(find(g, "end")[1:]), find(g, "layer")[1],
+            find(find(g, "stroke"), "type")[1]) for g in find_all(parse(pcb.read_text()), "gr_line")]
+    assert ((1.0, 2.0), (11.0, 2.0), "F.SilkS", "dash") in got
+    assert ((1.0, 3.0), (1.0, 9.0), "B.SilkS", "dash") in got
+
+
+def test_silk_avoid_drops_footprint_user_text_over_a_box_but_keeps_the_rest():
+    """A library footprint's own silk labels (the IRM-05-5's AC/L beside its pin) are dropped
+    when they overlap a silk_avoid box (a pad), like its lines; text elsewhere stays."""
+    from board.kicad_pcb import _drop_silk
+    fp = parse('(footprint "X" (at 10 10)'
+               ' (fp_text user "AC/L" (at 1.6 1.1) (layer "F.SilkS") (effects (font (size 1 1))))'
+               ' (fp_text user "+V" (at -5 -5) (layer "F.SilkS") (effects (font (size 1 1))))'
+               ' (fp_text user "fab" (at 1.6 1.1) (layer "F.Fab") (effects (font (size 1 1)))))')
+    _drop_silk(fp, 10.0, 10.0, 0, [(8.9, 8.9, 11.1, 11.1)])      # a 2.2 mm pad at (10, 10)
+    assert [t[2] for t in find_all(fp, "fp_text")] == ["+V", "fab"]

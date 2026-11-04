@@ -359,8 +359,8 @@ AT = {
     # SELV: PS1's output (below PS1)
     "F3": (82.0, 67.5, 0), "D4": (89.0, 67.5, 0), "D5": (96.5, 67.5, 0), "C15": (101.5, 67.5, 90),
     # SELV: USB
-    "J5": (110.0, 50.0, 0), "U5": (106.0, 56.0, 0), "F4": (111.0, 56.5, 90), "D2": (115.0, 56.5, 90),
-    "D6": (110.0, 60.5, 0), "R13": (116.5, 50.0, 90),
+    "J5": (110.0, 50.0, 0), "U5": (106.0, 56.0, 0), "F4": (111.0, 56.0, 90), "D2": (115.0, 56.0, 90),
+    "D6": (110.0, 60.0, 0), "R13": (116.5, 50.0, 90),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
     # test holes (TEST_HOLES): a row under the isolator, and a 4 x 2 block bottom right
     **{f"TP{2 + k}": (41.0 + 2.54 * k, 50.2, 0) for k in range(5)},
@@ -584,3 +584,118 @@ def pad_extra(c):
             return extra
         return f
     return {ref: make(ref) for ref in c.instances}
+
+
+# --- silkscreen (step 9) -------------------------------------------------------------------------
+# No reference designators (they ran together and mostly sat under parts; the component key PDF
+# names them). Labels only where a person needs them, each where there is room: the front for
+# what is used from the front, the back for the rest.
+TEST_LABELS = {"BL_RX": "BRX", "BL_TX": "BTX", "ZX": "ZX", "OC": "OC", "GND": "G", "+5V": "5V",
+               "+3V3": "3V3", "COIL": "COIL", "LED_DIN": "LED", "BUTTON": "BTN"}
+DEBUG_LABELS = {"1": "EN", "2": "RX", "3": "TX", "4": "G", "5": "3V3"}
+IO_LABELS = {"1": "5V", "2": "G", "3": "3V3", "4": "SDA", "5": "SCL", "6": "4", "7": "5", "8": "6"}
+HDR_LABELS = {n: {"+3V3": "3V3", "+5V": "5V", "GND": "G"}.get(net, net.removeprefix("HDR_"))
+              for n, net in HDR_PINS.items()}
+BOUNDARY_Y = (MAINS_Y + SELV_Y) / 2              # halfway across the 8 mm barrier
+BOUNDARY_NOTCH_Y = (RELAY_NOTCH[2] + SELV_Y) / 2
+
+
+def silk(c, p):
+    """Silk entries (text, x, y, size[, layer[, rotation]])."""
+    out = []
+    xy = lambda ref, n: pad_xy(c, p, ref, n)
+    # the mains terminals: their outlines fill the room beside the pins, so N and L go off the
+    # ends, in line with their pins (N at the top on both); then which end is which, and 230 V
+    for ref, label, y_n, y_l in (("J1", "SUPPLY", 10.4, 29.0), ("J2", "LOAD", 10.1, 28.4)):
+        x = p.at[ref][0]
+        out += [("N", x, y_n, 1.5), ("L", x, y_l, 1.5), (label, x, round(y_n - 2.2, 3), 1.0)]
+    out += [("230 V AC", 8.5, 31.3, 1.2), ("MAINS", 8.5, 33.3, 1.2),
+            ("230 V AC", 110.5, 31.0, 1.5), ("MAINS", 110.5, 33.6, 1.5),
+            ("230 V AC", 95.0, 30.0, 2.0, "B.SilkS"), ("MAINS", 95.0, 33.5, 2.0, "B.SilkS")]
+    # either side of the boundary line, at the left end, on both sides
+    for layer in ("F.SilkS", "B.SilkS"):
+        out += [("MAINS", 12.0, BOUNDARY_Y - 1.4, 1.0, layer), ("SELV", 12.0, BOUNDARY_Y + 1.4, 1.0, layer)]
+    # test holes: the row under the isolator on the back, above the holes (C7-C10 and J4 leave
+    # no room in front, and J4's own labels are below);
+    # the block bottom right on both sides, the top row labelled above, the bottom row below
+    for ref, net in TEST_HOLES.items():
+        x, y = xy(ref, "1")
+        if y < 55:
+            out.append((TEST_LABELS[net], x, round(y - 1.8, 3), 0.8, "B.SilkS"))
+        else:
+            dy = -1.7 if y < 65 else 1.65
+            for layer in ("F.SilkS", "B.SilkS"):
+                out.append((TEST_LABELS[net], x, round(y + dy, 3), 0.8, layer))
+    # the debug pads (SMD, front only): beside each, turned to fit between the pads and U1
+    for n, text in DEBUG_LABELS.items():
+        x, y = xy("TP1", n)
+        out.append((text, round(x + 1.45, 3), y, 0.8, "F.SilkS", 90))
+    # J3 and J4 on the back (the parts cover the front)
+    for n, text in IO_LABELS.items():
+        x, y = xy("J3", n)
+        out.append((text, x, round(y + 2.3, 3), 0.8, "B.SilkS"))
+    for n, text in HDR_LABELS.items():
+        x, y = xy("J4", n)
+        out.append((text, x, round(y + (1.75 if int(n) % 2 else -1.75), 3), 0.8, "B.SilkS"))
+    out.append(("USB", 104.5, AT["J5"][1], 0.8, "F.SilkS", 90))      # between PS1 and J5
+    # the title, on the back under PS1 (no pads there)
+    out += [("PETRO", 90.0, 50.5, 2.0, "B.SilkS"), ("230 V~ 10 A", 90.0, 53.5, 1.2, "B.SilkS"),
+            ("nakomis 2026", 90.0, 55.7, 1.0, "B.SilkS")]
+    return out
+
+
+def _clip(a, b, cuts):
+    """[a, b] minus the intervals in 'cuts', as a list of (lo, hi) longer than 0.5 mm."""
+    out, lo = [], a
+    for c0, c1 in sorted(cuts):
+        if c1 <= lo or c0 >= b:
+            continue
+        if c0 > lo:
+            out.append((lo, c0))
+        lo = max(lo, c1)
+    if lo < b:
+        out.append((lo, b))
+    return [(u, v) for u, v in out if v - u > 0.5]
+
+
+def boundary(c, p, margin=0.5):
+    """The mains/SELV boundary as dashed silk lines on both sides: halfway across the barrier,
+    dropping under the relay's notch, broken wherever it would cross a pad, the slot or a hole,
+    or (on the front) pass under a part, where it couldn't be seen and would cross the part's
+    own outline."""
+    from board.gnd import pad_boxes
+    from board.placement import bbox
+    x0, x1, _ = RELAY_NOTCH
+    path = [(0.6, BOUNDARY_Y), (x0 - 4, BOUNDARY_Y), (x0 - 4, BOUNDARY_NOTCH_Y),
+            (x1 + 4, BOUNDARY_NOTCH_Y), (x1 + 4, BOUNDARY_Y), (W - 0.6, BOUNDARY_Y)]
+    boxes = [b[1:] for b in pad_boxes(c, p)]
+    boxes += [(min(s.x1, s.x2) - s.width / 2, min(s.y1, s.y2) - s.width / 2,
+               max(s.x1, s.x2) + s.width / 2, max(s.y1, s.y2) + s.width / 2) for s in slots()]
+    bodies = [bbox(p, ref) for ref in c.instances]       # the parts are all on the front
+    out = []
+    for layer, avoid in (("F.SilkS", boxes + bodies), ("B.SilkS", boxes)):
+        for (ax, ay), (bx, by) in zip(path, path[1:]):
+            if ay == by:
+                cuts = [(b[0] - margin, b[2] + margin) for b in avoid if b[1] - margin < ay < b[3] + margin]
+                out += [(u, ay, v, ay, layer) for u, v in _clip(min(ax, bx), max(ax, bx), cuts)]
+            else:
+                cuts = [(b[1] - margin, b[3] + margin) for b in avoid if b[0] - margin < ax < b[2] + margin]
+                out += [(ax, u, ax, v, layer) for u, v in _clip(min(ay, by), max(ay, by), cuts)]
+    return out
+
+
+def silk_avoid(c, p, margin=0.1):
+    """Boxes the footprints' own silk must keep out of (write_board drops the lines and labels
+    that cross one): every pad (the fab would clip it there anyway) and the slot."""
+    from board.gnd import pad_boxes
+    boxes = [(x0 - margin, y0 - margin, x1 + margin, y1 + margin) for _, x0, y0, x1, y1 in pad_boxes(c, p)]
+    return boxes + [(min(s.x1, s.x2) - s.width / 2 - 0.3, min(s.y1, s.y2) - s.width / 2 - 0.3,
+                     max(s.x1, s.x2) + s.width / 2 + 0.3, max(s.y1, s.y2) + s.width / 2 + 0.3) for s in slots()]
+
+
+def fab_notes():
+    """(text entries, user rectangles) on Dwgs.User: the antenna overhang, and the mains rule."""
+    ux, uy, _ = AT["U1"]
+    text = [("MODULE ANTENNA OVERHANGS THIS EDGE: INTENTIONAL", ux + 20, H + 1.5, 0.8, "Dwgs.User"),
+            ("230 V AC ABOVE THE DASHED LINE: 8 mm REINFORCED BARRIER", W / 2, -1.5, 0.8, "Dwgs.User")]
+    return text, [(ux - 7.7, H, ux + 7.7, H + 5.05, "Dwgs.User")]

@@ -286,6 +286,25 @@ def _drop_silk(fp, x, y, rot, boxes):
         pts = [(x + a[0] + (b[0] - a[0]) * i / 20, y + a[1] + (b[1] - a[1]) * i / 20) for i in range(21)]
         if any(x0 <= px <= x1 and y0 <= py <= y1 for px, py in pts for x0, y0, x1, y1 in boxes):
             fp.remove(g)
+    # arcs and circles (pin-1 marks), by their defining points
+    for g in find_all(fp, "fp_arc") + find_all(fp, "fp_circle"):
+        if "SilkS" not in str(find(g, "layer")[1]):
+            continue
+        pts = [rotate(find(g, k)[1], find(g, k)[2], rot) for k in ("start", "mid", "end", "center") if find(g, k)]
+        if any(x0 <= x + px <= x1 and y0 <= y + py <= y1 for px, py in pts for x0, y0, x1, y1 in boxes):
+            fp.remove(g)
+    # and the footprint's own silk labels (user text) whose extent overlaps a box
+    for g in find_all(fp, "fp_text"):
+        if g[1] != "user" or "SilkS" not in str(find(g, "layer")[1]):
+            continue
+        font = find(find(g, "effects") or [], "font") or []
+        size = find(font, "size") or [None, 1.0, 1.0]
+        w, h = 0.9 * size[1] * len(str(g[2])) / 2, size[2] / 2
+        at = find(g, "at")
+        cx, cy = rotate(at[1], at[2], rot)
+        cx, cy = x + cx, y + cy
+        if any(cx - w < x1 and cx + w > x0 and cy - h < y1 and cy + h > y0 for x0, y0, x1, y1 in boxes):
+            fp.remove(g)
 
 
 def _zone(net_id, name, layer, outline, uid):
@@ -372,7 +391,7 @@ PRO = {
 def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(), hide_refs=(), art=(),
                 mask=None, silkscreen=None, keepouts=(), pad_extra=None, user_rects=(), silk_avoid=(),
                 model_dir=None, slots=(), zones=(), dru=None, netclasses=None, netclass_patterns=None,
-                plane_pts=None):
+                plane_pts=None, lines=()):
     """Write 'path' (.kicad_pcb) and a .kicad_pro beside it.
 
     layers=4: F.Cu, In1.Cu (GND zone), In2.Cu (+1V5 zone, only if that net exists), B.Cu.
@@ -396,7 +415,8 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     dru: the .kicad_dru text (default DRU). netclasses, netclass_patterns: replace the
     .kicad_pro's net classes and their net-name patterns (defaults: PRO's).
     plane_pts: the GND (and +1V5) pours' polygon instead of the whole outline (inset), e.g. to
-    keep ground pour out of a mains area."""
+    keep ground pour out of a mains area.
+    lines: (x0, y0, x1, y1, layer) dashed graphic lines (the mains boundary on the silkscreens)."""
     if layers not in (2, 4):
         raise ValueError("layers must be 2 or 4")
     path = Path(path)
@@ -462,6 +482,9 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
         tree.append([S("gr_rect"), [S("start"), rx0, ry0], [S("end"), rx1, ry1],
                      [S("stroke"), [S("width"), 0.1], [S("type"), S("dash")]], [S("fill"), S("none")],
                      [S("layer"), layer], uid()])
+    for lx0, ly0, lx1, ly1, layer in lines:
+        tree.append([S("gr_line"), [S("start"), lx0, ly0], [S("end"), lx1, ly1],
+                     [S("stroke"), [S("width"), 0.15], [S("type"), S("dash")]], [S("layer"), layer], uid()])
     for entry in silk:
         tree.append(_text(*entry[:4], uid, *entry[4:]))
     path.write_text(dumps(tree).replace(") (", ")\n (") + "\n")
