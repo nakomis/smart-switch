@@ -141,3 +141,4 @@ def test_defaults_unchanged(tmp_path):
     _, _, pcb = _mini(tmp_path)
     assert pcb.with_suffix(".kicad_dru").read_text() == DRU
     assert not [g for g in _edge(parse(pcb.read_text())) if g[0] == "gr_arc"]
+

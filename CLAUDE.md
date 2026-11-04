@@ -16,7 +16,7 @@ anyone else can have one.
 | Topic | Decision |
 |---|---|
 | Rating | 10 A continuous, 230 V AC, resistive. Derate inductive and capacitive loads. Design margin in: a 16 A relay, and copper and terminals sized for 16 A |
-| Form factor | In-line cord unit (cable in, cable out) in a bought UL94 V-0 ABS/PC junction box with glands and cord grips. Never PLA or PETG for the mains enclosure |
+| Form factor | In-line cord unit (cable in, cable out) in Martin's own printed case (PETRO-6), printed in a UL94 V-0 flame-retardant filament, with glands and cord grips. Never plain PLA or PETG for the mains enclosure. The board (about 120 × 70 mm) sets the case's size |
 | Power | Mains, through one Mean Well **IRM-05-5** (1 A) for the SELV side. Everything after it is SELV. The metering island is powered across the barrier by the ISOW7743's isolated converter (the IRM-01-5 was dropped for space, 4 Nov 2026). **Never** a non-isolated dropper or buck for the SELV supply. Safety-critical parts come only from authorised distributors (see `docs/DESIGN.md` §3.2) |
 | Metering | Option A: a **BL0939** (the BL0942 is out of stock), a 1 mΩ Kelvin shunt and a divider on the mains side. Its UART, zero-cross and over-current lines, and its 3.3 V supply, cross through a reinforced isolator with integrated power (**TI ISOW7743**, 1 forward + 3 reverse channels; never a basic-rated B variant) |
 | MCU | ESP32-S3-MINI-1-N8, soldered directly, antenna overhanging the edge furthest from the mains |

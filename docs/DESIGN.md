@@ -9,8 +9,9 @@ safety tested or certified.
 ## 1. Requirements
 
 - 10 A continuous at 230 V AC (UK), resistive. Derate inductive and capacitive loads.
-- An in-line cord unit: cable in, cable out, in a bought UL94 V-0 enclosure with glands and cord
-  grips. The case is opaque and must not leak LED light through cracks or joins.
+- An in-line cord unit: cable in, cable out, in Martin's own printed case (PETRO-6) in a UL94 V-0
+  flame-retardant filament, with glands and cord grips. The case is opaque and must not leak LED
+  light through cracks or joins.
 - Energy metering: V, A, W and kWh (BL0939).
 - One tactile button cycling on → off → auto; a WS2812B status LED.
 - MQTT through AWS IoT Core (Fleet), OTA updates with rollback, and Alexa.
@@ -149,10 +150,14 @@ Figures marked *unverified* there have not been checked against a primary datash
 
 ### Enclosure
 
-**Hammond 1591XXDBK**: black ABS, UL94 V-0 according to Hammond's drawing (not the "S" codes,
-which are HB). About 148 × 75 × 46.5 mm inside, with four M3 bosses at 114.75 × 54.25 mm. Rapid
-30-1839, £6.59. Glands: HellermannTyton NGM16-BLK (5–10 mm), which are V-2 only. No V-0 black nylon
-gland was found. That leaves a **board of about 120 × 60 mm** on the box's bosses.
+**Martin's own printed case** (decided 4 Nov 2026, PETRO-2), designed around the board in PETRO-6.
+It must be printed in a **UL94 V-0 flame-retardant filament** (FR-ABS, FR-PC/ABS or FR-PETG; never
+plain PLA or PETG), checked against what the CR6-SE can print. The board sets the case: about
+120 × 70 mm, M3 holes near the corners, the ESP32's antenna overhanging the SELV long edge (the case
+leaves it clear space), and the heights in `pcb/out/case-interface.json`. Glands: HellermannTyton
+NGM16-BLK (5–10 mm), V-2 only; no V-0 black nylon gland was found. The bought Hammond 1591XXDBK
+(V-0 ABS, 75 mm inside) researched in PETRO-1 is the fallback; its fixed width was what pinched
+the board.
 
 ## 5. Open questions
 
