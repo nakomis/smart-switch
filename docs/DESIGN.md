@@ -112,7 +112,7 @@ Figures marked *unverified* there have not been checked against a primary datash
 |---|---|---|---|---|---|---|
 | K1 | HF115F-I/005-1HS3A | Hongfa | C2976795 | 25 | 16 A 250 VAC; 5 V coil, 80 mA; coil–contact 5 kV, 10 mm creepage, reinforced (VDE) | Coil and contact pins about 20 mm apart, so no slot needed. **Not** the plain HF115F/005-1HS3 (C81373), which is VDE-rated only 10 A at 70 °C. Fallback: Omron G5RL-1A-E-HR (not on LCSC) |
 | F1 | 0505015.MXP (15 A, 6.3×32 mm ceramic, sand-filled, high breaking capacity) | Littelfuse | C3165450 | 65 | **50 kA** breaking at 500 VAC | Decided in §5.1. Fallback: 0215015.MXP (5×20, 15 A, only 500 A breaking, C720202) in 01000056Z clips (15 A, C151074) |
-| F1 clips | 3557-2 (×2, 6.3 mm fuse clips) | Keystone | C352820 | 1,089 | 30 A, 500 V | Fit a cover or barrier if the case allows |
+| F1 clips | 01220088Z (×2, 122 series PCB clips for ¼" fuses, beryllium copper, tin-plated, with ears) | Littelfuse | C206903 | 4,484 | 30 A; 505 series listed as compatible | Corrected 4 Nov 2026 (PETRO-2): the Keystone 3557-2 first listed here is an automotive blade-fuse holder and cannot hold this fuse. Clip centres 26.59 mm apart (outer holes 34.21 mm, Littelfuse's "A" for 1¼"). No barrier: the closed case covers that |
 | F2 | 0215.500MXP (T500mA 5×20 ceramic) | Littelfuse | C142839 | 2,052 | 1.5 kA breaking | Feeds both PSUs. Not a TR5 (35 A breaking only) |
 | F2 holder | 65600001009 (656 series) | Littelfuse | C187510 | 55 (+199 of the `.J` variant) | 10 A, 250 V, UL94 V-0 | Open holder |
 | RV1 | TMOV20RP275E | Littelfuse | C187710 | 440 | 275 VAC, thermally protected | TMOV14RP275E (C1528070) is the smaller option, but only 3 are in stock |
@@ -160,7 +160,10 @@ gland was found. That leaves a **board of about 120 × 60 mm** on the box's boss
 
 - **The copper, terminals and relay are sized for 16 A.** The relay is already 16 A and the
   terminals 32 A, and the `Mains16A` net class's minimum width is set for 16 A.
-- **F1 is a 15 A high-breaking-capacity fuse** (0505015.MXP, 6.3×32 mm, 50 kA) in 30 A clips. It
+- **F1 is a 15 A high-breaking-capacity fuse** (0505015.MXP, 6.3×32 mm, 50 kA) in 30 A clips
+  (Littelfuse 01220088Z). A replacement must be a 6.3×32 mm ceramic 15 A fast-acting fuse rated
+  at least 250 V AC, with its breaking capacity stated at 250 V AC or above, from an authorised
+  distributor; never a glass fuse. It
   protects against short circuits. 15 A, not 16 A: 16 A comes in neither the high-breaking range
   nor 15 A clips, and 10 A is 67 % of 15 A. A 5×20 15 A fuse breaks only about 500 A, which is low
   for a UK socket's prospective fault current, hence the 6.3×32.

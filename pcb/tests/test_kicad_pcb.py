@@ -191,7 +191,8 @@ def test_every_assembled_footprint_has_a_3d_model(tmp_path):
         ref = next((p[2] for p in find_all(fp, "property") if p[1] == "Reference"), None)
         ref = ref or next((t[2] for t in find_all(fp, "fp_text") if t[1] == "reference"), None)
         refs[ref] = find_all(fp, "model")
-    fitted = [r for r, i in c.instances.items() if i.part.lcsc and not i.dnp]
+    from board.parts import NO_MODEL
+    fitted = [r for r, i in c.instances.items() if i.part.lcsc and not i.dnp and i.part.key not in NO_MODEL]
     assert fitted
     for r in fitted:
         models = refs[r]

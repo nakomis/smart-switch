@@ -57,6 +57,8 @@ _TABLE = {
     "PSU1W": ("IRM-01-5", "C5656515", "local:PWRM-TH_IRM-01_MeanWell", "IRM-01-5", True, 0),
     "ISO": ("ISO7741DWR", "C571196", "SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL", "ISO7741DWR", True, 0),
     "BL0939": ("BL0939", "C2836697", "SOP-16_L9.9-W3.9-P1.27-LS6.0-BL", "BL0939", True, 0),
+    # F1: two clips per fuse, one footprint each (so the BOM counts two). EasyEDA has none.
+    "FUSECLIP": ("6.35mm fuse clip 30A", "C206903", "local:FuseClip_Littelfuse_0122_6.35mm", None, True, 0),
     "FUSEHOLD": ("5x20 holder", "C187510", "FUSE-TH_65600001009", "65600001009", True, 0),
     "MOV": ("TMOV20RP275E", "C187710", "RES-TH_L23.0-W9.5-P8.50-D0.9-S4.50", "TMOV20RP275E", True, 0),
     "SHUNT": ("1mR", "C4248455", "local:R_Shunt_Vishay_WSK2512_6332Metric_T2.21mm", None, True, 0),
@@ -90,6 +92,7 @@ MFR = {
     "RELAY16": ("Hongfa", "HF115F-I/005-1HS3A"), "PSU5W": ("Mean Well", "IRM-05-5"),
     "PSU1W": ("Mean Well", "IRM-01-5"), "ISO": ("Texas Instruments", "ISO7741DWR"),
     "BL0939": ("Shanghai Belling", "BL0939"), "FUSEHOLD": ("Littelfuse", "65600001009"),
+    "FUSECLIP": ("Littelfuse", "01220088Z"),
     "MOV": ("Littelfuse", "TMOV20RP275E"), "SHUNT": ("Vishay", "WSK25121L000FEA"),
     "MAINSTERM": ("Degson", "DG636-7.62-02P-14-02A(H)"), "SS34": ("MDD", "SS34"),
     "PTC5": ("Littelfuse", "1206L110THYR"), "TVS5": ("MDD", "SMAJ5.0A"),
@@ -134,7 +137,10 @@ ESP32_ANTENNA = (-7.7, -12.8, 7.7, -7.75)
 # 2.0 x 2.0 x 0.8 mm package, and its footprint has the same pin 1-4 layout as ours to within
 # 0.05 mm, with zero model offset and rotation.
 LCSC_3D = HERE / "footprints" / "lcsc.3dshapes"
-MODEL_OVERRIDE = {"LED": "LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020",
+# Assembled parts with no 3D model anywhere (EasyEDA has none, and nor does KiCad's library). The
+# STEP export shows them as bare pads; the case design (PETRO-6) takes their heights from DESIGN.md.
+NO_MODEL = {"FUSECLIP"}
+MODEL_OVERRIDE = {"LED":"LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020",
                   "SHUNT": "R2512_L6.3-W3.2-H0.6"}          # EasyEDA's (C4248455) on KiCad's footprint
 # Model offsets (x, y, z in mm, KiCad's model frame) that replace easyeda2kicad's where its are
 # wrong, found from top and side renders: the SOT-23-6 and C0603 offsets push the bodies off their
@@ -153,8 +159,9 @@ def _load(key, row):
     alias = ALIASES.get(key, {})
     if sym is None:     # footprint-only part: one passive pin per numbered pad, name = number
         for p in fp.pads:
-            if p.number:
-                pins.setdefault(alias.get(p.number, p.number), []).append(p.number)
+            names = pins.setdefault(alias.get(p.number, p.number), []) if p.number else None
+            if p.number and p.number not in names:       # a pad number may repeat (a clip's legs)
+                names.append(p.number)
         pin_types = {p.number: "passive" for p in fp.pads if p.number}
     else:
         for name, nums in load_symbol_pins(LCSC_SYM, sym).items():

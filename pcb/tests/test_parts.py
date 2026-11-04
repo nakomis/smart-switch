@@ -65,7 +65,7 @@ def test_local_footprints():
 def test_tht_flags():
     assert part("MH").tht and not part("ESP32").tht and not part("JST5").tht
     assert {k for k, p in PARTS.items() if p.tht and p.lcsc} == {
-        "IO", "IDC", "RELAY16", "PSU5W", "PSU1W", "FUSEHOLD", "MOV", "MAINSTERM", "TACT"}
+        "IO", "IDC", "RELAY16", "PSU5W", "PSU1W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT"}
 
 
 # --- Petro's parts against the makers' drawings (checked 4 Nov 2026) --------------------------
@@ -112,6 +112,19 @@ def test_irm01_matches_mean_well_drawing_with_unplated_centred_pegs():
     pegs = [q for q in fp.pads if not q.number]
     assert sorted((q.x, q.y, q.kind, q.drill) for q in pegs) == [
         (-7.5, 0.0, "np_thru_hole", 4.5), (7.5, 0.0, "np_thru_hole", 4.5)]
+
+
+def test_f1_clip_matches_littelfuse_drawing():
+    """Littelfuse 122 series (01220088Z, 30 A, for the 505 series fuse): one clip, two straight
+    leads 7.62 mm apart on one net, 1.98 mm holes (drilled 2.0)."""
+    p = part("FUSECLIP")
+    pads = p.footprint.pads
+    assert p.pins == {"1": ["1"]} and len(pads) == 2
+    assert pads[1].x - pads[0].x == pytest.approx(7.62)
+    assert all(q.drill == 2.0 and q.kind == "thru_hole" for q in pads)
+
+
+F1_CLIP_PITCH = 34.21 - 7.62          # clip centre to clip centre for a 1 1/4 in fuse (A = 1.347 in)
 
 
 def test_isolator_pad_rows_need_the_barrier_exception():
