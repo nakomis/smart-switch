@@ -126,7 +126,7 @@ Figures marked *unverified* there have not been checked against a primary datash
 | J1, J2 | DG636-7.62-02P | Degson | C2827897 | 933 | 32 A, 630 V, 7.62 mm pitch | L in/N in and L out/N out; wire entry to the side |
 | PSU1 | IRM-05-5 | Mean Well | (RS 135-8923) | RS: in stock | 5 V 1 A, reinforced | 45.7 × 25.4 × 21.5 mm; inrush 40 A at 230 V |
 | U_M | BL0939 (SOP-16) | Belling | C2836697 | 2,684 | 2 current channels, 1 voltage, ZX, UART 4800 | SSOP-20 C2841044: 6,789 in stock |
-| R_V | 5 × 390 kΩ (1206, C17933) over 470 Ω (C4502) | UNI-ROYAL | | | ≈ 4150:1 | 61 mV rms at 253 V against the BL0939's 70 mV maximum (13 % headroom; 510 Ω gave 6 %). 50 V across each 390 kΩ, whose 1206 pads are 1.75 mm apart (1.2 mm needed) |
+| R_V | 5 × 390 kΩ (1206, C17933) over 470 Ω (0402, C25117) | UNI-ROYAL | | | ≈ 4150:1 | 61 mV rms at 253 V against the BL0939's 70 mV maximum (13 % headroom; 510 Ω gave 6 %). 50 V across each 390 kΩ, whose 1206 pads are 1.75 mm apart (1.2 mm needed) |
 | Q1, D1 | AO3400A, 1N4148W | | | | | Relay driver and flyback, as on the heatlink |
 
 ### Across the barrier
@@ -142,7 +142,7 @@ Figures marked *unverified* there have not been checked against a primary datash
 | U1 | ESP32-S3-MINI-1-N8 | C2913206 | As on the heatlink; its LGA needs X-ray at assembly |
 | U2 | AP2112K-3.3TRG1 | C51118 | The ESP32-S3 peaks at 355 mA on Wi-Fi transmit, against the LDO's 600 mA |
 | D_OR | SS34 ×2 | C8678 | Diode-OR of USB VBUS and PSU1; over 0.5 V of margin above the LDO's dropout |
-| F3, D_TVS | 1206L110THYR polyfuse, SMAJ5.0A TVS | C126818, C113952 | On PSU1's output |
+| F3, D_TVS | 1206L110THYR polyfuse, SMAJ5.0A TVS | C126818, C2925443 | On PSU1's output |
 | J3 | House USB connector (JST SH 5-pin) | (as tinycrypt) | ESD on D±, polyfuse and TVS on VBUS, as on the heatlink |
 | SW1 | TS-1002 6×6 tactile, 7 mm tall | C455095 | Other heights are available for the cap stack-up |
 | LED1 | WS2812B-2020-V6 | C52917434 | 672k in stock. The 2 mm clear ring means its decoupling capacitor goes on the bottom side or outside the ring |

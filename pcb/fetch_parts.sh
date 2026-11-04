@@ -5,10 +5,8 @@ cd "$(dirname "$0")"
 PARTS=(
   C2913206  # ESP32 (ESP32-S3-MINI-1-N8)
   C265419   # JST5 (SM05B-SRSS-G-TB)
-  C7519     # ESD (USBLC6-2SC6)
   C51118    # LDO (AP2112K-3.3TRG1)
   C163512   # PTC (1206L050YR)
-  C151296   # TVS (SMF5.0A)
   C52917434 # LED (WS2812B-2020-V6)
   C20917    # FET (AO3400A)
   C81598    # DIODE (1N4148W)
@@ -25,14 +23,11 @@ PARTS=(
   C2827897  # MAINSTERM (Degson DG636-7.62-02P)
   C8678     # SS34 (diode-OR)
   C126818   # PTC5 (1206L110THYR, 1.1 A hold)
-  C113952   # TVS5 (SMAJ5.0A)
   C455095   # TACT (TS-1002, 7 mm)
   C2892547  # NTC (10 k, 0603)
   C17933    # R390K (1206, 200 V: the voltage divider, five in series)
   C596498   # BEAD (Murata BLM15EX331SN1D, 330 R at 100 MHz, 700 mA: TI's ISOW774x beads)
   C11702    # R1K (0402: the BL0939 input filters)
-  C507072   # C33N (0402: the BL0939 input filters)
-  C4502     # R470 (1206: the divider's bottom resistor; 61 mV rms at 253 V, under the BL0939's 70)
   C2977594  # IDC (DC3-2.54-16PAS, 16-way boxed header)
   C25905    # R5K1
   C25744    # R10K
@@ -43,6 +38,12 @@ PARTS=(
   C1525     # C100N
   C52923    # C1U
   C19702    # C10U
+  # JLCPCB basic / preferred swaps (no loading fee on Economic assembly), 4 Nov 2026
+  C21117    # C33N (Samsung CL10B333KB8NNNC, 0603 X7R, basic)
+  C25117    # R470 (0402WGF4700TCE, basic)
+  C19077497 # TVS (SMF5.0A, preferred)
+  C2925443  # TVS5 (SMAJ5.0A, preferred)
+  C7420376  # ESD (SRV05-4, preferred: same SOT-23-6 layout as the USBLC6-2SC6)
 )
 # easyeda.com's CloudFront returns 403 for easyeda2kicad's default User-Agent, so run it
 # through a one-line wrapper that sends a neutral UA instead.

@@ -26,15 +26,18 @@ class PartDef:
 
 
 # key: (value, lcsc, footprint file stem, symbol name, extended, rotation_offset)
+# extended: JLCPCB charges a loading fee for it (an extended part; basic and "preferred extended"
+# parts carry none on Economic assembly).
 # Footprint stems and symbol names are exactly what easyeda2kicad wrote. lcsc None means a local,
 # board-only footprint from footprints/local.pretty with pin name = pad number.
 _TABLE = {
     "ESP32": ("ESP32-S3-MINI-1-N8", "C2913206", "BULETM-SMD_ESP32-S3-MINI-1-N8", "ESP32-S3-MINI-1-N8", True, 0),
     "JST5": ("SM05B-SRSS-G-TB", "C265419", "CONN-SMD_SM05B-SRSS-G-TB-LF-SN", "SM05B-SRSS-G-TB(LF)(SN)", True, 0),
-    "ESD": ("USBLC6-2SC6", "C7519", "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL", "USBLC6-2SC6", True, 0),
+    # SRV05-4 (preferred): the USBLC6-2SC6's pin layout (1/6 and 3/4 the two lines, 5 VBUS, 2 GND)
+    "ESD": ("SRV05-4", "C7420376", "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL-1", "SRV05-4_C7420376", False, 0),
     "LDO": ("AP2112K-3.3TRG1", "C51118", "SOT-25-5_L2.9-W1.6-P0.95-LS2.8-BL", "AP2112K-3.3TRG1", True, 0),
     "PTC": ("500mA PTC", "C163512", "F1206", "1206L050YR", True, 0),
-    "TVS": ("SMF5.0A", "C151296", "SOD-123F_L2.8-W1.8-LS3.7-RD", "SMF5.0A_C151296", True, 0),
+    "TVS": ("SMF5.0A", "C19077497", "SOD-123FL_L2.7-W1.8-LS3.8-RD", "SMF5.0A_C19077497", False, 0),
     "LED": ("WS2812B-2020-V6", "C52917434", "LED-SMD_4P-L2.2-W2.0-P1.00_WS2815C-2020-4P", "WS2812B-2020-V6", True, 0),
     "FET": ("AO3400A", "C20917", "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR", "AO3400A", False, 0),
     "DIODE": ("1N4148W", "C81598", "SOD-123F_L2.7-W1.6-LS3.8-RD", "1N4148W_C81598", False, 0),
@@ -67,13 +70,13 @@ _TABLE = {
     "MAINSTERM": ("DG636-7.62-02P", "C2827897", "CONN-TH_DG636-7.62-02P-14-02A-H", "DG636-7.62-02P-14-02A(H)", True, 0),
     "SS34": ("SS34", "C8678", "SMA_L4.3-W2.6-LS5.2-RD", "SS34_C8678", False, 0),
     "PTC5": ("1.1A PTC", "C126818", "F1206", "1206L110THYR", True, 0),
-    "TVS5": ("SMAJ5.0A", "C113952", "SMA_L4.4-W2.6-LS5.0-RD", "SMAJ5.0A_C113952", True, 0),
+    "TVS5": ("SMAJ5.0A", "C2925443", "SMA_L4.3-W2.6-LS5.0-RD", "SMAJ5.0A_C2925443", False, 0),
     "TACT": ("TS-1002 7mm", "C455095", "SW-TH_4P-L6.0-W6.0-P4.50-LS6.5_TS-1002-07026", "TS-1002-07026", True, 0),
     "NTC": ("10k NTC", "C2892547", "R0603", "KNTC0603_10KF3950", True, 0),
     "R390K": ("390k", "C17933", "R1206", "1206W4F3903T5E", True, 0),
-    "R470": ("470R", "C4502", "R1206", "1206W4F4700T5E", True, 0),
+    "R470": ("470R", "C25117", "R0402", "0402WGF4700TCE", False, 0),      # 61 mV: any size
     "R1K": ("1k", "C11702", "R0402", "0402WGF1001TCE", False, 0),
-    "C33N": ("33nF", "C507072", "C0402", "0402B333K500NT", True, 0),
+    "C33N": ("33nF", "C21117", "C0603", "CL10B333KB8NNNC", False, 0),     # X7R, basic
     "DEBUG": ("Debug pads", None, "DebugPads_1x5_P2.54", None, False, 0),
     "MH": ("M3 hole", None, "MountingHole_M3_3.2mm_Pad6", None, False, 0),
     "MHN": ("M3 hole, unplated", None, "MountingHole_M3_3.2mm_NPTH", None, False, 0),
@@ -86,8 +89,8 @@ TESTHOLE_DRILL = 0.8      # mm: both legs (0.3-0.35 mm wire, sprung 1.2 mm apart
 # number alone). PCBWay buys parts anywhere, so the LCSC number goes in the notes as a source.
 MFR = {
     "ESP32": ("Espressif", "ESP32-S3-MINI-1-N8"), "JST5": ("JST", "SM05B-SRSS-G-TB(LF)(SN)"),
-    "ESD": ("STMicroelectronics", "USBLC6-2SC6"), "LDO": ("Diodes Inc", "AP2112K-3.3TRG1"),
-    "PTC": ("Littelfuse", "1206L050YR"), "TVS": ("Littelfuse", "SMF5.0A"),
+    "ESD": ("hongjiacheng", "SRV05-4"), "LDO": ("Diodes Inc", "AP2112K-3.3TRG1"),
+    "PTC": ("Littelfuse", "1206L050YR"), "TVS": ("hongjiacheng", "SMF5.0A"),
     "LED": ("Worldsemi", "WS2812B-2020-V6"), "FET": ("Alpha & Omega", "AO3400A"),
     "DIODE": ("Semtech", "1N4148W"), "IO": ("DORABO", "DB125-3.5-8P-GN-S"),
     "IDC": ("ZHOURI", "DC3-2.54-16PAS"),
@@ -102,10 +105,10 @@ MFR = {
     "FUSECLIP": ("Littelfuse", "01220088Z"),
     "MOV": ("Littelfuse", "TMOV20RP275E"), "SHUNT": ("Vishay", "WSK25121L000FEA"),
     "MAINSTERM": ("Degson", "DG636-7.62-02P-14-02A(H)"), "SS34": ("MDD", "SS34"),
-    "PTC5": ("Littelfuse", "1206L110THYR"), "TVS5": ("MDD", "SMAJ5.0A"),
+    "PTC5": ("Littelfuse", "1206L110THYR"), "TVS5": ("Liown", "SMAJ5.0A"),
     "TACT": ("XUNPU", "TS-1002-07026"), "NTC": ("KUU", "KNTC0603/10KF3950"),
-    "R390K": ("UNI-ROYAL", "1206W4F3903T5E"), "R470": ("UNI-ROYAL", "1206W4F4700T5E"),
-    "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Fenghua", "0402B333K500NT"),
+    "R390K": ("UNI-ROYAL", "1206W4F3903T5E"), "R470": ("UNI-ROYAL", "0402WGF4700TCE"),
+    "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Samsung", "CL10B333KB8NNNC"),
 }
 
 # fetched-name -> our-name, per key. The module symbol calls GPIOn "IOn" and spells the UART0 pins
@@ -122,6 +125,8 @@ ALIASES = {
     # XUNPU TS-1002 circuit diagram: the pins 6.5 mm apart are joined inside; the button closes
     # between the two pairs (4.5 mm apart).
     "TACT": {"1": "A", "2": "A", "3": "B", "4": "B"},
+    # the preferred TVS diodes name their pins K/A; pad 1 is the cathode, as before
+    "TVS": {"K": "1", "A": "2"}, "TVS5": {"K": "1", "A": "2"},
 }
 
 # Real extents where the footprint's courtyard is smaller than the part. The EasyEDA module

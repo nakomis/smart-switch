@@ -7,10 +7,10 @@ cd "$(dirname "$0")"
 MODELS=(
   C2913206  # ESP32-S3-MINI-1-N8
   C265419   # SM05B-SRSS-G-TB
-  C7519     # USBLC6-2SC6 (SOT-23-6)
+  C7420376  # SRV05-4 (SOT-23-6)
   C51118    # AP2112K (SOT-23-5)
   C163512   # 1206L050YR (1206)
-  C151296   # SMF5.0A (SOD-123FL)
+  C19077497 # SMF5.0A (SOD-123FL)
   C965555   # WS2812B-2020: C52917434 (the -V6) has no EasyEDA model; same 2020 package
   C20917    # AO3400A (SOT-23)
   C81598    # 1N4148W (SOD-123F)
@@ -19,6 +19,22 @@ MODELS=(
   C25905    # R0402
   C1525     # C0402
   C19702    # C0603
+  # Petro's own (PETRO-2)
+  C596498   # BLM15 bead (L0402)
+  C2836697  # BL0939 (SOP-16)
+  C5216380  # ISOW7743 (SOIC-20)
+  C187510   # 656 fuse holder (F2)
+  C2827897  # DG636 mains terminal
+  C187710   # TMOV20RP275E
+  C2892547  # NTC (R0603)
+  C48603696 # IRM-05-5
+  C126818   # 1206L110THYR (1206)
+  C17933    # 390k (R1206)
+  C2976795  # HF115F relay
+  C4248455  # WSK2512 shunt (R2512, on KiCad's footprint)
+  C8678     # SS34 (SMA)
+  C2925443  # SMAJ5.0A (SMA)
+  C455095   # TS-1002 tactile switch
 )
 mkdir -p footprints/lcsc.3dshapes
 FAILED=()

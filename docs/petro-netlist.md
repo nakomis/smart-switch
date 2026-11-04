@@ -84,11 +84,11 @@
 | Ref | Part | Value | LCSC |
 |---|---|---|---|
 | C1 | C100N | 100nF | C1525 |
-| C2 | C33N | 33nF | C507072 |
-| C3 | C33N | 33nF | C507072 |
-| C4 | C33N | 33nF | C507072 |
-| C5 | C33N | 33nF | C507072 |
-| C6 | C33N | 33nF | C507072 |
+| C2 | C33N | 33nF | C21117 |
+| C3 | C33N | 33nF | C21117 |
+| C4 | C33N | 33nF | C21117 |
+| C5 | C33N | 33nF | C21117 |
+| C6 | C33N | 33nF | C21117 |
 | C7 | C10U | 10uF | C19702 |
 | C8 | C1U | 1uF | C52923 |
 | C9 | C100N | 100nF | C1525 |
@@ -107,9 +107,9 @@
 | C22 | C100N | 100nF | C1525 |
 | C23 | C100N | 100nF | C1525 |
 | D1 | LED | WS2812B-2020-V6 | C52917434 |
-| D2 | TVS | SMF5.0A | C151296 |
+| D2 | TVS | SMF5.0A | C19077497 |
 | D3 | DIODE | 1N4148W | C81598 |
-| D4 | TVS5 | SMAJ5.0A | C113952 |
+| D4 | TVS5 | SMAJ5.0A | C2925443 |
 | D5 | SS34 | SS34 | C8678 |
 | D6 | SS34 | SS34 | C8678 |
 | F3 | PTC5 | 1.1A PTC | C126818 |
@@ -137,7 +137,7 @@
 | R7 | R390K | 390k | C17933 |
 | R8 | R390K | 390k | C17933 |
 | R9 | R390K | 390k | C17933 |
-| R10 | R470 | 470R | C4502 |
+| R10 | R470 | 470R | C25117 |
 | R11 | R10K | 10k | C25744 |
 | R12 | R10K | 10k | C25744 |
 | R13 | R5K1 | 5k1 | C25905 |
@@ -170,7 +170,7 @@
 | U2 | LDO | AP2112K-3.3TRG1 | C51118 |
 | U3 | BL0939 | BL0939 | C2836697 |
 | U4 | ISOW | ISOW7743 | C5216380 |
-| U5 | ESD | USBLC6-2SC6 | C7519 |
+| U5 | ESD | SRV05-4 | C7420376 |
 | XF1 | FUSECLIP | 6.35mm fuse clip 30A | C206903 |
 | XF2 | FUSECLIP | 6.35mm fuse clip 30A | C206903 |
 | XF3 | FUSEHOLD | 5x20 holder | C187510 |
