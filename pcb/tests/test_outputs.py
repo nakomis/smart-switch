@@ -27,7 +27,7 @@ def test_case_interface_matches_the_board():
     ci = json.loads(pb.case_interface(C, P))
     assert ci["board"] == {"width": pb.W, "height": pb.H, "thickness": 1.6, "origin": "top-left, y down"}
     assert {h["ref"]: (h["x"], h["y"]) for h in ci["holes"]} == pb.HOLES
-    assert all(h["plated"] == (h["ref"] in ("H3", "H4")) for h in ci["holes"])
+    assert not any(h["plated"] for h in ci["holes"])          # rev B: no copper reaches a screw
     led = ci["led"]
     assert (led["x"], led["y"]) == pb.AT["D1"][:2]
     assert led["flange_ring"] == [round(v, 3) for v in pb.led_ring()]
@@ -39,6 +39,21 @@ def test_case_interface_matches_the_board():
     assert ci["connectors"]["J3"]["edge"] == "bottom"
     ax0, ay0, ax1, ay1 = ci["antenna_overhang"]
     assert ay0 == pb.H and ay1 > pb.H and ax1 - ax0 > 10
+
+
+def test_case_interface_says_the_whole_board_is_live():
+    """Rev B is non-isolated: the case must treat every part of the board as mains, and the
+    low-voltage connectors as internal only (reachable with the case open, mains unplugged)."""
+    ci = json.loads(pb.case_interface(C, P))
+    assert ci["mains_area"]["whole_board"] is True
+    for ref in ("J3", "J4", "J5"):
+        assert ci["connectors"][ref]["internal_only"] is True, ref
+    assert ci["led"]["part"] == "SK6812-EC20"
+    assert {"K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2"} <= set(ci["tall_parts"])
+
+
+def test_pins_h_has_no_isolator_fault_pin():
+    assert "ISO_FLT" not in pb.pins_h()
 
 
 def test_usb_faces_the_right_hand_edge_with_nothing_in_the_plugs_way():

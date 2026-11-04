@@ -10,4 +10,4 @@ KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints
 # and the copper, routing and silk on it (step 5) are not. These modules test the placed board, so
 # they wait for step 4/5, which rewrites them. Remove each from this list as its step lands.
 collect_ignore = ["test_silk.py",
-                  "test_refs.py", "test_outputs.py"]
+                  "test_refs.py"]

@@ -98,6 +98,21 @@ def test_the_kelvin_pair_leaves_the_shunt_through_vias_beside_its_sense_pads(han
         assert any(t.net == net and t.layer == "B.Cu" for t in tracks), net
 
 
+def test_the_low_voltage_area_keeps_off_every_hand_track_of_another_group(hand):
+    tracks, _ = hand
+    for t in tracks:
+        need = R.spacing(_group(t.net), R.rest)
+        if not need:
+            continue
+        for i in range(21):
+            x = t.x1 + (t.x2 - t.x1) * i / 20
+            y = t.y1 + (t.y2 - t.y1) * i / 20
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7)):
+                r = t.width / 2 + need - 0.05
+                if pb.in_lv(x + dx * r, y + dy * r):
+                    pytest.fail(f"{t.net} track at ({x:.2f}, {y:.2f}): the area comes within {r:.2f} mm")
+
+
 def test_the_low_voltage_area_keeps_off_every_mains_supply_and_divider_pad():
     """No point of the area outside the keep-outs is nearer to a pad of another group than the
     rules' spacing from the rest of the nets."""

@@ -611,7 +611,8 @@ def lv_area():
 
 def lv_keepouts(c, p, margin=0.1):
     """(layer, x0, y0, x1, y1) on both layers: every pad of a group with a spacing to the rest,
-    grown by that spacing; every hand-routed supply track, likewise; the mounting holes."""
+    grown by that spacing; every hand-routed supply and divider track, likewise (by its bounding
+    box); the mounting holes."""
     from board.gnd import pad_boxes
     r = rules()
     boxes = []
@@ -620,7 +621,7 @@ def lv_keepouts(c, p, margin=0.1):
         s = r.spacing(g, r.rest) if g else 0.0
         if s:
             boxes.append((x0 - s - margin, y0 - s - margin, x1 + s + margin, y1 + s + margin))
-    for t in supply_tracks(c, p):
+    for t in supply_tracks(c, p) + divider_tracks(c, p):
         s = r.spacing(GROUPS[t.net], r.rest) + t.width / 2 + margin
         boxes.append((min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
     hole = 3.2 / 2 + 3.0 + margin
@@ -821,17 +822,21 @@ def pins_h():
              "/* Debug pads TP1, from the top: " + ", ".join(DEBUG_LABELS.values()) + ".",
              "   EN is the chip enable (bridge it to G to reset); RX/TX are UART0. */",
              "/* The relay is active-high (low-side FET); the button is active-low (GPIO0, also the",
-             "   boot strap). ISO_FLT is low if the isolator's converter has failed. BL_TX/BL_RX are",
-             "   UART1 to the BL0939 across the isolator; ZX is its zero cross, OC its fast over-current. */",
-             "/* Test holes (push-in loops, SELV only, mains disconnected): "
+             "   boot strap). BL_TX/BL_RX are UART1 to the BL0939; ZX is its zero cross, OC its fast",
+             "   over-current. */",
+             "/* Rev B is NON-ISOLATED: GND is tied to neutral, so every pin, pad and header is at mains",
+             "   potential whenever the unit is plugged in. Bench work (USB, test holes) with the mains",
+             "   unplugged only. */",
+             "/* Test holes (push-in loops, bench only, mains disconnected): "
              + ", ".join(f"{ref} {net}" for ref, net in TEST_HOLES.items()) + ". */", ""]
-    for k in ("RELAY", "LED", "BUTTON", "BL_TX", "BL_RX", "ZX", "OC", "NTC", "ISO_FLT",
+    for k in ("RELAY", "LED", "BUTTON", "BL_TX", "BL_RX", "ZX", "OC", "NTC",
               "USB_DM", "USB_DP", "UART_TX", "UART_RX"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
-    lines += ["", "/* IO terminal J3: " + ", ".join(IO_LABELS.values()) + " (SDA/SCL have 4.7k pull-ups). */"]
+    lines += ["", "/* IO terminal J3 (internal only, at mains potential): " + ", ".join(IO_LABELS.values())
+              + " (SDA/SCL have 4.7k pull-ups). */"]
     for k in ("IO_SDA", "IO_SCL", "IO_4", "IO_5", "IO_6"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
-    lines += ["", "/* IDC header J4 (pin: signal): "
+    lines += ["", "/* IDC header J4 (internal only, at mains potential; pin: signal): "
               + ", ".join(f"{n} {t}" for n, t in HDR_LABELS.items()) + ". */"]
     for k in sorted((k for k in GPIO if k.startswith("HDR_")), key=lambda k: GPIO[k]):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
@@ -841,29 +846,36 @@ def pins_h():
 def case_interface(c, p):
     """What the case (PETRO-6) needs from the board, as JSON, in board coordinates (mm, origin
     top-left, y down, top view): outline, holes, the LED and the light pipe's flange ring, the
-    button, the connectors with the edge each faces, and the antenna overhang."""
+    button, the connectors with the edge each faces, and the antenna overhang. Rev B is
+    non-isolated: the whole board is at mains potential, so the case treats all of it as live
+    and the low-voltage connectors as internal only (reached with the case open, unplugged)."""
     import json
     from board.placement import bbox
     box = lambda ref: [round(v, 3) for v in bbox(p, ref)]
     ux = AT["U1"][0]
     data = {
         "board": {"width": W, "height": H, "thickness": 1.6, "origin": "top-left, y down"},
-        "holes": [{"ref": r, "x": x, "y": y, "diameter": 3.2, "plated": r in ("H3", "H4")}
+        "holes": [{"ref": r, "x": x, "y": y, "diameter": 3.2, "plated": False,
+                   "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"}
                   for r, (x, y) in HOLES.items()],
-        "led": {"x": AT["D1"][0], "y": AT["D1"][1], "part": "WS2812B-2020", "body": box("D1"),
+        "led": {"x": AT["D1"][0], "y": AT["D1"][1], "part": "SK6812-EC20", "body": box("D1"),
                 "flange_ring": [round(v, 3) for v in led_ring()],
                 "note": f"{LED_RING} mm clear board round the LED for the light pipe's flange"},
         "button": {"x": AT["SW1"][0], "y": AT["SW1"][1], "part": "TS-1002 7 mm tactile", "body": box("SW1")},
         "connectors": {
             "J1": {"what": "mains in (L, N), 7.62 mm screw terminal", "edge": "left", "body": box("J1")},
             "J2": {"what": "mains out to the load (L, N)", "edge": "right", "body": box("J2")},
-            "J3": {"what": "8-way 3.5 mm I/O terminal (SELV)", "edge": "bottom", "body": box("J3")},
-            "J4": {"what": "16-way IDC header (SELV)", "edge": "none", "body": box("J4")},
-            "J5": {"what": "USB, JST SH 5-pin side entry (SELV)", "edge": "right", "body": box("J5")},
+            "J3": {"what": "8-way 3.5 mm I/O terminal, at mains potential", "edge": "bottom",
+                   "internal_only": True, "body": box("J3")},
+            "J4": {"what": "16-way IDC header, at mains potential (internal add-ons)", "edge": "none",
+                   "internal_only": True, "body": box("J4")},
+            "J5": {"what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
+                   "edge": "right", "internal_only": True, "body": box("J5")},
         },
-        "tall_parts": {r: box(r) for r in ("PS1", "K1", "XF1", "XF2", "XF3", "RV1")},
+        "tall_parts": {r: box(r) for r in ("K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2", "C4")},
         "antenna_overhang": [ux - 7.7, H, ux + 7.7, H + ANTENNA_OVERHANG],
-        "mains_area": {"note": "230 V AC above the barrier: the case must keep fingers and the SELV "
-                               "openings off it", "y_max": RELAY_NOTCH[2], "barrier": [MAINS_Y, SELV_Y]},
+        "mains_area": {"whole_board": True,
+                       "note": "non-isolated: every part of the board is at mains potential when "
+                               "plugged in; no opening may expose any of it"},
     }
     return json.dumps(data, indent=2) + "\n"
