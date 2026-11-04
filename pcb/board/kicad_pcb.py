@@ -68,6 +68,84 @@ class Via:
     drill: float = 0.3
 
 
+MIN_SLOT = 1.0       # mm: the narrowest routed slot JLCPCB and PCBWay mill (their minimum is 0.8-1.0)
+
+
+@dataclass
+class Slot:
+    """An internal routed slot (a stadium on Edge.Cuts) from (x1, y1) to (x2, y2), centre to
+    centre of its round ends, 'width' wide. Horizontal or vertical. Slots lengthen the creepage
+    path between copper on either side of them."""
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    width: float
+
+
+@dataclass
+class Zone:
+    """A copper zone on 'net' over polygon 'pts' on each of 'layers'. solid: pads join it with no
+    thermal relief (for current-carrying pours). clearance: to other nets' copper. min_width: the
+    narrowest neck the fill may have (KiCad's min_thickness)."""
+    net: str
+    layers: tuple
+    pts: list
+    solid: bool = False
+    priority: int = 0
+    clearance: float = 0.2
+    min_width: float = 0.2
+
+
+def solid_pads(circuit, nets):
+    """pad_extra entries that connect every pad on 'nets' to its zones solidly (zone_connect 2)."""
+    def for_ref(ref):
+        return lambda pad: [[S("zone_connect"), 2]] if circuit.net_of(ref, pad.number) in nets else []
+    refs = {r for n in nets for r, _ in circuit.nets.get(n, ())}
+    return {r: for_ref(r) for r in sorted(refs)}
+
+
+def merge_pad_extra(*extras):
+    """Combine pad_extra dicts: for a ref in several, each pad gets every one's nodes in order."""
+    out = {}
+    for ref in sorted({r for e in extras for r in e}):
+        fns = [e[ref] for e in extras if ref in e]
+        out[ref] = lambda pad, fns=fns: [node for f in fns for node in f(pad)]
+    return out
+
+
+def _slot(s, uid):
+    if s.width < MIN_SLOT:
+        raise ValueError(f"slot {s} is narrower than {MIN_SLOT} mm")
+    if s.x1 != s.x2 and s.y1 != s.y2:
+        raise ValueError(f"slot {s} must be horizontal or vertical")
+    (ax, ay), (bx, by) = sorted([(s.x1, s.y1), (s.x2, s.y2)])
+    r = s.width / 2
+    nx, ny = (0.0, r) if ay == by else (r, 0.0)        # normal to the slot's axis
+    dx, dy = (r, 0.0) if ay == by else (0.0, r)        # along it
+    line = lambda x0, y0, x1, y1: [S("gr_line"), [S("start"), x0, y0], [S("end"), x1, y1],
+                                   [S("stroke"), [S("width"), 0.1], [S("type"), S("default")]],
+                                   [S("layer"), "Edge.Cuts"], uid()]
+    arc = lambda x0, y0, mx, my, x1, y1: [S("gr_arc"), [S("start"), x0, y0], [S("mid"), mx, my],
+                                          [S("end"), x1, y1],
+                                          [S("stroke"), [S("width"), 0.1], [S("type"), S("default")]],
+                                          [S("layer"), "Edge.Cuts"], uid()]
+    return [line(ax - nx, ay - ny, bx - nx, by - ny), line(ax + nx, ay + ny, bx + nx, by + ny),
+            arc(ax - nx, ay - ny, ax - dx, ay - dy, ax + nx, ay + ny),
+            arc(bx - nx, by - ny, bx + dx, by + dy, bx + nx, by + ny)]
+
+
+def _poly_zone(z, net_id, uid):
+    layers = [S("layer"), z.layers[0]] if len(z.layers) == 1 else [S("layers")] + list(z.layers)
+    pads = [S("connect_pads"), S("yes"), [S("clearance"), z.clearance]] if z.solid else \
+        [S("connect_pads"), [S("clearance"), z.clearance]]
+    return [S("zone"), [S("net"), net_id], [S("net_name"), z.net], layers, uid(),
+            [S("priority"), z.priority], [S("hatch"), S("edge"), 0.5], pads,
+            [S("min_thickness"), z.min_width],
+            [S("fill"), S("yes"), [S("thermal_gap"), 0.3], [S("thermal_bridge_width"), 0.4]],
+            [S("polygon"), [S("pts")] + [[S("xy"), x, y] for x, y in z.pts]]]
+
+
 class _Uuids:
     """Deterministic uuids, so regenerating the board gives a byte-identical file."""
     def __init__(self):
@@ -283,7 +361,7 @@ PRO = {
 
 def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(), hide_refs=(), art=(),
                 mask=None, silkscreen=None, keepouts=(), pad_extra=None, user_rects=(), silk_avoid=(),
-                model_dir=None):
+                model_dir=None, slots=(), zones=(), dru=None, netclasses=None, netclass_patterns=None):
     """Write 'path' (.kicad_pcb) and a .kicad_pro beside it.
 
     layers=4: F.Cu, In1.Cu (GND zone), In2.Cu (+1V5 zone, only if that net exists), B.Cu.
@@ -301,7 +379,11 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     model_dir: where the 3D models are, as the board file should name it (default: relative to
     the board's directory through ${KIPRJMOD}, which kicad-cli resolves).
     mask, silkscreen: colour names for the stackup, which only affects renders (gerbers carry
-    no colour). None for both keeps KiCad's defaults (green mask, white silk)."""
+    no colour). None for both keeps KiCad's defaults (green mask, white silk).
+    slots: Slot()s, routed through the board inside the outline.
+    zones: Zone()s, copper of any shape on any layers, written after the GND pours.
+    dru: the .kicad_dru text (default DRU). netclasses, netclass_patterns: replace the
+    .kicad_pro's net classes and their net-name patterns (defaults: PRO's)."""
     if layers not in (2, 4):
         raise ValueError("layers must be 2 or 4")
     path = Path(path)
@@ -342,6 +424,10 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     for net, layer in plane:
         if net in ids:
             tree.append(_zone(ids[net], net, layer, placement.outline, uid))
+    for s in slots:
+        tree.extend(_slot(s, uid))
+    for z in zones:
+        tree.append(_poly_zone(z, ids[z.net], uid))
     for name, pts, kl, *opt in keepouts:
         tree.append(_keepout(name, pts, kl, uid, pour_only=bool(opt and opt[0])))
     for t in tracks:
@@ -364,5 +450,9 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     path.write_text(dumps(tree).replace(") (", ")\n (") + "\n")
     pro = json.loads(json.dumps(PRO))
     pro["meta"]["filename"] = path.with_suffix(".kicad_pro").name
+    if netclasses is not None:
+        pro["net_settings"]["classes"] = netclasses
+    if netclass_patterns is not None:
+        pro["net_settings"]["netclass_patterns"] = netclass_patterns
     path.with_suffix(".kicad_pro").write_text(json.dumps(pro, indent=2) + "\n")
-    path.with_suffix(".kicad_dru").write_text(DRU)
+    path.with_suffix(".kicad_dru").write_text(DRU if dru is None else dru)
