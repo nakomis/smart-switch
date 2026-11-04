@@ -20,6 +20,13 @@ Insulation between groups:
   Pads of a barrier part may come within BARRIER_EDGE of a slot under that part.
 - High-current nets (Mains16A): tracks at least HIGH_CURRENT_WIDTH wide.
 
+Non-isolated mode (rest=<group>): there is no SELV. Every net not named in a group sits at that
+group's potential (on Petro revision B the low-voltage circuitry is tied to neutral), so its spacing
+to each mains group is the matrix's functional creepage, not the reinforced 8 mm. The mounting
+holes take screws that could be reachable, so all copper, low-voltage too, keeps MAINS_EDGE from an
+unplated hole. Low-voltage copper may come near the board edge (the case is plastic); mains-group
+copper keeps MAINS_EDGE from it as before.
+
 IEC 60664-1 basis: rated voltage 250 V (the rationalised voltage for a 230 V supply), overvoltage
 category II, pollution degree 2, material group III (any FR-4: CTI 175-400 is IIIa). Linear
 interpolation between table rows is permitted by the standard; results round up to 0.05 mm.
@@ -98,8 +105,11 @@ class Rules:
     groups: dict
     high_current: set = field(default_factory=set)
     barriers: tuple = ()
+    rest: str | None = None          # non-isolated: the group every unnamed net belongs to
 
     def __post_init__(self):
+        if self.rest is not None and self.rest not in GROUPS:
+            raise ValueError(f"unknown rest group: {self.rest}")
         bad = {n: g for n, g in self.groups.items() if g not in GROUPS}
         if bad:
             raise ValueError(f"unknown groups: {bad}")
@@ -146,8 +156,15 @@ class Rules:
             out.append(f'  (condition "{cond}"))')
 
         for g in groups:
-            rule(f"{g} to SELV", [f"clearance (min {REINFORCED}mm)", f"creepage (min {REINFORCED}mm)"],
-                 f"A.hasNetclass('{g}') && {selv('B')}")
+            if self.rest is None:
+                rule(f"{g} to SELV", [f"clearance (min {REINFORCED}mm)", f"creepage (min {REINFORCED}mm)"],
+                     f"A.hasNetclass('{g}') && {selv('B')}")
+                continue
+            v = working_voltage(g, self.rest)
+            if v:
+                mm = creepage(v)
+                rule(f"{g} to the rest ({v:g} V)", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
+                     f"A.hasNetclass('{g}') && {selv('B')}")
         for (a, b), (v, mm) in self.matrix().items():
             if a > b or not mm:
                 continue                          # each pair once; nothing between equal potentials
@@ -157,7 +174,11 @@ class Rules:
         rule("mains to edge", [f"edge_clearance (min {MAINS_EDGE}mm)"], mains("A"))
         # Holes not on a mains net (mounting holes, SELV vias and pins); mains-to-mains spacing is
         # the pair rules' business, copper to copper.
-        rule("mains to holes", [f"hole_clearance (min {MAINS_EDGE}mm)"], f"({mains('A')}) && {selv('B')}")
+        if self.rest is None:
+            rule("mains to holes", [f"hole_clearance (min {MAINS_EDGE}mm)"], f"({mains('A')}) && {selv('B')}")
+        else:       # vias are the pair rules' business; the screws are the mounting holes'
+            rule("copper to mounting holes", [f"hole_clearance (min {MAINS_EDGE}mm)"],
+                 "B.Pad_Type == 'NPTH, mechanical'")
         if self.high_current:
             rule("high-current track width", [f"track_width (min {HIGH_CURRENT_WIDTH}mm)"],
                  f"A.hasNetclass('{HIGH_CURRENT}')")
