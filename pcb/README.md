@@ -19,6 +19,33 @@ arrives as `board/petro_board.py` and `build.py`.
 | `board/cleanup.py` | After routing, drops vias that join only one layer and track stubs that lead nowhere |
 | `board/fab.py` | BOMs (JLCPCB and PCBWay), CPL, gerbers, drill, renders, STEP |
 | `board/art.py` | Turns a black-and-white PNG into a silkscreen portrait |
+| `board/rules.py` | The mains rules: potential groups, fault scenarios, the working-voltage matrix, IEC 60664-1 creepage, the generated `.kicad_dru` and net classes, and the creepage check within barrier parts |
+
+## Mains rules
+
+Every mains net is in one potential group:
+
+| Group | What's in it |
+|---|---|
+| LINE | Live before F1 |
+| LIVE | Live after F1, plus the metering island |
+| PSU | Live after F2 |
+| NEUTRAL | Neutral |
+| LOAD | The relay's output |
+| DIV1–4 | The voltage divider's chain |
+
+Every other net is SELV. Each fault scenario (relay closed or open, either fuse blown) gives every
+group a potential. The worst difference between two groups is their working voltage, and IEC
+60664-1 Table F.4 (pollution degree 2, material group III) turns that into a creepage distance.
+`rules.py` writes the result as KiCad DRC rules, and `tests/test_rules.py` proves each rule fails a
+board that breaks it.
+
+Mains to SELV is 8 mm clearance and 8 mm creepage. There is one exception: between a certified
+barrier part's own pads (the isolator, relay and PSUs), clearance may drop to 3.0 mm, IEC's
+reinforced clearance at 4 kV. Creepage stays at 8 mm.
+
+KiCad 10 doesn't check creepage between two pads of one footprint, so `barrier_creepage()` checks
+those pairs itself, around any slots. Its estimate can only be shorter than the true path.
 
 ## Setting up
 
