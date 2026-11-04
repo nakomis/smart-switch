@@ -80,7 +80,7 @@ def two_pass_route(c, p, tmp, passes, hand_tracks, hand_vias):
         x0, y0, x1, y1 = p.outline
         on_board = lambda x, y, m=0.45: x0 + m <= x <= x1 - m and y0 + m <= y <= y1 - m
         tracks += [x for x in t if x.net in nets and (x.net != "GND" or (on_board(x.x1, x.y1) and on_board(x.x2, x.y2)))]
-        vias += [x for x in v if x.net in nets and (x.net != "GND" or on_board(x.x, x.y))]
+        vias += [x for x in v if x.net in nets and (x.net != "GND" or on_board(x.x, x.y, x.size / 2 + 0.3))]
     return tracks, vias
 
 

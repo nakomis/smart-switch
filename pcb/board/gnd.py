@@ -11,6 +11,7 @@ from board.kicad_pcb import Track, Via
 from board.placement import rotate
 
 VIA = (0.6, 0.3)           # size, drill: the router's own via
+EDGE_CLEAR = 0.3           # mm of board between a via's copper and the edge (the DRC's rule)
 DROP_RINGS = (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.3, 2.6, 3.0)
 
 
@@ -36,6 +37,12 @@ def _seg_dist(px, py, ax, ay, bx, by):
 def _box_dist(x, y, box):
     _, x0, y0, x1, y1 = box
     return math.hypot(max(x0 - x, 0, x - x1), max(y0 - y, 0, y - y1))
+
+
+def _on_board(placement, x, y, r):
+    x0, y0, x1, y1 = placement.outline
+    m = r + EDGE_CLEAR
+    return x0 + m <= x <= x1 - m and y0 + m <= y <= y1 - m
 
 
 def _sampled(ax, ay, bx, by, n=20):
@@ -66,7 +73,7 @@ def drops(circuit, placement, tracks, vias, net, inside, clear=0.2, skip=(), wid
                 for k in range(24):
                     a = 2 * math.pi * k / 24
                     vx, vy = px + dist * math.cos(a), py + dist * math.sin(a)
-                    if not inside(vx, vy):
+                    if not inside(vx, vy) or not _on_board(placement, vx, vy, r):
                         continue
                     ok = all(b[0] == net or _box_dist(vx, vy, b) >= r + clear for b in pads)
                     ok = ok and all(t.net == net or _seg_dist(vx, vy, t.x1, t.y1, t.x2, t.y2) >= r + t.width / 2 + clear
@@ -108,7 +115,8 @@ def stitch(circuit, placement, tracks, vias, net, inside, pitch=2.0, clear=0.5, 
     while y < y1:
         x = x0 + pitch / 2
         while x < x1:
-            ok = inside(x, y) and all(_box_dist(x, y, b) >= r + clear for b in pads)
+            ok = inside(x, y) and _on_board(placement, x, y, r)
+            ok = ok and all(_box_dist(x, y, b) >= r + clear for b in pads)
             ok = ok and all(_seg_dist(x, y, t.x1, t.y1, t.x2, t.y2) >= r + t.width / 2 + clear for t in tracks)
             ok = ok and all(math.hypot(x - v.x, y - v.y) >= spacing for v in placed)
             if ok:

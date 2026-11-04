@@ -71,3 +71,17 @@ def test_stitching_avoids_tracks():
     t = Track("DATA", "B.Cu", 2.0, 27.0, 38.0, 27.0, 0.3)
     vias = stitch(C, P, [t], [], "GND", EVERYWHERE, pitch=1.0, clear=0.5)
     assert all(abs(v.y - 27.0) >= 0.3 + 0.15 + 0.5 - 1e-9 for v in vias)
+
+
+def test_drops_and_stitching_keep_their_copper_off_the_board_edge():
+    """A via's copper must stay EDGE_CLEAR (0.3 mm, the DRC's copper-to-edge rule) inside the
+    outline, however generous 'inside' is (J5's shell tabs at the edge drew drops 0.19 mm off it)."""
+    from board.gnd import EDGE_CLEAR, VIA
+    anywhere = lambda x, y: True
+    x0, y0, x1, y1 = P.outline
+    m = VIA[0] / 2 + EDGE_CLEAR
+    _, vias, _ = drops(C, P, [], [], "GND", anywhere)
+    vias += stitch(C, P, [], vias, "GND", anywhere)
+    assert vias
+    for v in vias:
+        assert x0 + m - 1e-9 <= v.x <= x1 - m + 1e-9 and y0 + m - 1e-9 <= v.y <= y1 - m + 1e-9, (v.x, v.y)
