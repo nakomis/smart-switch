@@ -137,6 +137,42 @@ def test_dru_and_netclasses_are_parameters(tmp_path):
     assert not [v for v in drc["violations"] if v["type"] == "invalid_drc_rule"]
 
 
+def _gnd_outlines(pcb):
+    out = []
+    for z in find_all(parse(pcb.read_text()), "zone"):
+        if _zone_net(z) == "GND":
+            out.append([(p[1], p[2]) for p in find_all(find(find(z, "polygon"), "pts"), "xy")])
+    return out
+
+
+def test_ground_pour_outline_is_a_parameter(tmp_path):
+    pts = [(1.0, 15.0), (39.0, 15.0), (39.0, 29.0), (1.0, 29.0)]
+    _, _, pcb = _mini(tmp_path, plane_pts=pts)
+    outlines = _gnd_outlines(pcb)
+    assert len(outlines) == 2 and all(o == pts for o in outlines)
+
+
+def test_ground_pour_covers_the_board_by_default(tmp_path):
+    _, p, pcb = _mini(tmp_path)
+    for o in _gnd_outlines(pcb):
+        assert min(y for _, y in o) < p.outline[1] + 1 and max(y for _, y in o) > p.outline[3] - 1
+
+
+def test_modern_footprints_get_their_reference_and_value(tmp_path):
+    """KiCad 7+ footprints carry (property "Reference" "REF**") rather than fp_text."""
+    from board.netlist import Circuit
+    from board.placement import Placement
+    c = Circuit()
+    c.add("SHUNT", ref="RS1")
+    pcb = tmp_path / "s.kicad_pcb"
+    write_board(c, Placement((0, 0, 20, 20), {"RS1": (10, 10, 90)}), pcb, layers=2)
+    fp = find(parse(pcb.read_text()), "footprint")
+    props = {p[1]: p for p in find_all(fp, "property")}
+    assert props["Reference"][2] == "RS1"
+    assert props["Value"][2] == c.instances["RS1"].value
+    assert "REF**" not in pcb.read_text()
+
+
 def test_defaults_unchanged(tmp_path):
     _, _, pcb = _mini(tmp_path)
     assert pcb.with_suffix(".kicad_dru").read_text() == DRU

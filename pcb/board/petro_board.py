@@ -18,7 +18,7 @@ SELV side: as on the nakostat heatlink (STAT-75), so firmware and the reuse I/O 
   heatlink's exact pinouts. 5 V comes from PS1 or USB through a diode-OR.
 """
 from board.netlist import Circuit
-from board.rules import Rules
+from board.rules import HIGH_CURRENT_WIDTH, Rules
 
 # --- GPIO ----------------------------------------------------------------------------------------
 # The heatlink's assignments wherever the function is the same; J3/J4 identical. Avoided: the
@@ -300,7 +300,7 @@ def build_petro():
 #   SELV strip, y >= SELV_Y: the ESP32 module (antenna overhanging the bottom edge), J3 on the
 #   bottom edge (a side-wall slot in the case), J4, the button and LED (through the lid), USB, the
 #   relay driver, PS1's output protection.
-from board.kicad_pcb import Slot  # noqa: E402
+from board.kicad_pcb import Slot, Via, Zone, solid_pads  # noqa: E402
 from board.placement import Placement  # noqa: E402
 
 W, H = 120.0, 70.0
@@ -392,3 +392,57 @@ def sketch_lines():
     return [((0, MAINS_Y, x0, MAINS_Y), (220, 0, 0)), ((x0, MAINS_Y, x0, ny), (220, 0, 0)),
             ((x0, ny, x1, ny), (220, 0, 0)), ((x1, ny, x1, MAINS_Y), (220, 0, 0)),
             ((x1, MAINS_Y, W, MAINS_Y), (220, 0, 0)), ((0, SELV_Y, W, SELV_Y), (0, 160, 0))]
+
+
+# --- the mains copper ----------------------------------------------------------------------------
+# Each mains net is a solid pour on both layers, drawn as a generous polygon over its own stretch of
+# the mains strip; KiCad's fill then keeps the DRU's clearances to every other net, the edges and
+# the holes. Neutral is a band along the top edge with spurs down to J1, RV1, PS1 and J2; the live
+# chain runs along the bottom of the strip: J1 -> F1 (XF1..XF2) -> RS1 -> K1 -> J2. Each layer's
+# pour is at least half the IPC-2221 width at its narrowest (MAINS_MIN_WIDTH: KiCad's
+# min_thickness drops anything thinner), so the two stitched layers together carry 16 A.
+MAINS_MIN_WIDTH = HIGH_CURRENT_WIDTH / 2
+CU = ("F.Cu", "B.Cu")
+MAINS_POLYS = {
+    "N": [(3, 3), (117, 3), (117, 19), (106, 19), (106, 8.2), (96, 8.2), (96, 23.9), (87, 23.9),
+          (87, 8.2), (61, 8.2), (61, 12), (54, 12), (54, 8.2), (12, 8.2), (12, 19), (3, 19)],
+    "L_IN": [(3, 21), (14, 21), (14, 28.5), (27, 28.5), (27, 35.5), (3, 35.5)],
+    "L_F": [(40, 17.5), (54, 17.5), (54, 13), (69, 13), (69, 19), (57, 19), (57, 35.5), (40, 35.5)],
+    "L_SH": [(57, 32.5), (62, 32.5), (62, 37.3), (77, 37.3), (77, 41.5), (60, 41.5), (60, 38.5),
+             (57, 38.5)],
+    "L_OUT": [(63, 26), (104, 26), (104, 20.5), (117, 20.5), (117, 38.5), (79, 38.5), (79, 36),
+              (63, 36)],
+    "L_PSU": [(71, 19.5), (84, 19.5), (84, 25), (71, 25)],
+}
+STITCH = {
+    "N": [(14, 5.6), (24, 5.6), (34, 5.6), (44, 5.6), (50, 5.6), (66, 5.6), (76, 5.6), (84, 5.6),
+          (100, 5.6), (9, 10), (9, 12.5), (91.5, 12), (91.5, 18), (110, 7.5), (109, 12)],
+    "L_IN": [(6, 28), (11, 27), (11, 32), (20, 32), (8, 33)],
+    "L_F": [(46.6, 32), (45, 24), (52, 27), (44, 19.5), (62, 16.5)],
+    "L_SH": [(59, 37), (68.9, 39.6), (75.5, 40)],
+    "L_OUT": [(69, 33.9), (69, 29), (85, 32), (95, 32), (105, 32), (113, 28), (110, 34)],
+}
+STITCH_VIA = (1.2, 0.6)                    # size, drill
+
+
+def mains_zones():
+    """The mains pours: every high-current net, and L_PSU (F2 to PS1), on both layers, solid."""
+    return [Zone(net, CU, pts, solid=True, priority=1, clearance=0.2,
+                 min_width=MAINS_MIN_WIDTH if net in HIGH_CURRENT else 0.5)
+            for net, pts in MAINS_POLYS.items()]
+
+
+def stitch_vias():
+    size, drill = STITCH_VIA
+    return [Via(net, x, y, size, drill) for net, pts in STITCH.items() for x, y in pts]
+
+
+def gnd_pts():
+    """The SELV ground pour's extent (both layers): the SELV strip only, so there is no ground
+    pour anywhere in the mains area. The DRU keeps it 8 mm from every mains pad and pour."""
+    return [(0.5, SELV_Y), (W - 0.5, SELV_Y), (W - 0.5, H - 0.5), (0.5, H - 0.5)]
+
+
+def mains_pad_extra(c):
+    """Every pad on a mains pour joins it solidly (no thermal relief)."""
+    return solid_pads(c, set(MAINS_POLYS))

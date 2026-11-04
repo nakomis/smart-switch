@@ -47,6 +47,13 @@ reinforced clearance at 4 kV. Creepage stays at 8 mm.
 KiCad 10 doesn't check creepage between two pads of one footprint, so `barrier_creepage()` checks
 those pairs itself, around any slots. Its estimate can only be shorter than the true path.
 
+The high-current nets (N, L_IN, L_F, L_SH, L_OUT) are not tracks but solid pours on both layers,
+stitched with vias (`petro_board.mains_zones()` and `stitch_vias()`). Each pour is drawn as a
+generous polygon, and KiCad's fill trims it to the rules. Its `min_thickness` is half the IPC-2221
+width for 16 A, so KiCad drops any neck thinner than that. `tests/test_copper.py` refills the zones
+and checks that each layer, on its own, is one piece reaching every through-hole pad of its net,
+so the two layers carry the current in parallel. The ground pour covers the SELV strip only.
+
 ## Setting up
 
 ```bash

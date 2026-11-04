@@ -223,6 +223,16 @@ def _footprint(inst, x, y, rot, nets, uid, hide_ref=False, model_dir=None):
         if rot:                                      # text angles are absolute on a board
             at = find(t, "at")
             at[:] = at[:3] + [(at[3] if len(at) > 3 else 0) + rot]
+    for p in find_all(fp, "property"):               # KiCad 7+ footprints: (property "Reference" ...)
+        if p[1] == "Reference":
+            p[2] = inst.ref
+            if hide_ref:
+                p.insert(p.index(find(p, "layer")) + 1, [S("hide"), S("yes")])
+        elif p[1] == "Value":
+            p[2] = inst.value
+        at = find(p, "at")
+        if rot and at is not None:
+            at[:] = at[:3] + [(at[3] if len(at) > 3 else 0) + rot]
     for arc in find_all(fp, "fp_arc"):
         if find(arc, "angle") is not None:
             _modern_arc(arc)
@@ -361,7 +371,8 @@ PRO = {
 
 def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(), hide_refs=(), art=(),
                 mask=None, silkscreen=None, keepouts=(), pad_extra=None, user_rects=(), silk_avoid=(),
-                model_dir=None, slots=(), zones=(), dru=None, netclasses=None, netclass_patterns=None):
+                model_dir=None, slots=(), zones=(), dru=None, netclasses=None, netclass_patterns=None,
+                plane_pts=None):
     """Write 'path' (.kicad_pcb) and a .kicad_pro beside it.
 
     layers=4: F.Cu, In1.Cu (GND zone), In2.Cu (+1V5 zone, only if that net exists), B.Cu.
@@ -383,7 +394,9 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     slots: Slot()s, routed through the board inside the outline.
     zones: Zone()s, copper of any shape on any layers, written after the GND pours.
     dru: the .kicad_dru text (default DRU). netclasses, netclass_patterns: replace the
-    .kicad_pro's net classes and their net-name patterns (defaults: PRO's)."""
+    .kicad_pro's net classes and their net-name patterns (defaults: PRO's).
+    plane_pts: the GND (and +1V5) pours' polygon instead of the whole outline (inset), e.g. to
+    keep ground pour out of a mains area."""
     if layers not in (2, 4):
         raise ValueError("layers must be 2 or 4")
     path = Path(path)
@@ -422,8 +435,12 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     if layers == 4:
         plane.append(("+1V5", "In2.Cu"))
     for net, layer in plane:
-        if net in ids:
+        if net not in ids:
+            continue
+        if plane_pts is None:
             tree.append(_zone(ids[net], net, layer, placement.outline, uid))
+        else:
+            tree.append(_poly_zone(Zone(net, (layer,), plane_pts), ids[net], uid))
     for s in slots:
         tree.extend(_slot(s, uid))
     for z in zones:
