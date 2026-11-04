@@ -80,13 +80,13 @@ def test_isolator_channel_directions(island, selv, mains_to_selv):
 
 def test_live_path_order():
     """J1 -> F1 -> (MOV) -> shunt -> relay -> J2; the PSUs after F2, which is after F1."""
-    assert net("J1", "1") == net("XF1", "1") == "L_IN"
+    assert net("J1", "2") == net("XF1", "1") == "L_IN"
     assert net("XF2", "1") == net("RS1", "I1") == net("XF3", "1") == "L_F"
     assert {net("RV1", "1"), net("RV1", "2")} == {"L_F", "N"}
     assert net("RS1", "I2") == net("K1", "COM") == "L_SH"
-    assert net("K1", "NO") == net("J2", "2") == "L_OUT"
+    assert net("K1", "NO") == net("J2", "1") == "L_OUT"
     assert net("XF3", "2") == net("PS1", "AC/L") == "L_PSU"
-    assert net("J1", "2") == net("J2", "1") == "N"
+    assert net("J1", "1") == net("J2", "2") == "N"
 
 
 def test_high_current_nets_are_the_load_path():

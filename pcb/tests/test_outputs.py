@@ -39,3 +39,32 @@ def test_case_interface_matches_the_board():
     assert ci["connectors"]["J3"]["edge"] == "bottom"
     ax0, ay0, ax1, ay1 = ci["antenna_overhang"]
     assert ay0 == pb.H and ay1 > pb.H and ax1 - ax0 > 10
+
+
+def test_usb_faces_the_right_hand_edge_with_nothing_in_the_plugs_way():
+    """J5 is a side-entry JST SH: its mouth is the side away from its signal pads. It faces the
+    right-hand edge (the cable leaves through the case's end wall, beside J2), its front within
+    0.5 mm of the edge, and no part lies between the mouth and the edge."""
+    ci = json.loads(pb.case_interface(C, P))
+    assert ci["connectors"]["J5"]["edge"] == "right"
+    x0, y0, x1, y1 = bbox(P, "J5")
+    assert pb.W - 0.5 <= x1 <= pb.W
+    pads = [pb.pad_xy(C, P, "J5", n) for n in "12345"]
+    assert all(px < (x0 + x1) / 2 for px, _ in pads)              # signal pads at the back (left)
+    for ref in C.instances:
+        if ref != "J5":
+            bx0, by0, bx1, by1 = bbox(P, ref)
+            assert not (bx1 > x1 - 0.01 and by0 < y1 and by1 > y0), ref
+
+
+def test_mains_terminals_open_towards_their_edges():
+    """The DG636's wire openings are on its footprint's +y side (the two small rectangles in its
+    silk outline). J1's must face the left-hand edge and J2's the right, so the wires come in
+    from the case's end walls, never across the board; each body stays on the board."""
+    from board.placement import rotate
+    for ref, want in (("J1", -1), ("J2", 1)):
+        dx, dy = rotate(0.0, 1.0, pb.AT[ref][2])
+        assert round(dx) == want and round(dy) == 0, ref
+        x0, _, x1, _ = bbox(P, ref)
+        assert 0 <= x0 and x1 <= pb.W, ref
+        assert (x0 < 1.0) if want < 0 else (x1 > pb.W - 1.0), ref      # opening at the edge

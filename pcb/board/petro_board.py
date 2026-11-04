@@ -49,8 +49,10 @@ def modpin(gpio):
 
 # --- connectors ----------------------------------------------------------------------------------
 # J1 / J2: line in and load out (Degson DG636, 7.62 mm). Earth does not touch the board.
-J1_PINS = {"1": "L_IN", "2": "N"}
-J2_PINS = {"1": "N", "2": "L_OUT"}             # rotated 270: neutral on top, as on J1
+# Both turned so their wire openings face their end of the board (J1 left, J2 right), with
+# neutral on top on both.
+J1_PINS = {"1": "N", "2": "L_IN"}              # rotated 270: pad 1 on top
+J2_PINS = {"1": "L_OUT", "2": "N"}             # rotated 90: pad 2 on top
 # J5: the house USB connector (tinycrypt's J1, as on the heatlink): 1 VBUS, 2 D-, 3 D+, 4 CC,
 # 5 GND; pads 6/7 are the shell tabs.
 USB_PINS = {"1": "VBUS_IN", "2": "USB_DM", "3": "USB_DP", "4": "CC", "5": "GND"}
@@ -325,7 +327,7 @@ LED_RING = 2.0                              # mm of clear board round the LED (t
 
 AT = {
     # mains: terminals, the live chain, F2, the MOV
-    "J1": (8.0, 19.5, 90), "J2": (113.0, 19.5, 270),
+    "J1": (8.0, 19.5, 270), "J2": (112.0, 19.5, 90),
     "XF1": (20.0, F1_Y, 0), "XF2": (20.0 + F1_CLIP_PITCH, F1_Y, 0),
     "RS1": (57.0, 33.5, 0), "K1": (69.0, 46.5, 90), "PS1": (86.0, 42.0, 270),
     "XF3": (62.0, 22.0, 0), "RV1": (62.0, 12.0, 180),
@@ -359,8 +361,10 @@ AT = {
     # SELV: PS1's output (below PS1)
     "F3": (82.0, 67.5, 0), "D4": (88.5, 67.6, 0), "D5": (96.5, 67.6, 0), "C15": (100.8, 67.5, 90),
     # SELV: USB
-    "J5": (110.0, 50.0, 0), "U5": (106.0, 56.0, 0), "F4": (111.0, 56.0, 90), "D2": (115.0, 56.0, 90),
-    "D6": (110.0, 60.0, 0), "R13": (116.5, 50.0, 90),
+    # J5 (side entry, mouth opposite its signal pads) turned to face the right-hand edge, the
+    # protection to its left: U5 by D-/D+, F4 then D2 on VBUS, D6 to +5V below, R13 on CC
+    "J5": (116.5, 51.5, 90), "U5": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
+    "D6": (108.5, 58.5, 0), "R13": (112.5, 55.5, 90),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
     # test holes (TEST_HOLES): a row under the isolator, and a 4 x 2 block bottom right
     **{f"TP{2 + k}": (41.0 + 2.54 * k, 50.2, 0) for k in range(5)},
@@ -643,7 +647,7 @@ def silk(c, p):
     for n, text in HDR_LABELS.items():
         x, y = xy("J4", n)
         out.append((text, x, round(y + (1.75 if int(n) % 2 else -1.75), 3), 0.8, "B.SilkS"))
-    out.append(("USB", 104.5, AT["J5"][1], 0.8, "F.SilkS", 90))      # between PS1 and J5
+    out.append(("USB", AT["J5"][0], 57.0, 0.8))                       # below J5
     # the title, on the back under PS1 (no pads there)
     out += [("PETRO", 90.0, 50.5, 2.0, "B.SilkS"), ("230 V~ 10 A", 90.0, 53.5, 1.2, "B.SilkS"),
             ("nakomis 2026", 90.0, 55.7, 1.0, "B.SilkS")]
@@ -778,7 +782,7 @@ def case_interface(c, p):
             "J2": {"what": "mains out to the load (L, N)", "edge": "right", "body": box("J2")},
             "J3": {"what": "8-way 3.5 mm I/O terminal (SELV)", "edge": "bottom", "body": box("J3")},
             "J4": {"what": "16-way IDC header (SELV)", "edge": "none", "body": box("J4")},
-            "J5": {"what": "USB, JST SH 5-pin (SELV)", "edge": "none", "body": box("J5")},
+            "J5": {"what": "USB, JST SH 5-pin side entry (SELV)", "edge": "right", "body": box("J5")},
         },
         "tall_parts": {r: box(r) for r in ("PS1", "K1", "XF1", "XF2", "XF3", "RV1")},
         "antenna_overhang": [ux - 7.7, H, ux + 7.7, H + ANTENNA_OVERHANG],

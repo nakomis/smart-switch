@@ -8,7 +8,7 @@
 
 | Group | Net | Pins |
 |---|---|---|
-| LINE | `L_IN` | J1.1, XF1.1 |
+| LINE | `L_IN` | J1.2, XF1.1 |
 | LIVE | `3V3_M` | C1.1, C11.1, C12.1, C13.1, FB1.1, R11.2, U3.VDD, U4.VISOOUT |
 | LIVE | `BL_RX_M` | U3.RX/SDI, U4.OUTA |
 | LIVE | `BL_TX_M` | R11.1, U3.TX/SDO, U4.INB |
@@ -30,8 +30,8 @@
 | LIVE | `VP` | C6.1, R10.1, R9.2, U3.VP |
 | LIVE | `ZX_M` | U3.ZX, U4.INC |
 | PSU | `L_PSU` | PS1.AC/L, XF3.2 |
-| NEUTRAL | `N` | J1.2, J2.1, PS1.AC/N, R5.1, RV1.2 |
-| LOAD | `L_OUT` | J2.2, K1.NO |
+| NEUTRAL | `N` | J1.1, J2.2, PS1.AC/N, R5.1, RV1.2 |
+| LOAD | `L_OUT` | J2.1, K1.NO |
 | DIV1 | `DIV1` | R5.2, R6.1 |
 | DIV2 | `DIV2` | R6.2, R7.1 |
 | DIV3 | `DIV3` | R7.2, R8.1 |

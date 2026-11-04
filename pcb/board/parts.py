@@ -142,7 +142,9 @@ BODY = {"ESP32": (-7.7, -12.8, 7.7, 7.7),
         # IRM-05's body runs well past its pins on the -y side.
         "PSU5W": (-22.85, -16.57, 22.85, 8.83),   # 45.7 x 25.4
         "RELAY16": (-14.5, -6.35, 14.5, 6.35),    # 29 x 12.7, pin field taken as centred (checked at placement)
-        "MOV": (-11.5, -4.75, 11.5, 4.75)}        # 23 mm disc (max), 9.5 mm thick, standing on edge
+        "MOV": (-11.5, -4.75, 11.5, 4.75),
+        # Degson DG636, from its silk outline: the wire openings are on the +y side
+        "MAINSTERM": (-7.62, -4.6, 7.62, 7.9)}        # 23 mm disc (max), 9.5 mm thick, standing on edge
 # The antenna strip of the module, in footprint coordinates (above the top pad row).
 ESP32_ANTENNA = (-7.7, -12.8, 7.7, -7.75)
 
@@ -162,7 +164,7 @@ MODEL_OVERRIDE = {"LED":"LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020",
 # pads, the JST model's origin is 2 mm off its centre, and the capacitor models are centred on
 # z = 0 (half inside the board), so they are lifted by half their height. The IDC header's model
 # origin is 11.43 mm (4.5 pitches) and 4.57 mm off the footprint's centre.
-MODEL_OFFSET = {"RELAY16": (-0.7, 0, 15.7), "FUSEHOLD": (7.2, -14.7, 5.25), "ESD": (0, 0, 0), "JST5": (-2.0, -0.33, 0), "IDC": (-11.43, -4.47, 0),
+MODEL_OFFSET = {"MAINSTERM": (-7.62, -7.9, 0), "RELAY16": (-0.7, 0, 15.7), "FUSEHOLD": (7.2, -14.7, 5.25), "ESD": (0, 0, 0), "JST5": (-2.0, -0.33, 0), "IDC": (-11.43, -4.47, 0),
                 "C10U": (0, 0, 0.4), "C100N": (0, 0, 0.25), "C1U": (0, 0, 0.25)}
 
 
