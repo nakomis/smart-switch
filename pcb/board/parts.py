@@ -162,7 +162,7 @@ MODEL_OVERRIDE = {"LED":"LED-SMD_4P-L2.0-W2.0-H0.8-TL_WS2812B-2020",
 # pads, the JST model's origin is 2 mm off its centre, and the capacitor models are centred on
 # z = 0 (half inside the board), so they are lifted by half their height. The IDC header's model
 # origin is 11.43 mm (4.5 pitches) and 4.57 mm off the footprint's centre.
-MODEL_OFFSET = {"ESD": (0, 0, 0), "JST5": (-2.0, -0.33, 0), "IDC": (-11.43, -4.47, 0),
+MODEL_OFFSET = {"RELAY16": (-0.7, 0, 15.7), "FUSEHOLD": (7.2, -14.7, 5.25), "ESD": (0, 0, 0), "JST5": (-2.0, -0.33, 0), "IDC": (-11.43, -4.47, 0),
                 "C10U": (0, 0, 0.4), "C100N": (0, 0, 0.25), "C1U": (0, 0, 0.25)}
 
 
