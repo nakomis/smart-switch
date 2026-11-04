@@ -69,7 +69,9 @@ _TABLE = {
     "TACT": ("TS-1002 7mm", "C455095", "SW-TH_4P-L6.0-W6.0-P4.50-LS6.5_TS-1002-07026", "TS-1002-07026", True, 0),
     "NTC": ("10k NTC", "C2892547", "R0603", "KNTC0603_10KF3950", True, 0),
     "R390K": ("390k", "C17933", "R1206", "1206W4F3903T5E", True, 0),
-    "R470": ("470R", "C4502", "R1206", None, True, 0),
+    "R470": ("470R", "C4502", "R1206", "1206W4F4700T5E", True, 0),
+    "R1K": ("1k", "C11702", "R0402", "0402WGF1001TCE", False, 0),
+    "C33N": ("33nF", "C507072", "C0402", "0402B333K500NT", True, 0),
     "DEBUG": ("Debug pads", None, "DebugPads_1x5_P2.54", None, False, 0),
     "MH": ("M3 hole", None, "MountingHole_M3_3.2mm_Pad6", None, False, 0),
     "MHN": ("M3 hole, unplated", None, "MountingHole_M3_3.2mm_NPTH", None, False, 0),
@@ -98,6 +100,7 @@ MFR = {
     "PTC5": ("Littelfuse", "1206L110THYR"), "TVS5": ("MDD", "SMAJ5.0A"),
     "TACT": ("XUNPU", "TS-1002-07026"), "NTC": ("KUU", "KNTC0603/10KF3950"),
     "R390K": ("UNI-ROYAL", "1206W4F3903T5E"), "R470": ("UNI-ROYAL", "1206W4F4700T5E"),
+    "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Fenghua", "0402B333K500NT"),
 }
 
 # fetched-name -> our-name, per key. The module symbol calls GPIOn "IOn" and spells the UART0 pins

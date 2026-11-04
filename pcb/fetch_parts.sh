@@ -30,6 +30,8 @@ PARTS=(
   C455095   # TACT (TS-1002, 7 mm)
   C2892547  # NTC (10 k, 0603)
   C17933    # R390K (1206, 200 V: the voltage divider, five in series)
+  C11702    # R1K (0402: the BL0939 input filters)
+  C507072   # C33N (0402: the BL0939 input filters)
   C4502     # R470 (1206: the divider's bottom resistor; 61 mV rms at 253 V, under the BL0939's 70)
   C2977594  # IDC (DC3-2.54-16PAS, 16-way boxed header)
   C25905    # R5K1
