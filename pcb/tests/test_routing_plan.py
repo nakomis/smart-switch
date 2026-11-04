@@ -165,3 +165,29 @@ def test_island_keepouts_stop_tracks_escaping_towards_the_l_in_clip():
                        < 2.5 + 0.15 for b in lin)
             if near:
                 assert any(kx0 <= pt[0] <= kx1 and ky0 <= pt[1] <= ky1 for _, kx0, ky0, kx1, ky1 in keep), pt
+
+
+def test_island_keepouts_leave_every_island_pad_a_way_out():
+    """Freerouting keeps a track ROUTER_MARGIN + clearance + half its width (0.285 mm) off a
+    keep-out. Each island pad needs one side with a 1 mm escape strip (the pad's width, that
+    margin either side) clear of keep-outs and of its own part's other pins: the keep-outs round
+    U4's pad 20, with pin 19 beside it, left it none, and it went unrouted."""
+    from board.placement import rotate
+    m = 0.285
+    hit = lambda a, b: a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+    for ref, inst in C.instances.items():
+        x, y, rot = P.at[ref]
+        boxes = []
+        for pad in inst.part.footprint.pads:
+            dx, dy = rotate(pad.x, pad.y, rot)
+            w, h = (pad.h, pad.w) if round(pad.rot + rot) % 180 == 90 else (pad.w, pad.h)
+            boxes.append((C.net_of(ref, pad.number) if pad.number else None,
+                          x + dx - w / 2, y + dy - h / 2, x + dx + w / 2, y + dy + h / 2))
+        for net, x0, y0, x1, y1 in boxes:
+            if net not in pb.ISLAND or (ref == "RS1"):      # the shunt's sense pads: Kelvin, by hand
+                continue
+            strips = [(x0 - m, y0 - 1 - m, x1 + m, y0), (x0 - m, y1, x1 + m, y1 + 1 + m),
+                      (x0 - 1 - m, y0 - m, x0, y1 + m), (x1, y0 - m, x1 + 1 + m, y1 + m)]
+            free = [s for s in strips if not any(hit(s, k[1:]) for k in pb.island_keepouts())
+                    and not any(hit(s, o[1:]) for o in boxes if o[0] != net)]
+            assert free, (ref, net, (x0, y0, x1, y1))
