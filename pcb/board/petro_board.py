@@ -658,8 +658,9 @@ _LV_KEEP_CACHE = _LazyKeep()
 
 def pad_extra(c):
     """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND pads, J3's and J4's
-    GND pins and the GND test holes; U1's nine 1.2 mm centre GND pads get a -0.18 mm paste
-    margin (Espressif: a full thermal pad lifts the module)."""
+    GND pins, the bulk capacitors' GND leads (their thermal spokes can land on scraps of pour
+    between the supply's keep-outs) and the GND test holes; U1's nine 1.2 mm centre GND pads get
+    a -0.18 mm paste margin (Espressif: a full thermal pad lifts the module)."""
     def make(ref):
         def f(pad):
             net = c.net_of(ref, pad.number)
@@ -667,7 +668,7 @@ def pad_extra(c):
             if ref == "U1" and net == "GND" and abs(pad.w - 1.2) < 1e-6:
                 extra.append([S("solder_paste_margin"), -0.18])
             if net in MAINS_POLYS or (net == "GND" and (
-                    pad.kind == "smd" or ref in ("J3", "J4") or ref in TEST_HOLES)):
+                    pad.kind == "smd" or ref in ("J3", "J4", "C1", "C2", "C4") or ref in TEST_HOLES)):
                 extra.append([S("zone_connect"), 2])
             return extra
         return f
