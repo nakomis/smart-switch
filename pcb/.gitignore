@@ -2,6 +2,7 @@
 .pytest_cache/
 __pycache__/
 out/tmp/
+out/*/tmp/
 out/*/gerbers/
 # placement scratch (board.sketch, and the unrouted board DRC'd while placing)
 out/sketch.png
