@@ -31,7 +31,8 @@ void ctl_press(ctl_t *c)
         c->mode = CTL_MODE_OFF;
         return;
     }
-    c->mode = c->mode == CTL_MODE_OFF ? CTL_MODE_ON : c->mode == CTL_MODE_ON ? CTL_MODE_AUTO : CTL_MODE_OFF;
+    // on -> off -> auto -> on
+    c->mode = c->mode == CTL_MODE_ON ? CTL_MODE_OFF : c->mode == CTL_MODE_OFF ? CTL_MODE_AUTO : CTL_MODE_ON;
 }
 
 bool ctl_accepts_remote(const ctl_t *c)
@@ -76,14 +77,14 @@ ctl_result ctl_set_mode(ctl_t *c, ctl_mode mode)
     return CTL_OK;
 }
 
-bool ctl_cycle_valid(uint32_t n, uint32_t on_ms, uint32_t off_ms)
+bool ctl_cycle_valid(uint32_t n, uint32_t on_ms, uint32_t off_ms, uint32_t max_total_ms)
 {
     if (n < 1 || n > CONSOLE_CYCLE_MAX_N)
         return false;
     if (on_ms < CONSOLE_CYCLE_MIN_MS || on_ms > CONSOLE_CYCLE_MAX_MS || off_ms < CONSOLE_CYCLE_MIN_MS ||
         off_ms > CONSOLE_CYCLE_MAX_MS)
         return false;
-    return (uint64_t)n * ((uint64_t)on_ms + off_ms) <= CONSOLE_CYCLE_MAX_TOTAL_MS;
+    return (uint64_t)n * ((uint64_t)on_ms + off_ms) <= max_total_ms;
 }
 
 static void start_cycle(ctl_t *c, bool console, uint32_t n, uint32_t on_ms, uint32_t off_ms, int64_t now_ms)
@@ -105,7 +106,7 @@ ctl_result ctl_remote_cycle(ctl_t *c, uint32_t n, uint32_t on_ms, uint32_t off_m
     ctl_result r = remote_ok(c);
     if (r != CTL_OK)
         return r;
-    if (!ctl_cycle_valid(n, on_ms, off_ms))
+    if (!ctl_cycle_valid(n, on_ms, off_ms, CTL_REMOTE_CYCLE_MAX_TOTAL_MS))
         return CTL_ERR_INVALID;
     start_cycle(c, false, n, on_ms, off_ms, now_ms);
     return CTL_OK;
@@ -115,7 +116,7 @@ ctl_result ctl_bench_cycle(ctl_t *c, uint32_t n, uint32_t on_ms, uint32_t off_ms
 {
     if (c->trip != CTL_TRIP_NONE)
         return CTL_ERR_TRIPPED;
-    if (!ctl_cycle_valid(n, on_ms, off_ms))
+    if (!ctl_cycle_valid(n, on_ms, off_ms, CONSOLE_CYCLE_MAX_TOTAL_MS))
         return CTL_ERR_INVALID;
     start_cycle(c, true, n, on_ms, off_ms, now_ms);
     return CTL_OK;

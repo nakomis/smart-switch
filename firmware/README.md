@@ -81,9 +81,9 @@ On the C6's USB-Serial-JTAG (J4), prompt `petro>`:
 
 ## Behaviour
 
-**The mode** is off, on or auto (CLAUDE.md, Control). SW1 steps it **off → on → auto → off**, the
-order the gate procedures press it in (Gate 2b step 6 and Gate 3 step 3.3: one press from off
-closes the relay). A press counts once it has held 30 ms (5 ms polls).
+**The mode** is off, on or auto (CLAUDE.md, Control). SW1 steps it **on → off → auto → on**
+(Martin's decision): from off, two presses (off → auto → on) close the relay; from on, one press
+opens it. A press counts once it has held 30 ms (5 ms polls).
 
 - **on** and **off** are local overrides: the relay follows the mode, and Fleet's relay commands
   are refused (`"status":"error"`, "the mode is a local override").
@@ -143,7 +143,7 @@ below).
 | `{"command":"get_status"}` | Publishes a status now (`"reason":"request"`) |
 | `{"command":"relay","on":true}` | The relay, in auto only |
 | `{"command":"set_mode","mode":"off"}` | `on`, `off` or `auto`, stored; `off` also clears a trip |
-| `{"command":"relay_cycle","n":250,"on_ms":3000,"off_ms":5000}` | Auto only. The console's limits: n 1–10000, 50–60000 ms each, **an hour at most in all** (Gate 4's 500 × 8 s is 67 minutes: run it as two of 250). Leaves the relay open |
+| `{"command":"relay_cycle","n":500,"on_ms":3000,"off_ms":5000}` | Auto only. n 1–10000, 50–60000 ms each, **two hours at most in all** (Gate 4's 500 × 8 s is about 67 minutes; the console's cap stays at one hour). Leaves the relay open |
 | `{"command":"relay_cycle_stop"}` | Stops a cycle, relay open |
 | `{"command":"set_trip_threshold","amps":6.5}` | A **temporary** over-current threshold, 0.5–10.5 A (never above the default), RAM only, gone after a reboot; `"amps":null` restores 10.5 A. A status follows. Recorded and reported now; PETRO-5 enforces it |
 | `{"command":"wifi_stress","on":true,"duration_s":3600}` | Gate 3's transmit stress: 1400-byte UDP datagrams to the gateway's discard port, back to back, for 60–7200 s (default 3600), RAM only. `"on":false` stops it |

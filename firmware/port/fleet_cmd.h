@@ -5,8 +5,8 @@
 //   {"command":"relay","on":true}                  auto only (ctl.h): refused in on and off
 //   {"command":"set_mode","mode":"on"|"off"|"auto"} persisted; "off" also clears a trip
 //   {"command":"relay_cycle","n":500,"on_ms":3000,"off_ms":5000}
-//                                                  auto only; the console's limits: n 1-10000,
-//                                                  50-60000 ms each, an hour at most in all
+//                                                  auto only; n 1-10000, 50-60000 ms each, two
+//                                                  hours at most in all (the console: one)
 //   {"command":"relay_cycle_stop"}
 //   {"command":"set_trip_threshold","amps":6.5}    temporary, RAM only (gone after a reboot); 0.5 to
 //                                                  10.5 A, never above the default. "amps":null

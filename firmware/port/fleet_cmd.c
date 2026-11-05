@@ -57,8 +57,8 @@ static void relay_cycle(const cJSON *root, fleet_cmd *out)
     if (!whole(root, "n", UINT32_MAX, &out->n) || !whole(root, "on_ms", UINT32_MAX, &out->on_ms) ||
         !whole(root, "off_ms", UINT32_MAX, &out->off_ms))
         return fail(out, "relay_cycle needs whole numbers n, on_ms and off_ms");
-    if (!ctl_cycle_valid(out->n, out->on_ms, out->off_ms))
-        return fail(out, "relay_cycle: n 1-10000, on_ms and off_ms 50-60000, at most 1 h in all");
+    if (!ctl_cycle_valid(out->n, out->on_ms, out->off_ms, CTL_REMOTE_CYCLE_MAX_TOTAL_MS))
+        return fail(out, "relay_cycle: n 1-10000, on_ms and off_ms 50-60000, at most 2 h in all");
     out->kind = FLEET_CMD_RELAY_CYCLE;
 }
 

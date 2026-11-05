@@ -1,8 +1,9 @@
 // Petro's control logic: the mode, the relay and the trip latch. Portable, so the host tests it;
 // the control task (esp32c6/main/app.c) owns one ctl_t and drives the relay from ctl_relay().
 //
-// The mode is off, on or auto. The button steps it off -> on -> auto -> off (the order the gate
-// procedures use: one press from off closes the relay).
+// The mode is off, on or auto. The button steps it on -> off -> auto -> on (Martin's decision,
+// CLAUDE.md: from off, two presses reach on; from on, one press opens the relay). Nothing stored
+// means off.
 //   - on and off are local overrides: the relay follows the mode, and remote relay commands are
 //     refused (CTL_ERR_NOT_AUTO).
 //   - auto follows remote commands (Fleet, later Alexa). Entering auto starts with the relay off,
@@ -95,9 +96,12 @@ ctl_result ctl_bench_cycle(ctl_t *c, uint32_t n, uint32_t on_ms, uint32_t off_ms
 // Stops a running cycle (the relay off). True if one was running.
 bool ctl_cycle_stop(ctl_t *c);
 
-// Whether relay cycle's numbers are within the console's limits (console_parse.h): n 1-10000,
-// 50-60000 ms each, an hour at most in all.
-bool ctl_cycle_valid(uint32_t n, uint32_t on_ms, uint32_t off_ms);
+// Whether relay cycle's numbers are within limits: n 1-10000, 50-60000 ms each (console_parse.h),
+// and n x (on_ms + off_ms) at most max_total_ms in all: CONSOLE_CYCLE_MAX_TOTAL_MS (an hour) from
+// the console, which is busy while it runs; CTL_REMOTE_CYCLE_MAX_TOTAL_MS (two hours) from Fleet,
+// for Gate 4's 500 x 8 s (about 67 minutes).
+#define CTL_REMOTE_CYCLE_MAX_TOTAL_MS 7200000u
+bool ctl_cycle_valid(uint32_t n, uint32_t on_ms, uint32_t off_ms, uint32_t max_total_ms);
 
 // The trip hook (PETRO-5): opens the relay and latches. True if this latched a new trip (count
 // it); false if one was already latched (the first cause is kept) or cause is CTL_TRIP_NONE.

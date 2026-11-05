@@ -1,7 +1,7 @@
 """port/ctl: the mode, the relay, the trip latch and relay cycle, through petro-ctl.
 
-Spec (CLAUDE.md, Control; PETRO-3): one button cycling the mode (off -> on -> auto -> off, as the
-gate procedures press it); on and off are local overrides, so remote relay commands are refused;
+Spec (CLAUDE.md, Control; PETRO-3): one button cycling the mode on -> off -> auto -> on (Martin's
+decision; nothing stored means off); on and off are local overrides, so remote relay commands are refused;
 auto follows remote commands; the mode persists and is the power-on state; a press with a trip
 latched clears the trip and leaves the relay off.
 """
@@ -66,18 +66,25 @@ def test_a_stored_mode_out_of_range_starts_off(c, junk):
 
 # ---- the button -------------------------------------------------------------------------------
 
-def test_presses_cycle_off_on_auto_off(c):
-    c("init")
+def test_presses_cycle_on_off_auto_on(c):
+    c("init", stored=True, mode=ON)
     assert [(s["mode"], s["relay"]) for s in (c("press"), c("press"), c("press"))] == [
-        ("on", True), ("auto", False), ("off", False)]
+        ("off", False), ("auto", False), ("on", True)]
+
+
+def test_from_off_two_presses_reach_on(c):
+    c("init")
+    assert c("press")["mode"] == "auto"
+    s = c("press")
+    assert (s["mode"], s["relay"]) == ("on", True)
 
 
 def test_entering_auto_by_button_starts_with_the_relay_off(c):
     in_auto(c)
     assert c("relay", on=True)["relay"] is True
-    c("press")  # auto -> off
-    c("press")  # off -> on
-    s = c("press")  # on -> auto
+    c("press")  # auto -> on
+    c("press")  # on -> off
+    s = c("press")  # off -> auto
     assert s["mode"] == "auto" and s["relay"] is False
 
 
@@ -139,7 +146,7 @@ def test_a_press_clears_a_trip_and_leaves_the_relay_off(c):
     c("trip", cause="overcurrent")
     s = c("press")
     assert (s["trip"], s["mode"], s["relay"]) == (None, "off", False)
-    assert c("press")["relay"] is True  # and the next press is an ordinary one: off -> on
+    assert c("press")["mode"] == "auto"  # and the next press is an ordinary one: off -> auto
 
 
 def test_while_tripped_nothing_remote_closes_the_relay(c):
@@ -229,16 +236,25 @@ def test_remote_cycles_are_auto_only(c):
 
 
 @pytest.mark.parametrize("n,on,off", [(0, 100, 100), (10001, 50, 50), (5, 49, 100), (5, 100, 60001),
-                                      (10000, 180, 181), (31, 60000, 60000)])
+                                      (10000, 360, 361), (61, 60000, 60000)])
 def test_cycles_out_of_range_are_refused(c, n, on, off):
     in_auto(c)
     assert c("cycle", n=n, on_ms=on, off_ms=off)["result"] == "invalid"
     assert c("bench_cycle", n=n, on_ms=on, off_ms=off)["result"] == "invalid"
 
 
-def test_an_hour_exactly_is_allowed(c):
+def test_the_console_cap_is_an_hour(c):
+    c("init")
+    assert c("bench_cycle", n=10000, on_ms=180, off_ms=180)["result"] == "ok"  # exactly an hour
+    assert c("bench_cycle", n=10000, on_ms=180, off_ms=181)["result"] == "invalid"
+    assert c("bench_cycle", n=500, on_ms=3000, off_ms=5000)["result"] == "invalid"  # 67 min
+
+
+def test_the_fleet_cap_is_two_hours(c):
     in_auto(c)
-    assert c("cycle", n=10000, on_ms=180, off_ms=180)["result"] == "ok"
+    assert c("cycle", n=500, on_ms=3000, off_ms=5000)["result"] == "ok"  # Gate 4: 67 min
+    assert c("cycle", n=10000, on_ms=360, off_ms=360)["result"] == "ok"  # exactly two hours
+    assert c("cycle", n=10000, on_ms=360, off_ms=361)["result"] == "invalid"
 
 
 @pytest.mark.parametrize("interrupt", [
@@ -266,7 +282,7 @@ def test_a_console_cycle_runs_in_any_mode_and_leaves_the_relay_off(c):
     assert c("tick", now=100)["relay"] is False
     s = c("tick", now=200)
     assert s["cycle"] is None and s["relay"] is False and s["bench"] is True and s["mode"] == "on"
-    assert c("press")["mode"] == "auto"  # a press ends the bench override
+    assert c("press")["mode"] == "off"  # a press ends the bench override: on -> off
 
 
 def test_a_stopped_console_cycle_leaves_the_relay_off(c):
@@ -283,7 +299,7 @@ def test_the_bench_drives_the_relay_until_a_press(c):
     s = c("bench", on=True)
     assert s["relay"] is True and s["bench"] is True and s["mode"] == "off"
     s = c("press")
-    assert s["bench"] is False and s["mode"] == "on" and s["relay"] is True
+    assert s["bench"] is False and s["mode"] == "auto" and s["relay"] is False
 
 
 def test_the_bench_ends_with_a_mode_change_or_a_remote_relay_command(c):
