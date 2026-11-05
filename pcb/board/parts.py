@@ -77,6 +77,7 @@ _TABLE = {
     "TACT": ("TS-1002 7mm", "C455095", "SW-TH_4P-L6.0-W6.0-P4.50-LS6.5_TS-1002-07026", "TS-1002-07026", True, 0),
     "NTC": ("10k NTC", "C2892547", "R0603", "KNTC0603_10KF3950", True, 0),
     "R390K": ("390k", "C17933", "R1206", "1206W4F3903T5E", True, 0),
+    "R0": ("0R", "C17888", "R1206", "1206W4F3903T5E", False, 0),       # basic: the GND-neutral bond (a 1206 resistor's symbol)
     "R470": ("470R", "C25117", "R0402", "0402WGF4700TCE", False, 0),      # 61 mV: any size
     "R1K": ("1k", "C11702", "R0402", "0402WGF1001TCE", False, 0),
     # Revision B (non-isolated) supply: PI's LNK306 high-side buck (LNK302/304-306 datasheet,
@@ -147,6 +148,7 @@ MFR = {
     "PTC5": ("Littelfuse", "1206L110THYR"), "TVS5": ("Liown", "SMAJ5.0A"),
     "TACT": ("XUNPU", "TS-1002-07026"), "NTC": ("KUU", "KNTC0603/10KF3950"),
     "R390K": ("UNI-ROYAL", "1206W4F3903T5E"), "R470": ("UNI-ROYAL", "0402WGF4700TCE"),
+    "R0": ("UNI-ROYAL", "1206W4F0000T5E"),
     "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Samsung", "CL10B333KB8NNNC"),
     "LNK306": ("Power Integrations", "LNK306DN-TL"), "RFUSE": ("Yageo", "FKN2WSJT-52-10R"),
     "RECT": ("MDD", "M7"), "FASTREC": ("MDD", "US1MG"), "C4U7HV": ("AISHI", "EGW2GM4R7F12OT"),

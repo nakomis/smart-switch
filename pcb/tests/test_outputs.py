@@ -47,7 +47,9 @@ def test_case_interface_says_the_whole_board_is_live_j3_included():
     wired to it included; J3 and USB (J4) are internal only."""
     ci = json.loads(pb.case_interface(C, P))
     assert ci["mains_area"]["whole_board"] is True and "except" not in ci["mains_area"]
-    assert ci["connectors"]["J4"]["internal_only"] is True
+    assert ci["connectors"]["J4"]["internal_only"] is True and ci["connectors"]["J4"]["safe"] is False
+    for opening in ("button", "led"):                    # the case's two openings: both parts are live
+        assert "mains potential" in ci[opening]["note"], opening
     j3 = ci["connectors"]["J3"]
     assert j3["internal_only"] is True and j3["safe"] is False and j3["edge"] == "bottom"
     assert ci["led"]["part"] == "SK6812-EC20"

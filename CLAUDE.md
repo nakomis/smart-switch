@@ -22,8 +22,8 @@ reasoning is in `docs/DESIGN.md`.
 |---|---|
 | Rating | 10 A continuous, 230 V AC, resistive. Derate inductive and capacitive loads. Design margin in: a 16 A relay, and copper and terminals sized for 16 A |
 | Form factor | In-line cord unit (cable in, cable out) in Martin's own printed case (PETRO-6), printed in a UL94 V-0 flame-retardant filament, with glands and cord grips. Never plain PLA or PETG for the mains enclosure. The board (120 × 80 mm with 4 mm rounded corners) sets the case's size. **Nothing conductive may leave the case** |
-| Power | Non-isolated, from the mains: F2 (T500 mA), a fusible resistor and Power Integrations' **LNK306** high-side buck (12 V), then a TI **TPS563201** (5 V) and the AP2112K (3.3 V). GND is neutral, joined at the shunt's sense pad (the one star point) |
-| Metering | A **BL0939** (the BL0942 is out of stock) on GND, reading a 1 mΩ Kelvin shunt **in the neutral** and a 5 × 390 kΩ divider from L_IN; UART, zero cross and over-current wired straight to the ESP32 |
+| Power | Non-isolated, from the mains: F2 (T500 mA), a fusible resistor and Power Integrations' **LNK306** high-side buck (12 V), then a TI **TPS563201** (5 V) and the AP2112K (3.3 V). GND is neutral, joined through a 0 Ω link (R29, the one star point); the shunt's sense pads are true Kelvin (SENSE, KGND) |
+| Metering | A **BL0939** (the BL0942 is out of stock) on GND, reading a 1 mΩ Kelvin shunt **in the neutral**, east of the MOV (which returns to N_IN, so surges miss the shunt), and a 5 × 390 kΩ divider from L_IN; UART, zero cross and over-current wired straight to the ESP32 |
 | MCU | **ESP32-C6-WROOM-1-N8** (JLCPCB Economic assembly; the S3-MINI's LGA needed X-ray, so Standard), antenna overhanging the edge furthest from the mains |
 | I/O | J3, a 10-way 3.5 mm terminal for parts **inside the case**: 3.3 V, GND, SPI, I²C (4k7 pull-ups), IN (100k pull-down, an LP GPIO for wake) and OUT. At mains potential like everything else. USB (J4, the house connector) and the debug pads are for use **only with mains unplugged** |
 | Control | One tactile button cycling **on → off → auto**. On and off are local overrides (remote relay commands are refused); auto follows MQTT and Alexa. The mode persists in NVS and doubles as the power-on state. A press with a trip latched clears the trip and leaves the relay off |
@@ -39,7 +39,8 @@ reasoning is in `docs/DESIGN.md`.
   least 3.5 mm wide (IPC-2221 for 8 A a layer, 16 A for the pair). The `Mains16A` net class and
   the zones' minimum width fail the build if anything thins them.
 - ≥ 2.5 mm between mains potentials (L↔N, and every mains net to GND, which is neutral); the
-  divider's steps and the LNK306's switching node by the generated matrix (`pcb/board/rules.py`);
+  supply's DC bus 3.55 mm to GND and 4.35 mm to the live; the divider's steps and the LNK306's
+  switching node (1.0 mm inside the converter only) by the generated matrix (`pcb/board/rules.py`);
   3 mm to the board edge and holes.
 - F1: a 15 A high-breaking-capacity fuse (6.3×32 mm, 50 kA) for short circuits; the plug's 13 A
   fuse and the firmware trip (~10.5 A) cover overload. Then a 275 V AC thermally protected MOV, and

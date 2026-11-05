@@ -102,7 +102,7 @@ def test_hand_tracks_keep_the_matrix_spacing_from_other_pads(hand):
 
 def test_the_kelvin_pair_leaves_the_shunt_through_vias_beside_its_sense_pads(hand):
     tracks, vias = hand
-    for net, pad in (("GND", "2"), ("SENSE", "3")):
+    for net, pad in (("KGND", "2"), ("SENSE", "3")):
         px, py = pb.pad_xy(C, P, "RS1", pad)
         v = [x for x in vias if x.net == net and math.hypot(x.x - px, x.y - py) < 2.0]
         assert len(v) == 1, net
@@ -208,22 +208,47 @@ def test_the_router_area_holds_j3_and_its_resistors_whole():
                 assert pb._in_poly(x, y, pb.lv_area()), (ref, q.number)
 
 
-def test_the_kelvin_sense_line_reaches_r8_and_r10_by_hand():
-    """Vias between R8 and R9 and between R10 and R11, then F.Cu into each sense pad: the router
-    found no room at R10, and its only way to R8 was across the top neutral."""
+@pytest.mark.parametrize("net", ["KGND", "SENSE"])
+def test_the_kelvin_pair_is_complete_by_hand(net):
+    """Shunt to both filter resistors, by hand: the router never touches the sense lines."""
     tracks, vias = pb.kelvin_route(C, P)
-    sense = [t for t in tracks if t.net == "SENSE"]
-    for r in ("R8", "R10"):
-        assert any(abs(t.x2 - pb.pad_xy(C, P, r, "1")[0]) < 1e-6 and t.layer == "F.Cu" for t in sense), r
-    others = [(net, b) for net, *b in pad_boxes(C, P) if net not in ("SENSE", None)]
-    for v in [v for v in vias if v.net == "SENSE"]:
-        for net, b in others:
-            d = math.hypot(max(b[0] - v.x, 0, v.x - b[2]), max(b[1] - v.y, 0, v.y - b[3])) - v.size / 2
-            assert d >= 0.26, (net, b, round(d, 3))
-    for t in sense:
-        for net, b in others:
-            if net not in pb.GROUPS:
-                assert _seg_box_dist(t, b) >= 0.26 or t.layer == "B.Cu", (t, net, b)
+    assert _connected(net, tracks, vias), net
+
+
+def test_the_kelvin_pair_never_crosses_and_keeps_off_the_live():
+    """KGND and SENSE on B.Cu never cross (KGND above SENSE all the way), and both keep the 2.5 mm
+    to L_F's pour and the MOV's live lead."""
+    tracks, _ = pb.kelvin_route(C, P)
+    bk = [t for t in tracks if t.layer == "B.Cu" and t.net == "KGND"]
+    bs = [t for t in tracks if t.layer == "B.Cu" and t.net == "SENSE"]
+
+    def cross(a, b):
+        f = lambda p, q, r: (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+        p1, p2, q1, q2 = (a.x1, a.y1), (a.x2, a.y2), (b.x1, b.y1), (b.x2, b.y2)
+        return f(p1, p2, q1) * f(p1, p2, q2) < 0 and f(q1, q2, p1) * f(q1, q2, p2) < 0
+    assert not any(cross(a, b) for a in bk for b in bs)
+    lf = pb.MAINS_POLYS["L_F"]
+    for t in bk + bs:
+        for k in range(21):
+            x, y = t.x1 + (t.x2 - t.x1) * k / 20, t.y1 + (t.y2 - t.y1) * k / 20
+            d = min(math.hypot(max(min(a[0], b[0]) - x, 0, x - max(a[0], b[0])),
+                               max(min(a[1], b[1]) - y, 0, y - max(a[1], b[1])))
+                    for a, b in zip(lf, lf[1:] + lf[:1]))
+            assert pb._in_poly(x, y, lf) is False and d - t.width / 2 >= 2.5, (t, round(d, 2))
+
+
+def test_the_kelvin_vias_and_top_tracks_keep_the_routers_clearance_from_other_pads():
+    tracks, vias = pb.kelvin_route(C, P)
+    for kn in ("KGND", "SENSE"):
+        others = [(net, b) for net, *b in pad_boxes(C, P) if net not in (kn, None)]
+        for v in [v for v in vias if v.net == kn]:
+            for net, b in others:
+                d = math.hypot(max(b[0] - v.x, 0, v.x - b[2]), max(b[1] - v.y, 0, v.y - b[3])) - v.size / 2
+                assert d >= 0.26, (kn, net, b, round(d, 3))
+        for t in [t for t in tracks if t.net == kn and t.layer == "F.Cu"]:
+            for net, b in others:
+                if net not in pb.GROUPS:
+                    assert _seg_box_dist(t, b) >= 0.26, (t, net, b)
 
 
 def test_the_router_keeps_off_the_top_neutral_round_the_shunt():
@@ -237,8 +262,8 @@ def test_the_router_keeps_off_the_top_neutral_round_the_shunt():
 
 def test_the_usb_protections_flow_through_pins_are_tied_by_hand():
     tracks, _ = pb.usb_ties(C, P)
-    assert _connected_pads("USB_DM", [t for t in tracks if t.net == "USB_DM"], [("U6", "1"), ("U6", "6")])
-    assert _connected_pads("USB_DP", [t for t in tracks if t.net == "USB_DP"], [("U6", "3"), ("U6", "4")])
+    assert _connected_pads("USB_DM", [t for t in tracks if t.net == "USB_DM"], [("U6", "1"), ("U6", "6"), ("J4", "2")])
+    assert _connected_pads("USB_DP", [t for t in tracks if t.net == "USB_DP"], [("U6", "3"), ("U6", "4"), ("J4", "3")])
     for t in tracks:
         for net, *b in pad_boxes(C, P):
             if net not in (t.net, None):

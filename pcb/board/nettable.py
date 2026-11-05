@@ -12,7 +12,8 @@ def _pin_name(inst, pad):
 
 
 def net_table(c, groups):
-    order = ["LINE", "LIVE", "PSU", "SWNODE", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "low voltage"]
+    from board.rules import GROUPS as ALL      # every group, so a new one can never break the table
+    order = list(ALL) + ["low voltage"]
     rows = []
     for name, pads in c.nets.items():
         g = groups.get(name, "low voltage")

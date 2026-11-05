@@ -149,3 +149,38 @@ def test_build_check_catches_a_missing_pad(filled, monkeypatch):
     assert any("misses J2" in s for s in checks.pour_problems(C, P, board, {"L_OUT"}))
 
 
+
+
+def test_build_check_catches_a_cut_mains_pour(tmp_path):
+    """A real cut, refilled by KiCad: a 1 mm rule area across L_F's band under the relay, on both
+    layers, leaves L_F in two pieces on each layer, which pour_problems reports. (A track there
+    would be caught by the clearance rules first; this is the check for a split they allow.)"""
+    from board.checks import pour_problems
+    r = pb.rules()
+    base = ([k for k in PRO["net_settings"]["classes"] if k["name"] != "Mains"],
+            [k for k in PRO["net_settings"]["netclass_patterns"] if k["netclass"] != "Mains"])
+    classes, patterns = r.netclasses(base)
+    tracks, vias = pb.hand_wiring(C, P)
+    cut = [("cut", [(68.5, 36.0), (69.5, 36.0), (69.5, 43.0), (68.5, 43.0)], ("F.Cu", "B.Cu"))]
+    board = tmp_path / "petro.kicad_pcb"
+    write_board(C, P, board, tracks, vias + pb.stitch_vias(), layers=2, slots=pb.slots(), dru=r.dru(),
+                netclasses=classes, netclass_patterns=patterns, zones=pb.mains_zones(), keepouts=cut,
+                pad_extra=pb.pad_extra(C), plane_pts=pb.gnd_pts(), corner_radius=pb.CORNER_R)
+    subprocess.run([KICAD_CLI, "pcb", "drc", "--format", "json", "--refill-zones", "--save-board", "-o",
+                    str(tmp_path / "drc.json"), str(board)], check=True, capture_output=True)
+    problems = pour_problems(C, P, board, {"L_F"})
+    assert "L_F on F.Cu: 2 pieces" in problems and "L_F on B.Cu: 2 pieces" in problems, problems
+
+
+def test_build_check_needs_an_smd_pad_covered_not_grazed():
+    """The shunt's current pads carry the whole load on F.Cu: a pour must cover the pad's centre
+    and four inset points, not just touch it."""
+    from board.checks import _pad_points, inside
+    pad = next(q for q in C.instances["RS1"].part.footprint.pads if q.number == "1")
+    x, y, rot = P.at["RS1"]
+    pts = _pad_points(pad, x, y, rot, smd=True)
+    cx, cy = pts[0]
+    sliver = [(cx - 0.2, cy - 0.2), (cx + 0.2, cy - 0.2), (cx + 0.2, cy + 0.2), (cx - 0.2, cy + 0.2)]
+    whole = [(cx - 5, cy - 5), (cx + 5, cy - 5), (cx + 5, cy + 5), (cx - 5, cy + 5)]
+    assert inside(pts[0], sliver) and not all(inside(q, sliver) for q in pts)
+    assert all(inside(q, whole) for q in pts)

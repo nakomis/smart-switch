@@ -13,7 +13,7 @@
       "y": 4.0,
       "diameter": 3.2,
       "plated": false,
-      "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"
+      "note": "unplated; copper keeps only 3 mm (functional) off, so nylon screws, or metal ones that cannot be reached from outside the closed case"
     },
     {
       "ref": "H2",
@@ -21,7 +21,7 @@
       "y": 4.0,
       "diameter": 3.2,
       "plated": false,
-      "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"
+      "note": "unplated; copper keeps only 3 mm (functional) off, so nylon screws, or metal ones that cannot be reached from outside the closed case"
     },
     {
       "ref": "H3",
@@ -29,7 +29,7 @@
       "y": 76.0,
       "diameter": 3.2,
       "plated": false,
-      "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"
+      "note": "unplated; copper keeps only 3 mm (functional) off, so nylon screws, or metal ones that cannot be reached from outside the closed case"
     },
     {
       "ref": "H4",
@@ -37,7 +37,7 @@
       "y": 76.0,
       "diameter": 3.2,
       "plated": false,
-      "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"
+      "note": "unplated; copper keeps only 3 mm (functional) off, so nylon screws, or metal ones that cannot be reached from outside the closed case"
     }
   ],
   "tooling_holes": [
@@ -72,7 +72,7 @@
       61.8,
       47.8
     ],
-    "note": "2.0 mm clear board round the LED for the light pipe's flange"
+    "note": "2.0 mm clear board round the LED for the light pipe's flange. The LED is at mains potential: the light pipe must be insulating, with no gap a finger or a wire can reach the LED through"
   },
   "button": {
     "x": 49.5,
@@ -83,7 +83,8 @@
       42.2,
       53.9,
       49.0
-    ]
+    ],
+    "note": "the switch (metal top plate included) is at mains potential: the cap must be insulating and captive, so that a broken cap can't let a finger reach the switch"
   },
   "connectors": {
     "J1": {
@@ -122,6 +123,7 @@
       "what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
       "edge": "right",
       "internal_only": true,
+      "safe": false,
       "body": [
         113.71,
         47.6,
@@ -156,9 +158,9 @@
       50.55
     ],
     "RV1": [
-      62.5,
+      40.25,
       7.25,
-      85.5,
+      63.25,
       16.75
     ],
     "L1": [

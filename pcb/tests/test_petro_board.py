@@ -88,7 +88,8 @@ def test_live_path_order():
     """J1 -> F1 -> (MOV) -> relay -> J2 on the live; the supply branch after F2, which is after F1."""
     assert net("J1", "2") == net("XF1", "1") == "L_IN"
     assert net("XF2", "1") == net("K1", "COM") == net("XF3", "1") == "L_F"
-    assert {net("RV1", "1"), net("RV1", "2")} == {"L_F", "N_OUT"}
+    # the MOV returns to the incoming neutral: a surge never crosses the shunt
+    assert {net("RV1", "1"), net("RV1", "2")} == {"L_F", "N_IN"}
     assert net("K1", "NO") == net("J2", "1") == "L_OUT"
     assert net("XF3", "2") == "L_PSU"
 
@@ -102,12 +103,16 @@ def test_high_current_nets_are_the_load_path():
     assert pb.HIGH_CURRENT == {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
 
 
-def test_ground_meets_neutral_only_at_the_shunt_sense_pad():
-    """The star point: GND is the shunt's sense pad on the supply side; no other part joins GND
-    to N_IN, so no load current flows in the low-voltage ground."""
-    assert net("RS1", "E1") == "GND" and net("RS1", "E2") == "SENSE"
-    bridges = {r for r in C.instances if {"GND", "N_IN"} <= nets_of(r)}
-    assert bridges == {"RS1"}
+def test_ground_meets_neutral_only_at_the_bond_and_the_sense_lines_carry_no_current():
+    """The star point is R29, a 0 R link from GND to N_IN: the only part joining them, so no load
+    current flows in GND. The shunt's supply-side sense pad is KGND, a Kelvin return to the
+    BL0939's negative-input filters only, so the supply's own return current (the rectifier's
+    charging pulses) never flows in a sense line."""
+    assert net("RS1", "E1") == "KGND" and net("RS1", "E2") == "SENSE"
+    assert {r for r in C.instances if {"GND", "N_IN"} <= nets_of(r)} == {"R29"}
+    assert C.instances["R29"].part.key == "R0"
+    assert {r for r, _ in C.nets["KGND"]} == {"RS1", "R9", "R11"}
+    assert {r for r, _ in C.nets["SENSE"]} == {"RS1", "R8", "R10"}
 
 
 # --- the supply: PI's LNK306 high-side buck, 12 V -----------------------------------------------------
@@ -187,11 +192,11 @@ def test_supply_high_voltage_nets_are_the_psu_bus_and_swnode_groups():
 
 # --- metering ------------------------------------------------------------------------------------------
 
-def test_both_current_channels_read_the_shunt_against_ground():
+def test_both_current_channels_read_the_shunt_by_kelvin():
     for p, n in (("IP1", "IN1"), ("IP2", "IN2")):
         rp = next(r for r, _ in C.nets[net("U3", p)] if r != "U3" and C.instances[r].part.key == "R1K")
         rn = next(r for r, _ in C.nets[net("U3", n)] if r != "U3" and C.instances[r].part.key == "R1K")
-        assert "SENSE" in nets_of(rp) and "GND" in nets_of(rn)
+        assert "SENSE" in nets_of(rp) and "KGND" in nets_of(rn)
 
 
 def test_voltage_divider_from_line():

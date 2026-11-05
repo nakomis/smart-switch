@@ -6,10 +6,13 @@ reinforced barrier, is branch 5v-240v-separation / tag 5v-240v-separation-v1.
 
 Mains side:
   Live: J1 (line in) -> F1 (15 A HBC, in two clips XF1/XF2) -> the relay's COM; its NO -> J2.
-  The MOV across live and neutral after F1. F2 (T500 mA, holder XF3) feeds the supply.
-  Neutral: J1 -> the 1 mOhm Kelvin shunt RS1 -> J2. All the low-voltage circuitry's ground (GND)
-  is the shunt's sense pad on the supply side: the one place GND meets neutral (a star point), so
-  no load current flows in GND.
+  The MOV from live after F1 to the incoming neutral (N_IN), so a surge never crosses the shunt.
+  F2 (T500 mA, holder XF3) feeds the supply.
+  Neutral: J1 -> the 1 mOhm Kelvin shunt RS1 -> J2. The shunt's supply-side sense pad is KGND,
+  a Kelvin return that carries no current, to the BL0939's negative-input filters; the
+  low-voltage ground (GND) joins N_IN through a 0 R link (R29) beside the metering corner, the one
+  place GND meets neutral, so neither the load current nor the supply's own return current flows
+  in the sense lines.
 
 Supply (all at mains potential): PI's LNK306 high-side buck (datasheet Figure 5; the neutral-leg
   diode left out so its return is neutral): fusible resistor, half-wave rectifier, pi filter,
@@ -140,15 +143,15 @@ def build_petro():
         c.connect(n, (j2, pad))
     c.connect("L_IN", (part("FUSECLIP", "XF1"), "1"))           # F1's two clips
     c.connect("L_F", (part("FUSECLIP", "XF2"), "1"))
-    two("MOV", "RV1", "L_F", "N_OUT")       # after F1 (F1 clears a MOV short); on N_OUT: a surge crosses
-                                            # the 1 mR shunt (~0.02 J, within its pulse rating)
+    two("MOV", "RV1", "L_F", "N_IN")        # after F1 (F1 clears a MOV short); to N_IN, so a surge
+                                            # returns to the supply without crossing the shunt
     k1 = part("RELAY16", "K1")
     c.connect("L_F", (k1, "COM"))
     c.connect("L_OUT", (k1, "NO"))
     rs = part("SHUNT", "RS1")                                   # in the neutral, Kelvin
     c.connect("N_IN", (rs, "I1"))
     c.connect("N_OUT", (rs, "I2"))
-    c.connect(gnd, (rs, "E1"))                                  # the star point: GND meets N here
+    c.connect("KGND", (rs, "E1"))                               # Kelvin return: no current flows in it
     c.connect("SENSE", (rs, "E2"))
 
     # ---- the supply: F2, then PI's LNK306 high-side buck (12 V) ----------------------------------
@@ -224,7 +227,7 @@ def build_petro():
         rp, rn = c.add("R1K"), c.add("R1K")
         c.connect("SENSE", (rp, "1"))
         c.connect(pn, (rp, "2"), (u3, f"IP{k}"))
-        c.connect(gnd, (rn, "1"))
+        c.connect("KGND", (rn, "1"))                            # the shunt's other sense pad, by Kelvin
         c.connect(nn, (rn, "2"), (u3, f"IN{k}"))
         two("C33N", None, pn, gnd)
         two("C33N", None, nn, gnd)
@@ -317,6 +320,10 @@ def build_petro():
     for pad, n in IO_PINS.items():
         c.connect(n, (j3, pad))
 
+    # The star point: GND meets neutral through a 0 R link beside the metering corner (last, so the
+    # auto-numbered resistors keep their refs)
+    two("R0", "R29", gnd, "N_IN")
+
     # Mounting holes near the corners, all unplated: GND is at neutral, so a plated hole would put
     # the screw at mains potential. All copper keeps 3 mm from them (rules: copper to mounting holes).
     for ref in ("H1", "H2", "H3", "H4"):
@@ -382,14 +389,19 @@ AT = {
     # mains: terminals, the live chain, F2 (hanging below L_F's stub), the MOV, the shunt
     "J1": (8.0, 19.5, 270), "J2": (112.0, 19.5, 90),
     "XF1": (20.0, F1_Y, 0), "XF2": (20.0 + F1_CLIP_PITCH, F1_Y, 0),
-    "K1": (69.0, 46.5, 90), "RV1": (74.0, 12.0, 180), "RS1": (31.0, 6.5, 0),
+    "K1": (69.0, 46.5, 90), "RV1": (51.75, 12.0, 180), "RS1": (68.5, 6.5, 0),
     "XF3": (90.0, 45.6, 0),
     # the metering corner: the divider column from L_IN, the BL0939 and its filters
     "R12": (18.0, 25.0, 90), "R13": (18.0, 20.15, 90), "R14": (18.0, 15.3, 90), "R15": (20.6, 11.6, 0),
     "R16": (24.2, 14.0, 270),
     "U3": (31.0, 20.5, 180),
-    "R8": (29.05, 12.1, 90), "R9": (30.85, 12.1, 90), "R10": (32.65, 12.1, 90), "R11": (34.45, 12.1, 90),
-    "C13": (29.05, 14.7, 90), "C14": (30.85, 14.7, 90), "C15": (32.65, 14.7, 90), "C16": (34.45, 14.7, 90),
+    # the current-input filters: the KGND pair (R9, R11) west, the SENSE pair (R8, R10) east, so one
+    # via between each pair feeds both and the Kelvin lines never cross; turned so the Kelvin pads
+    # face the neutral strip (their stubs block no gap the router needs) and each resistor's input
+    # pad sits straight above its capacitor's (C14, C16, C13, C15 in the same order)
+    "R9": (29.05, 12.1, 270), "R11": (30.85, 12.1, 270), "R8": (32.65, 12.1, 270), "R10": (34.45, 12.1, 270),
+    "R29": (36.7, 9.6, 90),             # GND-neutral bond: N_IN pad in the strip, GND pad in the corner
+    "C14": (29.05, 14.7, 270), "C16": (30.85, 14.7, 270), "C13": (32.65, 14.7, 270), "C15": (34.45, 14.7, 270),
     "C17": (24.6, 18.0, 90), "R17": (23.0, 18.0, 90), "C12": (37.0, 17.6, 90), "R18": (24.4, 24.4, 90),
     # the supply block: F2 holder, fusible resistor, rectifier, pi filter, LNK306 buck
     # R1 2.4 mm right of rev B's first place and C1 turned, its bus pad towards L1: the DC bus
@@ -485,10 +497,11 @@ def sketch_lines():
 MAINS_MIN_WIDTH = round(math.ceil(ipc2221_width(16 / 2, COPPER_OZ) / 0.05) * 0.05, 2)    # 3.5 mm
 CU = ("F.Cu", "B.Cu")
 MAINS_POLYS = {
-    # neutral: deepened to y = 10 round the shunt (x 24.5-37.5)
-    "N_IN": [(3, 3), (30.2, 3), (30.2, 10), (24.5, 10), (24.5, 8.6), (12, 8.6), (12, 19), (3, 19)],
-    "N_OUT": [(31.8, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (72.5, 8.6), (72.5, 12),
-              (67, 12), (67, 8.6), (37.5, 8.6), (37.5, 10), (31.8, 10)],
+    # neutral: N_IN along the top from J1 to the shunt (x 62-75, deepened to y = 10 round it), with
+    # a pocket down round the MOV's neutral lead (x 45-50); N_OUT from the shunt to J2
+    "N_IN": [(3, 3), (67.7, 3), (67.7, 10), (62, 10), (62, 8.6), (50, 8.6), (50, 11.6), (45, 11.6),
+             (45, 8.6), (12, 8.6), (12, 19), (3, 19)],
+    "N_OUT": [(69.3, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (75, 8.6), (75, 10), (69.3, 10)],
     "L_IN": [(3, 21), (14, 21), (14, 25.4), (20, 25.4), (20, 28.5), (27, 28.5), (27, 35.5), (3, 35.5)],
     # live after F1: one band under the relay's L_F pins (y 37.6-41.5, 2.5 mm below L_OUT and
     # above the low-voltage area) joining the main block, the MOV's arm and XF3's column; each
@@ -503,14 +516,14 @@ MAINS_POLYS = {
 # The bottom layer's neutral stops short of the shunt's sense vias (the shunt joins N_IN and N_OUT
 # on the top layer, where its pads are).
 MAINS_POLYS_BCU = {
-    "N_IN": [(3, 3), (25.6, 3), (25.6, 8.6), (12, 8.6), (12, 19), (3, 19)],
-    "N_OUT": [(36.4, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (72.5, 8.6), (72.5, 12),
-              (67, 12), (67, 8.6), (36.4, 8.6)],
+    "N_IN": [(3, 3), (63.1, 3), (63.1, 8.6), (50, 8.6), (50, 11.2), (45, 11.2), (45, 8.6), (12, 8.6),
+             (12, 19), (3, 19)],
+    "N_OUT": [(73.9, 3), (117, 3), (117, 19), (106, 19), (106, 8.6), (73.9, 8.6)],
 }
 STITCH = {
-    "N_IN": [(9, 10), (9, 13), (14, 5.6), (21, 5.6), (24, 5.6)],
-    "N_OUT": [(38, 5.6), (44, 5.6), (52, 5.6), (60, 5.6), (66, 5.6), (84, 5.6), (100, 5.6),
-              (110, 7.5), (109, 12)],
+    "N_IN": [(9, 10), (9, 13), (14, 5.6), (21, 5.6), (27, 5.6), (33, 5.6), (39, 5.6), (44, 5.6),
+             (53, 5.6), (59, 5.6)],
+    "N_OUT": [(78, 5.6), (84, 5.6), (92, 5.6), (100, 5.6), (110, 7.5), (109, 12)],
     "L_IN": [(6, 28), (11, 27), (11, 32), (20, 32), (8, 33)],
     "L_F": [(46.6, 32), (45, 24), (52, 27), (44, 19.5), (62, 16.5), (59, 37), (68.9, 39.6),
             (75.5, 40), (79.5, 15.5), (80.3, 48.3)],
@@ -571,7 +584,8 @@ def divider_tracks(c, p):
 
 HV_W, SW_W, KELVIN_W = 0.5, 0.6, 0.25
 KELVIN_VIA = (0.6, 0.3)
-SHUNT_KEEPOUT = (24.5, 3.0, 37.5, 10.0)    # x0, y0, x1, y1: F.Cu, the neutral pours round RS1
+SHUNT_KEEPOUT = (61.0, 3.0, 76.0, 10.0)    # x0, y0, x1, y1: F.Cu, the neutral pours round RS1
+NEUTRAL_KEEPOUT = (24.5, 3.0, 37.5, 9.8)   # both layers: N_IN over the metering corner
 
 
 def _route(net, layer, width, *pts):
@@ -618,37 +632,52 @@ def supply_tracks(c, p):
 
 
 def kelvin_route(c, p):
-    """(tracks, vias): the shunt's sense pair. Each sense pad has a via beside it (GND below E1,
-    SENSE west of E2, over the gap between the two neutral pours, so neither necks the top layer's
-    N_OUT where it reaches I2; the bottom layer's neutral stops short of both) and runs down on
-    B.Cu into the metering corner, where the router and the GND pour take over."""
+    """(tracks, vias): the shunt's sense pair, KGND from E1 and SENSE from E2, by hand. Each sense
+    pad has a via beside it (KGND below E1, SENSE west of E2, over the gap between the two
+    neutral pours, so neither necks the top layer's neutral where the current pads are; the bottom
+    layer's neutral stops short of both). Then a tight pair west on B.Cu, KGND above SENSE all the
+    way so they never cross: under the shunt between the neutral and L_F's 2.5 mm, down under the
+    MOV's neutral lead, and up into the metering corner, where a via between each pair of filter
+    resistors (R9/R11 on KGND, R8/R10 on SENSE) feeds both on F.Cu."""
     (gx, gy), (sx, sy) = pad_xy(c, p, "RS1", "2"), pad_xy(c, p, "RS1", "3")
     gv, sv = (gx, round(gy + 1.25, 3)), (round(sx - 1.95, 3), sy)
-    t = _route("GND", "F.Cu", KELVIN_W, (gx, gy), gv)
-    t += _route("GND", "B.Cu", KELVIN_W, gv, (gx, 11.2))
+    mx, _ = pad_xy(c, p, "RV1", "2")                         # the MOV's neutral lead
+    pads = {r: pad_xy(c, p, r, "1") for r in ("R8", "R9", "R10", "R11")}
+    kv = (round((pads["R9"][0] + pads["R11"][0]) / 2, 3), pads["R9"][1])
+    svia = (round((pads["R8"][0] + pads["R10"][0]) / 2, 3), pads["R8"][1])
+    k_hi, s_hi = 9.5, 10.3                # under the shunt: L_F's top edge is y 13
+    k_dip, s_dip = 11.6, 12.4             # under the MOV's neutral lead
+    k_lo, s_lo = 10.4, 11.2               # into the metering corner
+    ek, es, wk, ws = round(mx + 3.0, 3), round(mx + 3.8, 3), round(mx - 3.2, 3), round(mx - 4.0, 3)
+    t = _route("KGND", "F.Cu", KELVIN_W, (gx, gy), gv)
+    t += _route("KGND", "B.Cu", KELVIN_W, gv, (gx, k_hi), (ek, k_hi), (ek, k_dip), (wk, k_dip), (wk, k_lo),
+                (kv[0], k_lo), kv)
     t += _route("SENSE", "F.Cu", KELVIN_W, (sx, sy), sv)
-    t += _route("SENSE", "B.Cu", KELVIN_W, sv, (sv[0], 10.4), (sv[0], 11.2))
-    # ... and on into R10's sense pad (the lower one, between IBP above it and C15's ground below,
-    # where the router found no room for a via): a via in the gap between R10 and R11, then F.Cu.
-    (rx, ry), (nx, _) = pad_xy(c, p, "R10", "1"), pad_xy(c, p, "R11", "1")
-    end = (round((rx + nx) / 2, 3), ry)
-    t += _route("SENSE", "B.Cu", KELVIN_W, (sv[0], 11.2), (end[0], 11.2), end)
-    t += _route("SENSE", "F.Cu", KELVIN_W, end, (rx, ry))
-    # ... and R8's: off the bottom-layer run at y 10.4 (under the top neutral, where the router is
-    # kept out), a via between R8 and R9, then F.Cu into R8's sense pad
-    (ax, ay), (bx, _) = pad_xy(c, p, "R8", "1"), pad_xy(c, p, "R9", "1")
-    end8 = (round((ax + bx) / 2, 3), ay)
-    t += _route("SENSE", "B.Cu", KELVIN_W, (sv[0], 10.4), (end8[0], 10.4), end8)
-    t += _route("SENSE", "F.Cu", KELVIN_W, end8, (ax, ay))
-    return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA), Via("SENSE", *end, *KELVIN_VIA),
-               Via("SENSE", *end8, *KELVIN_VIA)]
+    t += _route("SENSE", "B.Cu", KELVIN_W, sv, (sv[0], s_hi), (es, s_hi), (es, s_dip), (ws, s_dip), (ws, s_lo),
+                (svia[0], s_lo), svia)
+    for r in ("R9", "R11"):
+        t += _route("KGND", "F.Cu", KELVIN_W, kv, pads[r])
+    for r in ("R8", "R10"):
+        t += _route("SENSE", "F.Cu", KELVIN_W, svia, pads[r])
+    return t, [Via("KGND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA),
+               Via("KGND", *kv, *KELVIN_VIA), Via("SENSE", *svia, *KELVIN_VIA)]
 
 
 def usb_ties(c, p):
     """(tracks, []): the SRV05-4's flow-through pairs, D- pin 1 to 6 and D+ pin 3 to 4, straight
-    across on F.Cu; the router left D-'s two halves apart."""
+    across on F.Cu (the router left D-'s two halves apart), and the connector J4 into its bottom
+    row: D+ straight across, D- under pins 3 and 2 and up into pin 1 (the router has left that
+    corner open too). The ties wall in the GND pin 2 between them on F.Cu, so it drops through a
+    via between the two pin rows to the bottom layer's ground."""
     xy = lambda n: pad_xy(c, p, "U6", n)
-    return (_route("USB_DM", "F.Cu", 0.25, xy("1"), xy("6")) + _route("USB_DP", "F.Cu", 0.25, xy("3"), xy("4"))), []
+    (dmx, dmy), (dpx, dpy) = pad_xy(c, p, "J4", "2"), pad_xy(c, p, "J4", "3")
+    t = _route("USB_DM", "F.Cu", 0.25, xy("1"), xy("6")) + _route("USB_DP", "F.Cu", 0.25, xy("3"), xy("4"))
+    t += _route("USB_DP", "F.Cu", 0.25, (dpx, dpy), (xy("3")[0], dpy), xy("3"))
+    t += _route("USB_DM", "F.Cu", 0.25, (dmx, dmy), (xy("1")[0], dmy), xy("1"))
+    gx, gy = xy("2")
+    gv = (gx, round((gy + xy("5")[1]) / 2, 3))
+    t += _route("GND", "F.Cu", 0.25, gv, (gx, gy))
+    return t, [Via("GND", *gv, *KELVIN_VIA)]
 
 
 def ldo_ground(c, p):
@@ -665,8 +694,8 @@ def hand_wiring(c, p):
     Kelvin pair, the regulator's ground, the USB protection's flow-through ties."""
     kt, kv = kelvin_route(c, p)
     lt, _ = ldo_ground(c, p)
-    ut, _ = usb_ties(c, p)
-    return divider_tracks(c, p) + supply_tracks(c, p) + kt + lt + ut, kv
+    ut, uv = usb_ties(c, p)
+    return divider_tracks(c, p) + supply_tracks(c, p) + kt + lt + ut, kv + uv
 
 
 # --- the low-voltage router's area -----------------------------------------------------------------
@@ -710,6 +739,7 @@ def lv_keepouts(c, p, margin=0.1):
     # router once ran SENSE out of the sense via across N_IN and the pour's clearance round it cut
     # N_IN off from the shunt. (It reaches R8 from the pair's bottom-layer run below instead.)
     out.append(("F.Cu", *SHUNT_KEEPOUT))
+    out += [(layer, *NEUTRAL_KEEPOUT) for layer in CU]
     for v in stitch_vias():                     # the mains pours' stitching vias
         s = r.spacing(GROUPS[v.net], r.rest) + v.size / 2 + margin
         boxes.append((v.x - s, v.y - s, v.x + s, v.y + s))
@@ -881,7 +911,7 @@ def pins_h():
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
     lines += ["", "/* I/O terminal J3 (NOT isolated: at mains potential, for parts inside the case only): "
               + ", ".join(IO_LABELS.values()) + ".",
-              "   3V3 is the board's own rail (AP2112K, 600 mA; keep J3's load to ~150 mA); I2C has 4.7k",
+              "   3V3 is the board's own rail (AP2112K, heat-limited: keep J3's load to ~50 mA); I2C has 4.7k",
               "   pull-ups; IN reads low with nothing connected. */"]
     for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "IO_IN", "IO_OUT"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
@@ -902,14 +932,19 @@ def case_interface(c, p):
     data = {
         "board": {"width": W, "height": H, "corner_radius": CORNER_R, "thickness": 1.6, "origin": "top-left, y down"},
         "holes": [{"ref": r, "x": x, "y": y, "diameter": 3.2, "plated": False,
-                   "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"}
+                   "note": "unplated; copper keeps only 3 mm (functional) off, so nylon screws, or metal ones "
+                           "that cannot be reached from outside the closed case"}
                   for r, (x, y) in HOLES.items()],
         "tooling_holes": [{"ref": r, "x": x, "y": y, "diameter": TOOLING_DRILL,
                            "note": "JLCPCB's assembly tooling hole: not for a screw"} for r, (x, y) in TOOLING.items()],
         "led": {"x": AT["D1"][0], "y": AT["D1"][1], "part": "SK6812-EC20", "body": box("D1"),
                 "flange_ring": [round(v, 3) for v in led_ring()],
-                "note": f"{LED_RING} mm clear board round the LED for the light pipe's flange"},
-        "button": {"x": AT["SW1"][0], "y": AT["SW1"][1], "part": "TS-1002 7 mm tactile", "body": box("SW1")},
+                "note": f"{LED_RING} mm clear board round the LED for the light pipe's flange. The LED is at "
+                        "mains potential: the light pipe must be insulating, with no gap a finger or a wire can "
+                        "reach the LED through"},
+        "button": {"x": AT["SW1"][0], "y": AT["SW1"][1], "part": "TS-1002 7 mm tactile", "body": box("SW1"),
+                   "note": "the switch (metal top plate included) is at mains potential: the cap must be "
+                           "insulating and captive, so that a broken cap can't let a finger reach the switch"},
         "connectors": {
             "J1": {"what": "mains in (L, N), 7.62 mm screw terminal", "edge": "left", "body": box("J1")},
             "J2": {"what": "mains out to the load (L, N)", "edge": "right", "body": box("J2")},
@@ -917,7 +952,7 @@ def case_interface(c, p):
                            "SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT; for parts mounted inside the case",
                    "edge": "bottom", "internal_only": True, "safe": False, "body": box("J3")},
             "J4": {"what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
-                   "edge": "right", "internal_only": True, "body": box("J4")},
+                   "edge": "right", "internal_only": True, "safe": False, "body": box("J4")},
         },
         "tall_parts": {r: box(r) for r in ("K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2", "C4")},
         "antenna_overhang": [ux - ANTENNA_HALF, H, ux + ANTENNA_HALF, H + ANTENNA_OVERHANG],

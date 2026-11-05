@@ -26,7 +26,7 @@
 #define PETRO_PIN_UART_RX 17
 
 /* I/O terminal J3 (NOT isolated: at mains potential, for parts inside the case only): 3V3, G, SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT.
-   3V3 is the board's own rail (AP2112K, 600 mA; keep J3's load to ~150 mA); I2C has 4.7k
+   3V3 is the board's own rail (AP2112K, heat-limited: keep J3's load to ~50 mA); I2C has 4.7k
    pull-ups; IN reads low with nothing connected. */
 #define PETRO_PIN_SPI_SCLK 18
 #define PETRO_PIN_SPI_MOSI 19

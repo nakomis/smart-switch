@@ -169,3 +169,12 @@ def test_tooling_holes_sit_in_the_low_voltage_area_far_from_the_mains_pours():
             assert d >= 6.0, (h, net, round(d, 2))
     (ax, ay), (bx, by) = pb.TOOLING.values()
     assert math.hypot(ax - bx, ay - by) > 100            # as far apart as the board allows
+
+
+def test_the_mov_sits_across_live_and_the_incoming_neutral_off_the_shunt():
+    """RV1's leads land on the L_F pour and the N_IN pour (a surge returns to the supply without
+    crossing the shunt), and the shunt sits east of it, in the neutral strip."""
+    (lx, ly), (nx, ny) = pb.pad_xy(C, P, "RV1", "1"), pb.pad_xy(C, P, "RV1", "2")
+    assert pb._in_poly(lx, ly, pb.MAINS_POLYS["L_F"]) and pb._in_poly(nx, ny, pb.MAINS_POLYS["N_IN"])
+    assert pb._in_poly(nx, ny, pb.MAINS_POLYS_BCU["N_IN"])
+    assert P.at["RS1"][0] > nx + 10

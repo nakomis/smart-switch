@@ -29,7 +29,7 @@ The board is **revision B: non-isolated** (§3.1). Two earlier designs are kept 
 ## 2. Block diagram
 
 ```
- L in ─┬─ F1 15 A ─┬─ MOV (to N out)
+ L in ─┬─ F1 15 A ─┬─ MOV (to N in, ahead of the shunt)
        │           ├─ K1 relay contact ── L out
        │           └─ F2 T500 mA ─ R1 10 Ω fusible ─ D7 ─ π filter ─ LNK306 buck ─ 12 V
        │                                                                              │
@@ -38,8 +38,9 @@ The board is **revision B: non-isolated** (§3.1). Two earlier designs are kept 
        └─ divider 5 × 390 kΩ ─ VP ─┐                                     AP2112K ─ 3V3
                                    BL0939 ── UART, ZX, OC ── ESP32-C6 ─┬─ button, LED, NTC
                                    │ (IP/IN)                            ├─ relay driver (5 V coil)
- N in ─── RS1 1 mΩ Kelvin ─────────┴──── N out                          └─ USB (J4), debug pads, J3 I/O
-            E1 = GND: the star point, the one place GND meets neutral
+ N in ─┬─ RS1 1 mΩ Kelvin ─────────┴──── N out                          └─ USB (J4), debug pads, J3 I/O
+        │   E1 = KGND: a Kelvin return to the BL0939's IN- filters, carrying no current
+        └─ R29 0 Ω = GND: the star point, the one place GND meets neutral
  Earth: not on the PCB (Wago 221 in the case).
 ```
 
@@ -75,20 +76,26 @@ current transformer and a voltage transformer (Option B). The ZMPT101B and ZMCT1
 certification, and B is bulkier, adds phase error and is weaker at low loads. In rev A the BL0939
 sat on the live side behind a reinforced isolator; rev B needs none:
 
-- **The shunt is in the neutral** (N_IN → RS1 → N_OUT). Its supply-side sense pad (E1) is GND:
-  the **star point**, the one place GND meets neutral, so no load current flows in GND and the
-  BL0939 reads the shunt against its own ground.
+- **The shunt is in the neutral** (N_IN → RS1 → N_OUT), and both of its sense pads are true
+  Kelvin connections: E2 is SENSE (to the IP inputs' 1 kΩ filters) and E1 is **KGND** (to the IN
+  inputs' filters), a net of its own that carries no current. GND joins N_IN through **R29, a 0 Ω
+  link** beside the metering corner: the **star point**, the one place GND meets neutral, so no load
+  current flows in GND. (Until the gate 1 review GND *was* E1; then the supply's return current,
+  the rectifier's charging pulses, flowed through the sense line and would have read as tens of
+  watts of phantom power at the voltage peaks.)
 - **Voltage: 5 × 390 kΩ (1206) from L_IN over 470 Ω**, about 4150:1: 61 mV rms at 253 V against
   the BL0939's 70 mV maximum (13 % headroom). 50 V across each 390 kΩ, whose 1206 pads are 1.75 mm
   apart. The divider hangs from L_IN, before F1, so the BL0939 still sees the mains with F1 blown.
 - **Both current channels read the shunt** (Belling's 1 kΩ / 33 nF filters): channel A meters,
   channel B drives I_leak, the fast over-current output, an interrupt for the firmware trip.
 - **UART, zero cross and over-current go straight to the ESP32**, with the BL0939's TX pulled up.
-- **The Kelvin sense lines** leave from the inside edges of the shunt's sense pads as a tight pair
-  (through vias in pad, then on the bottom layer). 10 mm of 5 mm-wide track is about 0.17 mΩ, so
-  sense taps on the current path would be off by 17 %.
+- **The Kelvin sense lines** leave from the shunt's sense pads through vias beside them and run
+  as a tight pair on the bottom layer to the metering corner, routed by hand (`kelvin_route`). 10 mm
+  of 5 mm-wide track is about 0.17 mΩ, so sense taps on the current path would be off by 17 %.
 - **Order in the live:** F1 first, then the MOV and the relay. The MOV sits after F1, so F1 clears
-  a shorted MOV.
+  a shorted MOV, and it returns to **N_IN**, ahead of the shunt (moved at gate 1, all four reviewers
+  agreeing): a surge goes back to the supply without passing through the shunt or into the BL0939's
+  inputs. The shunt sits in the neutral strip east of the MOV for that.
 
 ### 3.3 Power: the LNK306 buck (decided 4 Nov 2026)
 
@@ -100,9 +107,14 @@ sat on the live side behind a reinforced isolator; rev B needs none:
 - **TI's TPS563201 makes 5 V** (datasheet 8.2), then the existing 5 V rail: a diode-OR with USB
   (SS34 × 2), a 1.1 A polyfuse and an SMAJ5.0A TVS, and the AP2112K for 3.3 V.
 - **The supply's high-voltage nets are routed by hand** (`supply_tracks`), at the spacing matrix's
-  distances. The switching node and what rides on it (SW, BP, FB, FBH) are a group of their own at
-  1.0 mm: functional insulation inside the converter, where a short only trips its current limit
-  (IPC-2221 B4 gives 0.8 mm). The DC bus keeps 2.5 mm from everything else.
+  distances. The smoothed bus (VBULK1, VBULK) sits at the rectified peak, 354 V DC above neutral, so
+  it keeps **3.55 mm** from GND and **4.35 mm** from the live (the rms of that plus the live's AC,
+  433 V; IEC 60664-1 Table F.4). The switching node and what rides on it (SW, BP, FB, FBH) keep
+  **1.0 mm** from the supply's own input, its bus and GND only: functional insulation inside the
+  converter, where a short trips its current limit or kills the LNK306, which F2 and R1 contain
+  (IPC-2221 B4 gives 0.8 mm). To the live, the load and the divider it keeps the full 4.35 mm.
+  (Both corrected at gate 1: the bus had been treated as 250 V, and the 1.0 mm had applied to
+  every group.)
 - **Buy safety-critical parts only from authorised distributors**: the fuses and holders, the
   relay, the MOV, the fusible resistor and the mains terminals. Never marketplace traders, because
   of counterfeits. That is why they are hand-fit (§3.6).
@@ -111,9 +123,18 @@ sat on the live side behind a reinforced isolator; rev B needs none:
 
 UK BS 1363 plugs are polarised, so a single-pole relay and fuse in the live are enough. A miswired
 socket or extension could still swap live and neutral: then F1 sits in the neutral (the plug's
-fuse still protects the cord) and GND is at 230 V. The board is treated as live whenever it is
-plugged in either way, and the output is labelled and treated as **live whenever the unit is
-plugged in**, even with the relay open. The Gate 3 procedure says so.
+fuse still protects the cord), the relay switches the neutral so the load stays live when "off",
+and GND, J3 and everything on the board sit at 230 V to earth. A lost neutral upstream floats the
+whole board to live through the load. The board is treated as live whenever it is plugged in
+either way, and the output is labelled and treated as **live whenever the unit is plugged in**,
+even with the relay open.
+
+The board can't detect either: with GND at neutral it only sees the live-to-neutral difference.
+Detecting reversal needs an earth reference on the PCB (a high-value resistor chain to earth, as
+a socket tester does), which would undo "earth never touches the PCB". Considered at gate 1 and
+**not fitted** (5 Nov 2026): the defences are a socket tester before every first use of a socket
+or extension (Gate 3), the closed case, nothing conductive leaving it, and USB only with mains
+unplugged. An RCD protects against a fault to earth, not against reversal.
 
 ### 3.5 J3: I/O for parts inside the case (decided 5 Nov 2026)
 
@@ -122,8 +143,10 @@ J3 is a 10-way 3.5 mm terminal for sensors and outputs added **inside** the case
 LP GPIO (GPIO3, 100 kΩ pull-down, so the low-power core can wake on it) and OUT (GPIO23). It is
 wired straight to the ESP32 and is **at mains potential**: whatever is wired to it must sit
 entirely inside the closed case, and a sensor that has to see out (a PIR, a light sensor) looks
-through an insulating window. The 3.3 V rail is the AP2112K's (600 mA); keep J3's load to about
-150 mA so the C6 keeps its headroom.
+through an insulating window. The 3.3 V rail is the AP2112K's: rated 600 mA, but heat limits it
+first (5 V to 3.3 V in a SOT-23-5 at about 250 °C/W, so 1.7 V × the current). Keep J3's load to
+**about 50 mA**: with the C6's average draw that is about 0.26 W, where 150 mA would be 0.4 W, a
+100 °C rise (raised at gate 1). A sensor that needs more brings its own regulator from J3's 3.3 V.
 
 An isolated J3 (an ISOW7743 for its 3.3 V, an ISO7741 for SPI and an ISO1640 for I²C, behind an
 8 mm barrier) was built and routed, then dropped the same day for about £75 on five boards; it is
@@ -163,7 +186,7 @@ is in `docs/design/parts-research/`.
 | XF1, XF2 | 01220088Z (F1's clips, 122 series) | Littelfuse | C206903 | 30 A | Clip centres 26.59 mm apart |
 | F2 | 0215.500MXP (T500mA 5×20 ceramic) | Littelfuse | C142839 | 1.5 kA breaking | Feeds the supply. Not a TR5 (35 A breaking only) |
 | XF3 | 65600001009 (F2's holder, 656 series) | Littelfuse | C187510 | 10 A, 250 V, UL94 V-0 | |
-| RV1 | TMOV20RP275E | Littelfuse | C187710 | 275 VAC, thermally protected | L_F to N_OUT |
+| RV1 | TMOV20RP275E | Littelfuse | C187710 | 275 VAC, thermally protected | L_F to N_IN (ahead of the shunt) |
 | R1 | FKN2WSJT-52-10R (10 Ω 2 W fusible) | Yageo | C1394194 | Flameproof | Inrush limit and fault fuse |
 | J1, J2 | DG636-7.62-02P | Degson | C2827897 | 32 A, 630 V | Wire entry at their own ends |
 
@@ -173,6 +196,7 @@ is in `docs/design/parts-research/`.
 |---|---|---|---|
 | RS1 | WSK25121L000FEA (1 mΩ, 4-terminal 2512) | C4248455 | 0.1 W at 10 A |
 | R12–R16, R17 | 5 × 390 kΩ 1206, 470 Ω 0402 | C17933, C25117 | The divider |
+| R29 | 0 Ω 1206 | C17888 | The GND–neutral bond: the star point |
 | U4 | LNK306DN | C34318 | |
 | D7, D9 | M7 (1 kV) | C95872 | Rectifier; feedback sampling |
 | D8 | US1M (75 ns) | C412437 | Freewheel |
