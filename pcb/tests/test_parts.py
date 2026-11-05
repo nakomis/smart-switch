@@ -197,7 +197,7 @@ def test_electrolytics_are_polarised_pad_1_positive(key):
     assert part(key).pins == {"+": ["1"], "-": ["2"]}
 
 
-@pytest.mark.parametrize("key", ["RECT", "ES1J", "S1G"])
+@pytest.mark.parametrize("key", ["RECT", "FASTREC"])
 def test_diodes_name_anode_and_cathode(key):
     assert set(part(key).pins) == {"A", "K"}
 

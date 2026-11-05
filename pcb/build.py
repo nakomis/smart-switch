@@ -31,7 +31,7 @@ from board.dsn import ROUTER_MARGIN
 from board import petro_board as pb
 from board.checks import filled, pour_problems
 from board.cleanup import pad_shapes, prune
-from board.fab import export_step, fab, write_bom, write_bom_pcbway, write_cpl
+from board.fab import export_step, fab, write_bom, write_bom_pcbway, write_cpl, write_hand_fit
 from board.kicad_pcb import PRO, write_board
 from board.netlist import check
 from board.route import route
@@ -206,9 +206,10 @@ def main():
     silk = [v for v in d["violations"] if v["type"].startswith(("silk", "text"))]
     print(f"silk warnings: {len(silk)}")
 
-    write_bom(c, out / "bom-jlcpcb.csv")
-    write_bom_pcbway(c, out / "bom-pcbway.csv")
-    write_cpl(c, p, out / "cpl.csv")
+    write_bom(c, out / "bom-jlcpcb.csv", exclude=pb.HAND_FIT)
+    write_bom_pcbway(c, out / "bom-pcbway.csv", exclude=pb.HAND_FIT)
+    write_cpl(c, p, out / "cpl.csv", exclude=pb.HAND_FIT)
+    write_hand_fit(c, out / "hand-fit.csv", pb.HAND_FIT)
     (out / "pins.h").write_text(pb.pins_h())
     (out / "case-interface.json").write_text(pb.case_interface(c, p))
     print(f"gerbers: {fab(board, out, layers=LAYERS)}")

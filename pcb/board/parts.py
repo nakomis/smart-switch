@@ -62,7 +62,8 @@ _TABLE = {
     # metering island from the SELV side (TI SLLSFK1C). The LCSC stock is the F variant (outputs
     # low on lost input); the non-F ISOW7743DFMR (outputs high) is preferred, same footprint.
     "ISOW": ("ISOW7743", "C5216380", "SOIC-20_L12.8-W7.5-P1.27-LS10.3-BL", "ISOW7743FDFMR", True, 0),
-    "BEAD": ("330R@100MHz", "C596498", "L0402", "BLM15EX331SN1D", True, 0),
+    # 0603, basic (5 Nov 2026: the 0402 BLM15EX331SN1D was an extended part)
+    "BEAD": ("120R@100MHz", "C14709", "L0603", "BLM18PG121SN1D_C14709", False, 0),
     "BL0939": ("BL0939", "C2836697", "SOP-16_L9.9-W3.9-P1.27-LS6.0-BL", "BL0939", True, 0),
     # F1: two clips per fuse, one footprint each (so the BOM counts two). EasyEDA has none.
     "FUSECLIP": ("6.35mm fuse clip 30A", "C206903", "local:FuseClip_Littelfuse_0122_6.35mm", None, True, 0),
@@ -82,20 +83,22 @@ _TABLE = {
     # Figure 5 and Component Selection), 12 V, then TI's TPS563201 12 V -> 5 V (datasheet 8.2).
     "LNK306": ("LNK306DN", "C34318", "SOIC-8_7P-L4.9-W3.9-P1.27-LS6.0-BL-PE3", "LNK306DN", True, 0),
     "RFUSE": ("10R 2W fusible", "C1394194", "local:R_Axial_FKN2WS_P15.24mm", None, True, 0),
-    "RECT": ("S1M", "C144860", "SMA_L4.4-W2.8-LS5.4-RD", "S1M-E3_61T", True, 0),
+    # JLCPCB basic (5 Nov 2026): M7 (1 kV 1 A, standard recovery) for the rectifier and the
+    # feedback diode (PI's datasheet uses a 1N4005GP there); US1M (1 kV, 75 ns) for the freewheel
+    # (PI: 75 ns or faster in MDCM)
+    "RECT": ("M7", "C95872", "SMA_L4.3-W2.6-LS5.2-RD", "M7_C95872", False, 0),
+    "FASTREC": ("US1M", "C412437", "SMA_L4.4-W2.8-LS5.4-RD", "US1MG_C412437", False, 0),
     "C4U7HV": ("4.7uF 400V", "C112482", "CAP-TH_BD8.0-P3.50-D0.6-FD", "EGW2GM4R7F12OT", True, 0),
     "L1MF": ("1mH 350mA", "C168102", "IND-SMD_L6.0-W6.0_FNR60XXS", "FNR6045S102MT", True, 0),
-    "ES1J": ("ES1J", "C232830", "SMA_L4.3-W2.7-LS5.0-RD", "ES1J_C232830", True, 0),
     "L680U": ("680uH 1A", "C48934988", "IND-SMD_L10.0-W10.0_ABG10A50M4R7", "NR1050M681N", True, 0),
     "C220U": ("220uF 25V", "C4747974", "CAP-SMD_BD6.3-L6.6-W6.6-LS7.2-FD", "RST220UF25V019", True, 0),
     "C100N6": ("100nF", "C14663", "C0603", "CC0603KRX7R9BB104", False, 0),
     "C10U50": ("10uF 50V", "C13585", "C1206", "CL31A106KBHNNNE", False, 0),
-    "S1G": ("S1G", "C85102", "SMA_L4.3-W2.6-LS5.2-RD", "S1G-13-F", True, 0),
     "R13K": ("13k", "C22797", "R0603", "0603WAF1302T5E", False, 0),
     "R2K": ("2k", "C22975", "R0603", "0603WAF2001T5E", False, 0),
     "R3K3": ("3k3", "C22978", "R0603", "0603WAF3301T5E", False, 0),
     "BUCK": ("TPS563201", "C116592", "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BR", "TPS563201DDCR", True, 0),
-    "R54K9": ("54k9", "C23077", "R0603", "0603WAF5492T5E", True, 0),
+    "R56K": ("56k", "C23206", "R0603", "0603WAF5602T5E", False, 0),
     "R10K6": ("10k", "C25804", "R0603", "0603WAF1002T5E", False, 0),
     "L3U3": ("3.3uH", "C602030", "IND-SMD_L4.0-W4.0", "FHD4020S-3R3MT", True, 0),
     "C22U": ("22uF 25V", "C12891", "C1206", "CL31A226KAHNNNE", False, 0),
@@ -134,7 +137,7 @@ MFR = {
     "R330": ("UNI-ROYAL", "0402WGF3300TCE"), "C100N": ("Samsung", "CL05B104KO5NNNC"),
     "C1U": ("Samsung", "CL05A105KA5NQNC"), "C10U": ("Samsung", "CL10A106KP8NNNC"),
     "RELAY16": ("Hongfa", "HF115F-I/005-1HS3A"), "PSU5W": ("Mean Well", "IRM-05-5"),
-    "ISOW": ("Texas Instruments", "ISOW7743DFMR"), "BEAD": ("Murata", "BLM15EX331SN1D"),
+    "ISOW": ("Texas Instruments", "ISOW7743DFMR"), "BEAD": ("Murata", "BLM18PG121SN1D"),
     "BL0939": ("Shanghai Belling", "BL0939"), "FUSEHOLD": ("Littelfuse", "65600001009"),
     "FUSECLIP": ("Littelfuse", "01220088Z"),
     "MOV": ("Littelfuse", "TMOV20RP275E"), "SHUNT": ("Vishay", "WSK25121L000FEA"),
@@ -144,13 +147,13 @@ MFR = {
     "R390K": ("UNI-ROYAL", "1206W4F3903T5E"), "R470": ("UNI-ROYAL", "0402WGF4700TCE"),
     "R1K": ("UNI-ROYAL", "0402WGF1001TCE"), "C33N": ("Samsung", "CL10B333KB8NNNC"),
     "LNK306": ("Power Integrations", "LNK306DN-TL"), "RFUSE": ("Yageo", "FKN2WSJT-52-10R"),
-    "RECT": ("Vishay", "S1M-E3/61T"), "C4U7HV": ("AISHI", "EGW2GM4R7F12OT"),
-    "L1MF": ("cjiang", "FNR6045S102MT"), "ES1J": ("onsemi", "ES1J"), "L680U": ("COILANK", "NR1050M681N"),
+    "RECT": ("MDD", "M7"), "FASTREC": ("MDD", "US1MG"), "C4U7HV": ("AISHI", "EGW2GM4R7F12OT"),
+    "L1MF": ("cjiang", "FNR6045S102MT"), "L680U": ("COILANK", "NR1050M681N"),
     "C220U": ("KNSCHA", "RST220UF25V019"), "C100N6": ("Yageo", "CC0603KRX7R9BB104"),
-    "C10U50": ("Samsung", "CL31A106KBHNNNE"), "S1G": ("Diodes Inc", "S1G-13-F"),
+    "C10U50": ("Samsung", "CL31A106KBHNNNE"), 
     "R13K": ("UNI-ROYAL", "0603WAF1302T5E"), "R2K": ("UNI-ROYAL", "0603WAF2001T5E"),
     "R3K3": ("UNI-ROYAL", "0603WAF3301T5E"), "BUCK": ("Texas Instruments", "TPS563201DDCR"),
-    "R54K9": ("UNI-ROYAL", "0603WAF5492T5E"), "R10K6": ("UNI-ROYAL", "0603WAF1002T5E"),
+    "R56K": ("UNI-ROYAL", "0603WAF5602T5E"), "R10K6": ("UNI-ROYAL", "0603WAF1002T5E"),
     "L3U3": ("cjiang", "FHD4020S-3R3MT"), "C22U": ("Samsung", "CL31A226KAHNNNE"),
     "ESP32C6": ("Espressif", "ESP32-C6-WROOM-1-N8"), "ISO7741": ("Texas Instruments", "ISO7741DWR"),
     "ISO1640": ("Texas Instruments", "ISO1640DWR"), "IO10": ("DORABO", "DB125-3.5-10P-GN-S"),
@@ -173,7 +176,7 @@ ALIASES = {
     # the preferred TVS diodes name their pins K/A; pad 1 is the cathode, as before
     "TVS": {"K": "1", "A": "2"}, "TVS5": {"K": "1", "A": "2"},
     # rev B: the electrolytics' pad 1 is positive (silk '+', chamfered base); S1G calls its cathode C
-    "C4U7HV": {"1": "+", "2": "-"}, "C220U": {"1": "+", "2": "-"}, "S1G": {"C": "K"},
+    "C4U7HV": {"1": "+", "2": "-"}, "C220U": {"1": "+", "2": "-"}, "FASTREC": {"C": "K"},
     "LED": {"DIN": "DI", "DOUT": "DO"},
 }
 

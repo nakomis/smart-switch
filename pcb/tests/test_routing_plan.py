@@ -251,6 +251,17 @@ def test_every_isolator_ground_pin_has_a_via_past_its_end():
                        for t in tracks), (ref, pad.number)
 
 
+def test_a_b_cu_ground_spine_joins_the_isolators_board_side_ground_vias():
+    """Fixed before routing, so no signal track can wall the isolators' ground off."""
+    tracks, vias = pb.isolator_drops(C, P)
+    gv = sorted((v for v in vias if v.net == "GND"), key=lambda v: v.x)
+    spine = [t for t in tracks if t.net == "GND" and t.layer == "B.Cu"]
+    assert spine
+    pts = {(round(x, 3), round(y, 3)) for t in spine for x, y in ((t.x1, t.y1), (t.x2, t.y2))}
+    assert all((round(v.x, 3), round(v.y, 3)) in pts for v in gv)
+    assert len(spine) == len(gv) - 1                                   # a chain, end to end
+
+
 def test_each_routers_area_holds_its_isolator_pads_whole():
     """Freerouting takes its area for the board outline: a pad that pokes out of it is a standing
     violation it cannot route to."""

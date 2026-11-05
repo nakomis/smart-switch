@@ -91,6 +91,10 @@ GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "N_IN": "NEUTRAL", "N_OUT": "NEUTRAL", 
           **{n: "SELV" for n in SELV_NETS}}
 HIGH_CURRENT = {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
 BARRIERS = ("U7", "U8", "U9")                # the island's isolators: a slot under each
+# Hand-fit (5 Nov 2026): the mains parts, bought from authorised distributors (DESIGN.md §3.2) and
+# soldered by Martin; left off the fab's BOMs and CPL, listed in hand-fit.csv. The mains terminals,
+# F1's clips, F2's holder, the relay, the MOV and the fusible resistor.
+HAND_FIT = ("J1", "J2", "XF1", "XF2", "XF3", "K1", "RV1", "R1")
 BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on an NC_ net
 
 
@@ -157,9 +161,9 @@ def build_petro():
     c.connect("FB", (u4, "FB"))
     two("C100N6", None, "BP", "SW")                             # BYPASS capacitor, to SOURCE
     two("L680U", None, "SW", v12)                               # output inductor, 680 uH (>= 0.5 mH, PI MDCM)
-    pins("ES1J", "D8", A=gnd, K="SW")                                 # freewheel (35 ns)
+    pins("FASTREC", "D8", A=gnd, K="SW")                              # freewheel (US1M, 75 ns)
     pins("C220U", _plus=v12, _minus=gnd)
-    pins("S1G", "D9", A=v12, K="FBH")                                 # feedback: samples the output...
+    pins("RECT", "D9", A=v12, K="FBH")                                # feedback: samples the output...
     two("C10U50", None, "FBH", "SW")                            # ...onto C3, across SOURCE
     two("R13K", None, "FBH", "FB")                              # 1.65 V at FB: 12.4 V out
     two("R2K", None, "FB", "SW")
@@ -176,7 +180,7 @@ def build_petro():
     two("C100N6", None, v12, gnd)
     two("C100N6", None, "BST5", "SW5")                          # bootstrap
     two("L3U3", None, "SW5", "VPSU")
-    two("R54K9", None, "VPSU", "FB5")                           # 0.768 V x (1 + 54.9/10) = 4.98 V
+    two("R56K", None, "VPSU", "FB5")                            # 0.768 V x (1 + 56/10) = 5.07 V
     two("R10K6", None, "FB5", gnd)
     two("C22U", None, "VPSU", gnd)
     two("C22U", None, "VPSU", gnd)
@@ -458,7 +462,7 @@ AT = {
     # (side 2, the island's, facing down), their island-side parts between them and J3
     "J3": (25.85, 81.0, 0),
     "U7": (ISO_X[0], ISO_Y, 180), "U8": (ISO_X[1], ISO_Y, 180), "U9": (ISO_X[2], ISO_Y, 180),
-    "FB1": (5.0, 74.0, 90), "FB2": (6.5, 74.0, 90), "C30": (8.5, 74.0, 90), "C31": (10.1, 74.0, 90),
+    "FB1": (5.0, 74.8, 90), "FB2": (6.5, 74.8, 90), "C30": (8.5, 74.0, 90), "C31": (10.1, 74.0, 90),
     "C32": (11.5, 74.0, 90), "C33": (13.1, 74.0, 90), "R27": (15.5, 74.0, 90),
     "C35": (24.0, 74.0, 90), "C37": (37.2, 74.0, 90), "R29": (33.5, 74.0, 90), "R31": (40.5, 74.0, 90),
     # ... and their board-side parts above them
@@ -718,7 +722,7 @@ def supply_tracks(c, p):
     (rx, ry), (dx, dy) = xy("R1", "2"), xy("D7", "2")
     t += _route("L_RF", "F.Cu", HV_W, (rx, ry), (dx, ry), (dx, dy))
     k7, c1, l1a = xy("D7", "1"), xy("C1", "1"), xy("L1", "1")
-    t += _route("VBULK1", "F.Cu", HV_W, k7, (k7[0], c1[1]))
+    t += _route("VBULK1", "F.Cu", HV_W, k7, (k7[0], 59.5), (k7[0], c1[1]))        # a node for the branch
     t += _route("VBULK1", "F.Cu", HV_W, (k7[0], 59.5), (l1a[0], 59.5), l1a)
     l1b, c2, d = xy("L1", "2"), xy("C2", "1"), xy("U4", "4")
     # Into C2's + pad short of its centre, and down to D along L1's pad edge: 2.5 mm from C2's
@@ -778,6 +782,10 @@ def isolator_drops(c, p):
             vy = round(vy, 3)
             tracks.append(Track(net, "F.Cu", x, y, x, vy, 0.25))
             vias.append(Via(net, x, vy, size, drill))
+    # The board side's vias, joined end to end on B.Cu: a spine the router must cross on F.Cu, so
+    # no signal track can wall the isolators' ground off (it did, twice, through the pour).
+    gv = sorted((v for v in vias if v.net == "GND"), key=lambda v: v.x)
+    tracks += [Track("GND", "B.Cu", a.x, a.y, b.x, b.y, 0.4) for a, b in zip(gv, gv[1:])]
     return tracks, vias
 
 

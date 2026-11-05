@@ -72,6 +72,12 @@ PARTS=(
   C571196   # ISO7741DWR (safe SPI: 3 forward, 1 reverse)
   C5216237  # ISO1640DWR (safe I2C)
   C5184956  # IO10 (DB125-3.5-10P-GN-S, 10-way 3.5 mm screw terminal)
+  # JLCPCB basic swaps, 5 Nov 2026 (no loading fee on Economic): M7 for the S1M rectifier and the
+  # S1G feedback diode, US1M (75 ns) for the ES1J freewheel, 56k for 54k9, an 0603 bead
+  C95872    # RECT (M7, 1 kV 1 A)
+  C412437   # FASTREC (US1M, 1 kV 1 A, 75 ns)
+  C23206    # R56K (0603)
+  C14709    # BEAD (Murata BLM18PG121SN1D, 120 R at 100 MHz, 2 A)
 )
 # easyeda.com's CloudFront returns 403 for easyeda2kicad's default User-Agent, so run it
 # through a one-line wrapper that sends a neutral UA instead.

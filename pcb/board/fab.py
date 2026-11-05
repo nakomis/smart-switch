@@ -3,7 +3,9 @@ and renders.
 
 Only circuit instances reach the BOM and CPL, so board-only footprints (the silk portrait)
 are excluded by construction; DNP instances and parts without an LCSC number (test pads,
-mounting holes) are excluded explicitly, in Python."""
+mounting holes) are excluded explicitly, in Python. Hand-fit parts (exclude=...) are on the
+board and in the STEP model but left out of what the fab assembles, and listed on their own
+(write_hand_fit) for buying from authorised distributors."""
 import csv
 import shutil
 import subprocess
@@ -13,10 +15,10 @@ from pathlib import Path
 KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 
 
-def _fitted(circuit):
-    """Instances JLCPCB assembles: not DNP, and a real LCSC part (test pads and mounting holes
-    are board-only footprints with no LCSC number)."""
-    return {r: i for r, i in circuit.instances.items() if not i.dnp and i.part.lcsc}
+def _fitted(circuit, exclude=()):
+    """Instances the fab assembles: not DNP, not hand-fit ('exclude'), and a real LCSC part (test
+    pads and mounting holes are board-only footprints with no LCSC number)."""
+    return {r: i for r, i in circuit.instances.items() if not i.dnp and i.part.lcsc and r not in exclude}
 
 
 def _ref_key(ref):
@@ -24,9 +26,9 @@ def _ref_key(ref):
     return head, int(ref[len(head):] or 0)
 
 
-def write_bom(circuit, path):
+def write_bom(circuit, path, exclude=()):
     groups = {}
-    for ref, inst in _fitted(circuit).items():
+    for ref, inst in _fitted(circuit, exclude).items():
         groups.setdefault((inst.value, inst.part.lcsc, inst.part.footprint.name.split(":")[-1]), []).append(ref)
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -35,12 +37,12 @@ def write_bom(circuit, path):
             w.writerow([value, ",".join(sorted(refs, key=_ref_key)), fp, lcsc])
 
 
-def write_bom_pcbway(circuit, path):
+def write_bom_pcbway(circuit, path, exclude=()):
     """PCBWay's BOM layout (their template's columns): one row per part, with manufacturer and
     part number; the LCSC number goes in the notes as a known source."""
     from board.parts import MFR
     groups = {}
-    for ref, inst in _fitted(circuit).items():
+    for ref, inst in _fitted(circuit, exclude).items():
         groups.setdefault(inst.part.key, []).append(ref)
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -55,7 +57,7 @@ def write_bom_pcbway(circuit, path):
                         f"LCSC {inst.part.lcsc}"])
 
 
-def write_cpl(circuit, placement, path):
+def write_cpl(circuit, placement, path, exclude=()):
     """Mid X / Mid Y are the footprint origin (the pad-pattern centre for every part) in mm in
     the GERBER frame, which JLCPCB uses for placement: the same origin as the KiCad board, x
     unchanged and y negated (KiCad's y is down, Gerber's is up). This matches KiCad's own
@@ -63,10 +65,26 @@ def write_cpl(circuit, placement, path):
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Designator", "Mid X", "Mid Y", "Layer", "Rotation"])
-        for ref, inst in sorted(_fitted(circuit).items(), key=lambda kv: _ref_key(kv[0])):
+        for ref, inst in sorted(_fitted(circuit, exclude).items(), key=lambda kv: _ref_key(kv[0])):
             x, y, rot = placement.at[ref]
             w.writerow([ref, f"{x:.4f}", f"{-y:.4f}", "Top",
                         f"{(rot + inst.part.rotation_offset) % 360:g}"])
+
+
+def write_hand_fit(circuit, path, refs):
+    """The parts left for hand fitting: one row per part, with its maker's part number to buy by
+    (from an authorised distributor) and the LCSC number the footprint came from."""
+    from board.parts import MFR
+    groups = {}
+    for ref in refs:
+        groups.setdefault(circuit.instances[ref].part.key, []).append(ref)
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["Designator", "Qty per board", "Manufacturer", "Mfg Part #", "Value", "LCSC (reference)"])
+        for key, rs in sorted(groups.items(), key=lambda g: _ref_key(sorted(g[1], key=_ref_key)[0])):
+            part = circuit.instances[rs[0]].part
+            maker, number = MFR.get(key, ("", ""))
+            w.writerow([",".join(sorted(rs, key=_ref_key)), len(rs), maker, number, part.value, part.lcsc or ""])
 
 
 def fab(board_path, out_dir, layers=2):

@@ -97,6 +97,12 @@ def test_the_safe_input_is_pulled_down_on_the_island():
     assert len([r for r in by_key("R100K") if nets_of(r) == {"ISO_IN", "ISO_GND"}]) == 1
 
 
+def test_the_mains_parts_are_hand_fit():
+    keys = {r: C.instances[r].part.key for r in pb.HAND_FIT}
+    assert keys == {"J1": "MAINSTERM", "J2": "MAINSTERM", "XF1": "FUSECLIP", "XF2": "FUSECLIP",
+                    "XF3": "FUSEHOLD", "K1": "RELAY16", "RV1": "MOV", "R1": "RFUSE"}
+
+
 def test_mounting_holes_are_unplated():
     for ref in ("H1", "H2", "H3", "H4"):
         assert C.instances[ref].part.key == "MHN", ref
@@ -153,10 +159,10 @@ def test_lnk306_high_side_buck():
     bp = [r for r in by_key("C100N6") if nets_of(r) == {"BP", "SW"}]
     assert net(u, "BP") == "BP" and len(bp) == 1
     assert nets_of(by_key("L680U")[0]) == {"SW", "+12V"}
-    d1 = by_key("ES1J")[0]
+    d1 = by_key("FASTREC")[0]                       # US1M, 75 ns (PI: 75 ns or faster in MDCM)
     assert (net(d1, "A"), net(d1, "K")) == ("GND", "SW")
-    d2 = by_key("S1G")[0]
-    assert (net(d2, "A"), net(d2, "K")) == ("+12V", "FBH")
+    assert C.instances["D9"].part.key == "RECT"     # M7, as PI's 1N4005GP feedback diode
+    assert (net("D9", "A"), net("D9", "K")) == ("+12V", "FBH")
     c3 = [r for r in by_key("C10U50") if nets_of(r) == {"FBH", "SW"}]
     assert len(c3) == 1
     r1 = by_key("R13K")[0]
@@ -177,9 +183,9 @@ def test_tps563201_makes_5v_for_the_existing_rail():
     assert nets_of(by_key("L3U3")[0]) == {"SW5", "VPSU"}
     boot = [r for r in by_key("C100N6") if nets_of(r) == {"SW5", "BST5"}]
     assert net(u, "VBST") == "BST5" and len(boot) == 1
-    top, bottom = by_key("R54K9")[0], by_key("R10K6")[0]
+    top, bottom = by_key("R56K")[0], by_key("R10K6")[0]
     assert nets_of(top) == {"VPSU", "FB5"} and nets_of(bottom) == {"FB5", "GND"}
-    assert 4.9 < 0.768 * (1 + 54.9 / 10.0) < 5.1
+    assert 4.9 < 0.768 * (1 + 56 / 10.0) < 5.1       # 5.07 V
     assert len([r for r in by_key("C22U") if nets_of(r) == {"VPSU", "GND"}]) == 2
 
 

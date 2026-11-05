@@ -36,6 +36,23 @@ def test_bom_groups_and_excludes_dnp(tmp_path):
     assert len(rows) == 2
 
 
+def test_hand_fit_parts_leave_the_boms_and_the_cpl_for_their_own_list(tmp_path):
+    """Parts Martin buys from authorised distributors and fits himself: on the board (and in the
+    STEP model), but not in what the fab assembles."""
+    from board.fab import write_bom_pcbway, write_hand_fit
+    c, p, (a, b, d, e) = _synthetic()
+    write_bom(c, tmp_path / "bom.csv", exclude=(a,))
+    write_bom_pcbway(c, tmp_path / "pcbway.csv", exclude=(a,))
+    write_cpl(c, p, tmp_path / "cpl.csv", exclude=(a,))
+    write_hand_fit(c, tmp_path / "hand-fit.csv", (a,))
+    refs = lambda f, col: [r for row in csv.DictReader(open(tmp_path / f)) for r in row[col].split(",")]
+    assert a not in refs("bom.csv", "Designator") and b in refs("bom.csv", "Designator")
+    assert a not in refs("pcbway.csv", "Designator") and a not in refs("cpl.csv", "Designator")
+    rows = list(csv.DictReader(open(tmp_path / "hand-fit.csv")))
+    assert [r["Designator"] for r in rows] == [a]
+    assert {"Designator", "Qty per board", "Manufacturer", "Mfg Part #", "Value", "LCSC (reference)"} <= set(rows[0])
+
+
 def test_bom_has_every_assembled_part_and_no_board_only_ones(tmp_path):
     write_bom(C, tmp_path / "bom.csv")
     rows = list(csv.DictReader(open(tmp_path / "bom.csv")))
