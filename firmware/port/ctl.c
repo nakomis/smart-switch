@@ -11,11 +11,23 @@ void ctl_init(ctl_t *c, bool have_stored, int stored_mode, int stored_trip)
     c->mode = CTL_MODE_OFF;
     if (have_stored && (stored_mode == CTL_MODE_ON || stored_mode == CTL_MODE_AUTO))
         c->mode = (ctl_mode)stored_mode;
-    if (stored_trip == CTL_TRIP_OVERTEMP)
-        c->trip = CTL_TRIP_OVERTEMP;
+    if (stored_trip >= CTL_TRIP_OVERCURRENT && stored_trip <= CTL_TRIP_CAUSES)
+        c->trip = (ctl_trip_cause)stored_trip;
     else if (stored_trip != CTL_TRIP_NONE)
         c->trip = CTL_TRIP_OVERCURRENT;
     c->trip_amps = CTL_TRIP_AMPS_DEFAULT;
+    c->instant_amps = CTL_INSTANT_AMPS_DEFAULT;
+    c->sensors_ok = true;
+}
+
+void ctl_set_sensors_ok(ctl_t *c, bool ok)
+{
+    c->sensors_ok = ok;
+}
+
+void ctl_set_clear_blocked(ctl_t *c, bool blocked)
+{
+    c->clear_blocked = blocked;
 }
 
 // Anything that takes control from a cycle or the bench: both end, the relay off.
@@ -25,18 +37,29 @@ static void interrupt(ctl_t *c)
     c->bench = false;
 }
 
-void ctl_press(ctl_t *c)
+ctl_result ctl_clear_trip(ctl_t *c)
 {
+    if (c->trip == CTL_TRIP_NONE)
+        return CTL_OK;
+    if (c->clear_blocked)
+        return CTL_ERR_CLEAR_BLOCKED;
     interrupt(c);
     c->want = false;
+    c->trip = CTL_TRIP_NONE;
+    if (c->mode == CTL_MODE_ON)
+        c->mode = CTL_MODE_OFF;  // the relay stays off
+    return CTL_OK;
+}
+
+ctl_result ctl_press(ctl_t *c)
+{
     if (c->trip != CTL_TRIP_NONE)
-    {
-        c->trip = CTL_TRIP_NONE;
-        c->mode = CTL_MODE_OFF;
-        return;
-    }
+        return ctl_clear_trip(c);
+    interrupt(c);
+    c->want = false;
     // on -> off -> auto -> on
     c->mode = c->mode == CTL_MODE_ON ? CTL_MODE_OFF : c->mode == CTL_MODE_OFF ? CTL_MODE_AUTO : CTL_MODE_ON;
+    return CTL_OK;
 }
 
 bool ctl_accepts_remote(const ctl_t *c)
@@ -58,6 +81,8 @@ ctl_result ctl_remote_relay(ctl_t *c, bool on)
     ctl_result r = remote_ok(c);
     if (r != CTL_OK)
         return r;
+    if (on && !c->sensors_ok)
+        return CTL_ERR_SENSORS;
     interrupt(c);
     c->want = on;
     return CTL_OK;
@@ -115,6 +140,8 @@ ctl_result ctl_remote_cycle(ctl_t *c, uint32_t n, uint32_t on_ms, uint32_t off_m
         return r;
     if (!ctl_cycle_valid(n, on_ms, off_ms, CTL_REMOTE_CYCLE_MAX_TOTAL_MS))
         return CTL_ERR_INVALID;
+    if (!c->sensors_ok)
+        return CTL_ERR_SENSORS;
     start_cycle(c, false, n, on_ms, off_ms, now_ms);
     return CTL_OK;
 }
@@ -125,6 +152,8 @@ ctl_result ctl_bench_cycle(ctl_t *c, uint32_t n, uint32_t on_ms, uint32_t off_ms
         return CTL_ERR_TRIPPED;
     if (!ctl_cycle_valid(n, on_ms, off_ms, CONSOLE_CYCLE_MAX_TOTAL_MS))
         return CTL_ERR_INVALID;
+    if (!c->sensors_ok)
+        return CTL_ERR_SENSORS;
     start_cycle(c, true, n, on_ms, off_ms, now_ms);
     return CTL_OK;
 }
@@ -155,6 +184,8 @@ ctl_result ctl_bench_relay(ctl_t *c, bool on)
 {
     if (on && c->trip != CTL_TRIP_NONE)
         return CTL_ERR_TRIPPED;
+    if (on && !c->sensors_ok)
+        return CTL_ERR_SENSORS;
     interrupt(c);
     c->bench = true;
     c->bench_on = on;
@@ -178,6 +209,24 @@ ctl_result ctl_set_trip_amps(ctl_t *c, double amps)
 bool ctl_trip_amps_temporary(const ctl_t *c)
 {
     return c->trip_amps != CTL_TRIP_AMPS_DEFAULT;
+}
+
+ctl_result ctl_set_instant_amps(ctl_t *c, double amps)
+{
+    if (amps < 0)
+    {
+        c->instant_amps = CTL_INSTANT_AMPS_DEFAULT;
+        return CTL_OK;
+    }
+    if (!(amps >= CTL_INSTANT_AMPS_MIN && amps <= CTL_INSTANT_AMPS_DEFAULT))
+        return CTL_ERR_INVALID;
+    c->instant_amps = amps;
+    return CTL_OK;
+}
+
+bool ctl_instant_amps_temporary(const ctl_t *c)
+{
+    return c->instant_amps != CTL_INSTANT_AMPS_DEFAULT;
 }
 
 bool ctl_trip(ctl_t *c, ctl_trip_cause cause)
@@ -256,10 +305,25 @@ const char *ctl_trip_name(ctl_trip_cause cause)
         return "overcurrent";
     case CTL_TRIP_OVERTEMP:
         return "overtemp";
+    case CTL_TRIP_OVERCURRENT_INSTANT:
+        return "overcurrent_instant";
+    case CTL_TRIP_METER_FAULT:
+        return "meter_fault";
     case CTL_TRIP_NONE:
         break;
     }
     return NULL;
+}
+
+bool ctl_trip_parse(const char *name, ctl_trip_cause *out)
+{
+    for (int cause = CTL_TRIP_OVERCURRENT; name != NULL && cause <= CTL_TRIP_CAUSES; cause++)
+        if (strcmp(name, ctl_trip_name((ctl_trip_cause)cause)) == 0)
+        {
+            *out = (ctl_trip_cause)cause;
+            return true;
+        }
+    return false;
 }
 
 const char *ctl_result_message(ctl_result r)
@@ -271,11 +335,15 @@ const char *ctl_result_message(ctl_result r)
     case CTL_ERR_NOT_AUTO:
         return "refused: the mode is a local override (on or off); set mode auto first";
     case CTL_ERR_TRIPPED:
-        return "refused: tripped; only a press of the button clears it";
+        return "refused: tripped; clear it first (the button, or Fleet's clear_trip)";
     case CTL_ERR_INVALID:
         return "out of range";
     case CTL_ERR_LOCAL_ONLY:
         return "refused: only off can be set remotely; on and auto are set with the button";
+    case CTL_ERR_SENSORS:
+        return "refused: the meter isn't healthy (BL0939 or NTC), so the relay stays off";
+    case CTL_ERR_CLEAR_BLOCKED:
+        return "refused: can't clear yet (the NTC is within 5 C of its limit, or OC is still active)";
     }
     return "?";
 }

@@ -38,9 +38,8 @@ int main(int argc, char **argv)
         const char *mode = str(in, "mode"), *trip = str(in, "trip"), *reason = str(in, "reason");
         if (mode)
             ctl_mode_parse(mode, &v.mode);
-        v.trip = trip && strcmp(trip, "overcurrent") == 0 ? CTL_TRIP_OVERCURRENT
-                 : trip && strcmp(trip, "overtemp") == 0  ? CTL_TRIP_OVERTEMP
-                                                          : CTL_TRIP_NONE;
+        if (!ctl_trip_parse(trip, &v.trip))
+            v.trip = CTL_TRIP_NONE;
         v.reason = !reason                          ? REPORT_HEARTBEAT
                    : strcmp(reason, "boot") == 0    ? REPORT_BOOT
                    : strcmp(reason, "change") == 0  ? REPORT_CHANGE
@@ -61,7 +60,11 @@ int main(int argc, char **argv)
         v.zx_hz = num(in, "zx_hz", &v.have_zx);
         v.trip_amps = num(in, "trip_amps", NULL);
         v.trip_amps_temporary = flag(in, "trip_amps_temporary");
+        v.instant_amps = num(in, "instant_amps", NULL);
+        v.instant_amps_temporary = flag(in, "instant_amps_temporary");
+        v.overtemp_c = num(in, "overtemp_c", NULL);
         v.trips_enforced = flag(in, "trips_enforced");
+        v.zx_sync = flag(in, "zx_sync");
         v.stress_left_s = (uint32_t)num(in, "stress_s", &v.stress);
         v.rssi = (int)num(in, "rssi", &v.have_rssi);
         v.uptime_s = (uint32_t)num(in, "uptime_s", NULL);

@@ -82,7 +82,9 @@ int prom_format(char *out, size_t cap, const prom_sample *v)
         put(&s, "\"} %lu\n", (unsigned long)v->reset_counts[i]);
     }
     put(&s, "petro_trips_total{cause=\"overcurrent\"} %lu\n", (unsigned long)v->trips_overcurrent);
+    put(&s, "petro_trips_total{cause=\"overcurrent_instant\"} %lu\n", (unsigned long)v->trips_overcurrent_instant);
     put(&s, "petro_trips_total{cause=\"overtemp\"} %lu\n", (unsigned long)v->trips_overtemp);
+    put(&s, "petro_trips_total{cause=\"meter_fault\"} %lu\n", (unsigned long)v->trips_meter_fault);
     if (!s.ok)
     {
         out[0] = '\0';

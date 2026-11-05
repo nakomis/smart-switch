@@ -36,9 +36,16 @@ size_t bl0939_build_full_read(uint8_t out[2]);
 // A register write: {0xA5, reg, low, mid, high, checksum}. Returns BL0939_WRITE_LEN.
 size_t bl0939_build_write(uint8_t reg, uint32_t value24, uint8_t out[BL0939_WRITE_LEN]);
 
-// The start-up sequence (soft reset, unlock writes, mode, temperature control) as consecutive
-// write frames. Returns the number of frames written to out (at most max_frames).
-size_t bl0939_init_frames(uint8_t out[][BL0939_WRITE_LEN], size_t max_frames);
+// The start-up sequence (soft reset, unlock writes, mode, temperature control and, unless
+// fast_rms_ctrl is 0, both channels' fast-RMS control: the OC output's threshold, prot.h's
+// prot_fast_rms_ctrl) as consecutive write frames. Returns the number of frames written to out (at
+// most max_frames).
+size_t bl0939_init_frames(uint8_t out[][BL0939_WRITE_LEN], size_t max_frames, uint32_t fast_rms_ctrl);
+
+// One register's read request: {0x55, reg}. The chip answers with 4 bytes: the 24-bit value low
+// byte first, then ~(0x55 + reg + the three bytes).
+#define BL0939_REG_REPLY_LEN 4
+size_t bl0939_build_read(uint8_t reg, uint8_t out[2]);
 
 // The raw registers of one full packet.
 typedef struct
@@ -71,6 +78,9 @@ uint8_t bl0939_packet_checksum(const uint8_t *packet, size_t len_without_checksu
 bl0939_status_t bl0939_parse_packet(const uint8_t *packet, size_t len, bl0939_raw_t *raw);
 
 const char *bl0939_status_name(bl0939_status_t status);
+
+// Verifies a register reply (bl0939_build_read); value is set only on BL0939_OK.
+bl0939_status_t bl0939_parse_register(uint8_t reg, const uint8_t *reply, size_t len, uint32_t *value);
 
 // Conversion factors: register counts per volt, per amp, per watt and CF pulses per kWh.
 typedef struct

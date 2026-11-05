@@ -166,3 +166,44 @@ def test_room_temperature_code(bl):
     assert 15 < bl("temp 417")["celsius"] < 30
     r = bl(f"parse {packet(tps1=417).hex()}")
     assert r["petro"]["celsius"] == pytest.approx(bl("temp 417")["celsius"])
+
+
+# --- PETRO-5: the fast-RMS thresholds and register reads -------------------------------------------
+
+def test_init_with_the_fast_rms_threshold_writes_both_channels(bl):
+    frames = bl("init 3ce3")["frames"]
+    assert frames[:4] == ESPHOME_INIT[:4]
+    assert frames[4:] == [bl("write 10 3ce3")["frame"], bl("write 1e 3ce3")["frame"]]
+    assert frames[4].startswith("a510e33c00") and frames[5].startswith("a51ee33c00")
+
+
+def test_init_with_esphome_s_threshold_matches_esphome(bl):
+    assert bl("init 181c")["frames"] == ESPHOME_INIT
+
+
+def test_register_read_request(bl):
+    assert bl("readreg 1e") == {"frame": "551e"}
+
+
+def reply(reg: int, value: int, checksum=None) -> str:
+    data = le24(value)
+    if checksum is None:
+        checksum = ~(0x55 + reg + sum(data)) & 0xFF
+    return (data + bytes([checksum])).hex()
+
+
+@pytest.mark.parametrize("reg,value", [(0x1E, 0x3CE3), (0x18, 0x001000), (0x10, 0xFFFFFF), (0x00, 0)])
+def test_register_reply(bl, reg, value):
+    assert bl(f"parsereg {reg:x} {reply(reg, value)}") == {"status": "ok", "value": value}
+
+
+def test_register_reply_bad_checksum(bl):
+    good = reply(0x1E, 0x3CE3)
+    bad = good[:-2] + f"{(int(good[-2:], 16) ^ 1):02x}"
+    assert bl(f"parsereg 1e {bad}") == {"status": "checksum"}
+    # the register is part of the checksum: a reply for another register fails
+    assert bl(f"parsereg 10 {good}") == {"status": "checksum"}
+
+
+def test_register_reply_wrong_length(bl):
+    assert bl("parsereg 1e e33c") == {"status": "length"}

@@ -62,16 +62,32 @@ static void relay_cycle(const cJSON *root, fleet_cmd *out)
     out->kind = FLEET_CMD_RELAY_CYCLE;
 }
 
+// An optional threshold: absent (false, *set false), null (-1, the default) or a number in range.
+static bool threshold(const cJSON *root, const char *name, double min, double max, bool *set, double *out)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(root, name);
+    *set = item != NULL;
+    if (item == NULL)
+        return true;
+    if (cJSON_IsNull(item))
+        *out = -1;
+    else if (cJSON_IsNumber(item) && isfinite(item->valuedouble) && item->valuedouble >= min &&
+             item->valuedouble <= max)
+        *out = item->valuedouble;
+    else
+        return false;
+    return true;
+}
+
 static void set_trip(const cJSON *root, fleet_cmd *out)
 {
-    const cJSON *amps = cJSON_GetObjectItemCaseSensitive(root, "amps");
-    if (cJSON_IsNull(amps))
-        out->amps = -1;
-    else if (cJSON_IsNumber(amps) && isfinite(amps->valuedouble) && amps->valuedouble >= CTL_TRIP_AMPS_MIN &&
-             amps->valuedouble <= CTL_TRIP_AMPS_DEFAULT)
-        out->amps = amps->valuedouble;
-    else
+    if (!threshold(root, "amps", CTL_TRIP_AMPS_MIN, CTL_TRIP_AMPS_DEFAULT, &out->set_amps, &out->amps))
         return fail(out, "amps must be 0.5-10.5, or null for the default");
+    if (!threshold(root, "instant_amps", CTL_INSTANT_AMPS_MIN, CTL_INSTANT_AMPS_DEFAULT, &out->set_instant,
+                   &out->instant_amps))
+        return fail(out, "instant_amps must be 1-15, or null for the default");
+    if (!out->set_amps && !out->set_instant)
+        return fail(out, "amps must be given (0.5-10.5), or instant_amps (1-15), or both");
     out->kind = FLEET_CMD_SET_TRIP;
 }
 
@@ -149,6 +165,8 @@ void fleet_cmd_parse(const char *json, size_t len, fleet_cmd *out)
         out->kind = FLEET_CMD_RELAY_CYCLE_STOP;
     else if (strcmp(command, "set_trip_threshold") == 0)
         set_trip(root, out);
+    else if (strcmp(command, "clear_trip") == 0)
+        out->kind = FLEET_CMD_CLEAR_TRIP;
     else if (strcmp(command, "wifi_stress") == 0)
         wifi_stress(root, out);
     else if (strcmp(command, "reboot") == 0)
@@ -178,6 +196,8 @@ const char *fleet_cmd_result_type(fleet_cmd_kind kind)
         return "relay_cycle_stop_result";
     case FLEET_CMD_SET_TRIP:
         return "set_trip_threshold_result";
+    case FLEET_CMD_CLEAR_TRIP:
+        return "clear_trip_result";
     case FLEET_CMD_WIFI_STRESS:
         return "wifi_stress_result";
     case FLEET_CMD_REBOOT:

@@ -47,7 +47,9 @@ int main(int argc, char **argv)
         s.rssi = (int)num(in, "rssi", &s.have_rssi);
         s.uptime_s = (uint32_t)num(in, "uptime_s", NULL);
         s.trips_overcurrent = (uint32_t)num(in, "trips_overcurrent", NULL);
+        s.trips_overcurrent_instant = (uint32_t)num(in, "trips_overcurrent_instant", NULL);
         s.trips_overtemp = (uint32_t)num(in, "trips_overtemp", NULL);
+        s.trips_meter_fault = (uint32_t)num(in, "trips_meter_fault", NULL);
         const char *names[16];
         uint32_t counts[16];
         const cJSON *resets = cJSON_GetObjectItemCaseSensitive(in, "resets"), *r;

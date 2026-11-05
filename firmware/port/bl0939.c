@@ -22,24 +22,45 @@ size_t bl0939_build_write(uint8_t reg, uint32_t value24, uint8_t out[BL0939_WRIT
     return BL0939_WRITE_LEN;
 }
 
-size_t bl0939_init_frames(uint8_t out[][BL0939_WRITE_LEN], size_t max_frames)
+size_t bl0939_init_frames(uint8_t out[][BL0939_WRITE_LEN], size_t max_frames, uint32_t fast_rms_ctrl)
 {
-    // ESPHome's start-up values, less its fast-RMS thresholds: those set when I_leak (OC) fires,
-    // which is PETRO-5's trip, so this slice leaves them at the chip's reset values.
-    static const struct
+    // ESPHome's start-up values, with Petro's own fast-RMS thresholds (the OC output, PETRO-5's
+    // instant trip) on both channels: they read the same shunt.
+    const struct
     {
         uint8_t reg;
         uint32_t value;
     } seq[] = {
         {BL0939_REG_SOFT_RESET, 0x5A5A5A},  // reset to defaults
         {BL0939_REG_USR_WRPROT, 0x000055},  // allow user register writes
-        {BL0939_REG_MODE, 0x001000},        // 50 Hz, RMS update as ESPHome
+        {BL0939_REG_MODE, 0x001000},        // 50 Hz, RMS update every 400 ms, as ESPHome
         {BL0939_REG_TPS_CTRL, 0x0047FF},    // alarms on, automatic temperature, 100 ms
+        {BL0939_REG_IA_FAST_RMS_CTRL, fast_rms_ctrl},
+        {BL0939_REG_IB_FAST_RMS_CTRL, fast_rms_ctrl},
     };
+    size_t count = fast_rms_ctrl ? 6 : 4;
     size_t n = 0;
-    for (; n < sizeof(seq) / sizeof(seq[0]) && n < max_frames; n++)
+    for (; n < count && n < max_frames; n++)
         bl0939_build_write(seq[n].reg, seq[n].value, out[n]);
     return n;
+}
+
+size_t bl0939_build_read(uint8_t reg, uint8_t out[2])
+{
+    out[0] = BL0939_READ_COMMAND;
+    out[1] = reg;
+    return 2;
+}
+
+bl0939_status_t bl0939_parse_register(uint8_t reg, const uint8_t *reply, size_t len, uint32_t *value)
+{
+    if (len != BL0939_REG_REPLY_LEN)
+        return BL0939_ERR_LENGTH;
+    unsigned sum = BL0939_READ_COMMAND + reg + reply[0] + reply[1] + reply[2];
+    if ((uint8_t)(~sum & 0xFF) != reply[3])
+        return BL0939_ERR_CHECKSUM;
+    *value = (uint32_t)reply[0] | ((uint32_t)reply[1] << 8) | ((uint32_t)reply[2] << 16);
+    return BL0939_OK;
 }
 
 uint8_t bl0939_packet_checksum(const uint8_t *packet, size_t len_without_checksum)
