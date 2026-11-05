@@ -93,6 +93,7 @@ IGNORE = {"silk_overlap", "silk_over_copper", "silk_edge_clearance", "text_heigh
           "lib_footprint_mismatch", "lib_footprint_issues"}
 
 
+@pytest.mark.kicad
 def test_drc_is_clean_apart_from_unrouted_signals(filled):
     drc, _, _ = filled
     bad = [(v["type"], v["description"], [i["description"] for i in v["items"]])
@@ -103,6 +104,7 @@ def test_drc_is_clean_apart_from_unrouted_signals(filled):
     assert bad == []
 
 
+@pytest.mark.kicad
 def test_the_pours_and_hand_wiring_connect_every_mains_and_supply_pad(filled):
     drc, _, _ = filled
     nets = set(pb.MAINS_POLYS) | set(pb.SUPPLY_HV_NETS) | set(pb.SWNODE_NETS)
@@ -111,6 +113,7 @@ def test_the_pours_and_hand_wiring_connect_every_mains_and_supply_pad(filled):
     assert stray == []
 
 
+@pytest.mark.kicad
 @pytest.mark.parametrize("net", sorted(pb.HIGH_CURRENT))
 def test_each_layer_alone_is_one_piece_reaching_every_through_hole_pad(filled, net):
     """So the two layers really are in parallel all the way, and neither depends on the vias.
@@ -126,12 +129,14 @@ def test_each_layer_alone_is_one_piece_reaching_every_through_hole_pad(filled, n
                     assert _inside(((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), pieces[0]), (net, layer, ref, pad)
 
 
+@pytest.mark.kicad
 def test_the_ground_pour_fills_on_both_layers(filled):
     _, polys, _ = filled
     for layer in ("F.Cu", "B.Cu"):
         assert polys[("GND", layer)], layer
 
 
+@pytest.mark.kicad
 def test_build_check_agrees(filled):
     """board.checks.pour_problems (which build.py runs on the routed board) passes here..."""
     from board.checks import pour_problems
@@ -139,6 +144,7 @@ def test_build_check_agrees(filled):
     assert pour_problems(C, P, board, pb.HIGH_CURRENT) == []
 
 
+@pytest.mark.kicad
 def test_build_check_catches_a_missing_pad(filled, monkeypatch):
     """...and fails when a pour misses a through-hole pad of its net."""
     from board import checks
@@ -151,6 +157,7 @@ def test_build_check_catches_a_missing_pad(filled, monkeypatch):
 
 
 
+@pytest.mark.kicad
 def test_build_check_catches_a_cut_mains_pour(tmp_path):
     """A real cut, refilled by KiCad: a 1 mm rule area across L_F's band under the relay, on both
     layers, leaves L_F in two pieces on each layer, which pour_problems reports. (A track there

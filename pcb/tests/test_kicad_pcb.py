@@ -40,6 +40,7 @@ def _portrait(tmp_path):
     return png
 
 
+@pytest.mark.kicad
 def test_kicad_parses_unrouted_board(tmp_path):
     _, _, pcb = _mini(tmp_path)
     drc = _drc(pcb, tmp_path / "drc.json")
@@ -89,6 +90,7 @@ def test_bad_layer_count(tmp_path):
         write_board(c, place_mini(c), tmp_path / "x.kicad_pcb", layers=3)
 
 
+@pytest.mark.kicad
 def test_pro_file_read_by_drc(tmp_path):
     """The 0.15 mm default clearance in .kicad_pro must reach DRC (net_settings.meta.version 3):
     two pads 0.1 mm apart violate it, and the report states the 0.15 mm limit."""

@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 from conftest import KICAD_FP
 from board.kicadlib import load_footprint, load_symbol_pins, load_symbol_pin_types
@@ -9,6 +10,7 @@ SYM = '''(kicad_symbol_lib (symbol "U" (symbol "U_1_1"
   (pin bidirectional line (at 0 0 0) (length 2.54) (name "IO0") (number "2")))))'''
 
 
+@pytest.mark.kicad
 def test_load_kicad_stdlib_footprint():
     fp = load_footprint(R0402)
     assert fp.node[0] == "footprint"
