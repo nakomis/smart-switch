@@ -1,0 +1,49 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "en-GB": {
+          "name": "${SKILL_NAME}",
+          "summary": "Switch Petro smart plugs on and off with Alexa.",
+          "description": "Petro is a home-made 10 A smart plug with energy metering. This skill lets Alexa switch Petro units on and off, and tells you when one is offline. A unit follows Alexa only while it is in auto mode (its light is blue): when it is held on or off at its button, or a safety trip has opened it, Alexa says it can't switch it rather than pretending to. You need a Nakomis account that has been given access to the units.",
+          "examplePhrases": [
+            "Alexa, turn on Petro b1",
+            "Alexa, switch off Petro b1",
+            "Alexa, is Petro b1 on?"
+          ],
+          "keywords": ["smart plug", "switch", "petro", "nakomis"],
+          "smallIconUri": "file://assets/images/en-GB_smallIconUri.png",
+          "largeIconUri": "file://assets/images/en-GB_largeIconUri.png"
+        }
+      },
+      "isAvailableWorldwide": false,
+      "distributionCountries": ["GB"],
+      "distributionMode": "PUBLIC",
+      "category": "SMART_HOME",
+      "testingInstructions": "${TESTING_INSTRUCTIONS}"
+    },
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false,
+      "locales": {
+        "en-GB": {
+          "privacyPolicyUrl": "https://nakom.is/privacy-policy"
+        }
+      }
+    },
+    "permissions": [{ "name": "alexa::async_event:write" }],
+    "apis": {
+      "smartHome": {
+        "endpoint": { "uri": "${ENDPOINT_ARN}" },
+        "regions": {
+          "EU": { "endpoint": { "uri": "${ENDPOINT_ARN}" } }
+        },
+        "protocolVersion": "3"
+      }
+    }
+  }
+}
