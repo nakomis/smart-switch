@@ -103,7 +103,10 @@ _TABLE = {
     # Rev B, 5 Nov 2026: the ESP32-C6 (Economic: the S3-MINI needs X-ray, so Standard) and the safe
     # I/O island on J3, across TI's reinforced isolators in the wide (DW) body: ISO7741 (SPI, 3
     # forward / 1 reverse), ISO1640 (I2C); the ISOW7743 above powers the island and carries IN/OUT.
-    "ESP32C6": ("ESP32-C6-WROOM-1-N8", "C5366877", "WIRELM-SMD_ESP32-C6-WROOM-1", "ESP32-C6-WROOM-1-N8", True, 0),
+    # local: EasyEDA's footprint (WIRELM-SMD_ESP32-C6-WROOM-1) less its 12 unnumbered 0.5 mm
+    # thermal vias, which had no net and paste and mask open on both sides (solder would wick)
+    "ESP32C6": ("ESP32-C6-WROOM-1-N8", "C5366877", "local:ESP32-C6-WROOM-1_NoThermalVias",
+                "ESP32-C6-WROOM-1-N8", True, 0),
     "ISO7741": ("ISO7741DWR", "C571196", "SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL", "ISO7741DWR", True, 0),
     "ISO1640": ("ISO1640DWR", "C5216237", "SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL", "ISO1640DWR", True, 0),
     "IO10": ("DB125-3.5-10P-GN-S", "C5184956", "CONN-TH_10P-P3.50_DIBO_DB125-3.5-10P-GN-S",

@@ -6,7 +6,7 @@ import math
 import pytest
 
 from board import petro_board as pb
-from board.parts import ESP32_ANTENNA
+from board.parts import ESP32C6_ANTENNA as ESP32_ANTENNA
 from board.placement import rotate
 from board.rules import MAINS_EDGE
 
@@ -121,7 +121,7 @@ def test_all_copper_keeps_3mm_from_the_mounting_holes():
 def test_mains_pads_keep_3mm_from_the_edges():
     for ref in C.instances:
         for net, b in _pads(ref):
-            if net in pb.GROUPS:
+            if net in pb.GROUPS and pb.GROUPS[net] != "SELV":           # the island may reach the edge
                 assert min(b[0], b[1], pb.W - b[2], pb.H - b[3]) >= MAINS_EDGE - 1e-6, (ref, net)
 
 
@@ -146,3 +146,48 @@ def test_the_shunt_sits_in_the_neutral_strip_with_n_in_west():
 def test_every_test_hole_is_on_a_low_voltage_net():
     for ref, net in pb.TEST_HOLES.items():
         assert net not in pb.GROUPS
+
+
+# --- the safe I/O island ------------------------------------------------------------------------
+
+def _poly_dist(b, poly):
+    """Distance from box b to an axis-aligned rectangle given as a 4-point polygon."""
+    xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+    return math.hypot(max(min(xs) - b[2], 0, b[0] - max(xs)), max(min(ys) - b[3], 0, b[1] - max(ys)))
+
+
+def test_every_island_pad_is_in_the_island():
+    area = pb.island_area()
+    for ref in C.instances:
+        for net, b in _pads(ref):
+            if pb.GROUPS.get(net) == "SELV":
+                assert _poly_dist(b, area) == 0 and pb._in_poly((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, area), (ref, net)
+
+
+def test_everything_else_keeps_8mm_from_the_island():
+    """Bar the isolators' own board-side pads, which the slot takes care of."""
+    area = pb.island_area()
+    for ref in C.instances:
+        for net, b in _pads(ref):
+            if pb.GROUPS.get(net) == "SELV":
+                continue
+            if ref in pb.BARRIERS:
+                assert _poly_dist(b, area) >= 7.1 - 1e-6, (ref, net)
+            else:
+                assert _poly_dist(b, area) >= 8.0 - 1e-6, (ref, net, round(_poly_dist(b, area), 2))
+
+
+def test_the_isolators_face_the_island_across_the_slot():
+    (slot,) = pb.slots()
+    for ref in pb.BARRIERS:
+        for net, b in _pads(ref):
+            cy = (b[1] + b[3]) / 2
+            assert (cy > pb.ISO_Y) == (pb.GROUPS.get(net) == "SELV"), (ref, net)
+            assert b[1] - (slot.y1 + slot.width / 2) >= 1.0 - 1e-6 or (slot.y1 - slot.width / 2) - b[3] >= 1.0 - 1e-6
+        x0, _, x1, _ = _box(ref)
+        assert min(slot.x1, slot.x2) < x0 and max(slot.x1, slot.x2) > x1, ref
+
+
+def test_j3_opens_onto_the_bottom_edge():
+    x0, y0, x1, y1 = _box("J3")
+    assert pb.H - 0.6 <= y1 <= pb.H and P.at["J3"][2] == 0      # wire openings on its +y side

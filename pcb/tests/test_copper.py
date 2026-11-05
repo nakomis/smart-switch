@@ -34,7 +34,7 @@ def filled(tmp_path_factory):
     tracks, vias = pb.hand_wiring(C, P)
     board = out / "petro.kicad_pcb"
     write_board(C, P, board, tracks, vias + pb.stitch_vias(), layers=2, slots=pb.slots(), dru=r.dru(),
-                netclasses=classes, netclass_patterns=patterns, zones=pb.mains_zones(),
+                netclasses=classes, netclass_patterns=patterns, zones=pb.mains_zones() + pb.island_zones(),
                 pad_extra=pb.pad_extra(C), plane_pts=pb.gnd_pts())
     subprocess.run([KICAD_CLI, "pcb", "drc", "--format", "json", "--severity-all", "--refill-zones",
                     "--save-board", "-o", str(out / "drc.json"), str(board)], check=True, capture_output=True)
@@ -147,3 +147,12 @@ def test_build_check_catches_a_missing_pad(filled, monkeypatch):
     real = checks.inside
     monkeypatch.setattr(checks, "inside", lambda pt, poly: False if pt[0] > jx - 10 else real(pt, poly))
     assert any("misses J2" in s for s in checks.pour_problems(C, P, board, {"L_OUT"}))
+
+
+def test_the_island_pours_iso_gnd_on_both_layers_inside_the_island(filled):
+    zones = [z for z in pb.island_zones() if z.net == "ISO_GND"]
+    assert {lay for z in zones for lay in z.layers} == {"F.Cu", "B.Cu"}
+    assert all(z.pts == pb.island_area() for z in zones)
+    _, polys, _ = filled
+    for layer in ("F.Cu", "B.Cu"):
+        assert polys[("ISO_GND", layer)], layer

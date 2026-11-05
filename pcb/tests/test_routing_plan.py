@@ -127,3 +127,15 @@ def test_the_low_voltage_area_keeps_off_every_mains_supply_and_divider_pad():
                 d = math.hypot(max(b[0] - x, 0, x - b[2]), max(b[1] - y, 0, y - b[3]))
                 if d < need - 0.05 and pb.in_lv(x, y):
                     pytest.fail(f"{net} pad at {b}: ({x:.2f}, {y:.2f}) is in the area, {d:.2f} mm away")
+
+
+def test_the_low_voltage_area_keeps_8mm_from_the_island():
+    xs = [p[0] for p in pb.island_area()]
+    ys = [p[1] for p in pb.island_area()]
+    for k in range(200):
+        for j in range(60):
+            x = min(xs) - 8 + (max(xs) - min(xs) + 16) * k / 199
+            y = min(ys) - 8 + (max(ys) - min(ys) + 8) * j / 59
+            d = math.hypot(max(min(xs) - x, 0, x - max(xs)), max(min(ys) - y, 0, y - max(ys)))
+            if d < 8.0 - 0.05:
+                assert not pb._in_poly(x, y, pb.lv_area()), (round(x, 2), round(y, 2), round(d, 2))

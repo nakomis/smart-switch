@@ -354,7 +354,12 @@ def build_petro():
         c.connect(f"ISO_{sig}", (u9, f"{sig}2"))
         two("R4K7", None, f"I2C_{sig}", v33)
         two("R4K7", None, f"ISO_{sig}", "ISO_3V3")
-    c.no_connect(u9, "NC")
+    # Its NC pins have no internal connection (TI: may be tied to ground). Each goes to its own
+    # side's ground, so no unconnected copper sits on the barrier.
+    for pad in ("2", "4", "8"):
+        c.connect(gnd, (u9, "NC", pad))
+    for pad in ("10", "13", "15"):
+        c.connect("ISO_GND", (u9, "NC", pad))
     two("C100N", None, v33, gnd)
     two("C100N", None, "ISO_3V3", "ISO_GND")
 
@@ -410,7 +415,13 @@ F1_CLIP_PITCH = 34.21 - 7.62            # clip centres for a 1 1/4 in fuse (Litt
 F1_Y = 32.0
 LED_RING = 2.0                          # mm of clear board round the LED (the light pipe's flange)
 DY = 15.0                               # the low-voltage side's move down from rev A
-TP_X, TP_PITCH, TP_ROWS = 27.5, 3.2, (46.5, 51.5, 56.5)    # the test holes' block
+TP_X, TP_PITCH, TP_ROWS = 27.5, 3.2, (42.0, 47.0, 52.0)    # the test holes' block
+# The safe I/O island's barrier: the isolators' centre line, their x, and the module's edge. Their
+# pad rows are 7.1 mm apart inside; a slot along the line takes creepage round its ends, and the
+# isolators are 3.7 mm or more apart so the air gap between neighbours' opposite sides is 8 mm.
+ISO_Y = 66.0
+ISO_X = (13.0, 27.5, 40.7)
+U1_EDGE = 9.25          # the module's centre above the bottom edge: its antenna starts at the edge
 TP_LABEL_DY = -1.9                      # each test hole's label, above it
 
 AT = {
@@ -440,21 +451,28 @@ AT = {
     # USB (J4 facing the right-hand edge, its protection to its left)
     "J4": (116.5, 51.5, 90), "U6": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
     "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
-    # the module and its supply (rev A's, DY lower)
-    "U1": (16.0, H - 7.75, 180), "U2": (25.5, 49.0 + DY, 0),
-    "C18": (17.5, 51.5 + DY, 0), "C19": (21.0, 51.5 + DY, 0), "C20": (21.0, 49.0 + DY, 0),
-    "TP1": (6.0, 52.5 + DY, 0), "R19": (2.0, 49.0 + DY, 90), "C23": (3.5, 49.0 + DY, 90),
-    "C21": (2.0, 53.0 + DY, 90), "C22": (3.5, 53.0 + DY, 90), "R25": (2.0, 57.0 + DY, 90),
-    "R26": (3.5, 57.0 + DY, 90),
-    # reuse I/O (internal only)
-    "J3": (40.0, 66.0 + DY, 0),
-    # button, LED
-    "SW1": (57.9, 52.8 + DY, 0), "D1": (58.0, 59.5 + DY, 0), "C24": (56.0, 65.5 + DY, 90),
-    "R23": (58.5, 65.5 + DY, 90), "R20": (61.0, 65.5 + DY, 90),
-    # relay driver and NTC (below the relay)
-    "Q1": (66.0, 64.5 + DY, 0), "D3": (66.0, 68.0 + DY, 0), "R21": (70.0, 64.0 + DY, 90),
-    "R22": (71.5, 64.0 + DY, 90), "TH1": (74.0, 66.0 + DY, 90), "R24": (75.8, 66.0 + DY, 90),
-    "C25": (77.0, 68.5 + DY, 0),
+    # the safe I/O island, bottom left: J3 on the bottom edge, the isolators across the barrier
+    # (side 2, the island's, facing down), their island-side parts between them and J3
+    "J3": (27.0, 81.0, 0),
+    "U7": (ISO_X[0], ISO_Y, 180), "U8": (ISO_X[1], ISO_Y, 180), "U9": (ISO_X[2], ISO_Y, 180),
+    "FB1": (8.5, 74.0, 90), "FB2": (10.0, 74.0, 90), "C30": (12.0, 74.0, 90), "C31": (13.6, 74.0, 90),
+    "C32": (15.0, 74.0, 90), "C33": (16.6, 74.0, 90), "R27": (19.0, 74.0, 90),
+    "C35": (27.5, 74.0, 90), "C37": (40.7, 74.0, 90), "R29": (37.0, 74.0, 90), "R31": (44.0, 74.0, 90),
+    # ... and their board-side parts above them
+    "C26": (8.5, 57.6, 90), "C27": (10.5, 57.6, 90), "C28": (12.0, 57.6, 90), "C29": (16.0, 57.6, 90),
+    "R26": (17.6, 57.6, 90), "C34": (27.5, 57.6, 90), "C36": (40.7, 57.6, 90),
+    "R28": (36.0, 57.6, 90), "R30": (37.6, 57.6, 90),
+    # the module, bottom middle (antenna past the bottom edge), its supply and EN at its right
+    "U1": (64.0, H - U1_EDGE, 180),
+    "C21": (75.6, 82.6, 90), "C22": (77.2, 82.6, 90), "R19": (75.6, 79.0, 90), "C23": (77.2, 79.0, 90),
+    # 3.3 V, the debug pads, button and LED: the open ground above the island
+    "U2": (9.0, 53.0, 0), "C18": (5.6, 53.0, 90), "C19": (12.4, 53.0, 90), "C20": (14.0, 53.0, 90),
+    "TP1": (2.4, 46.5, 0),
+    "SW1": (9.5, 45.6, 0), "R20": (15.2, 48.0, 90),
+    "D1": (20.5, 44.5, 0), "C24": (18.0, 49.0, 90), "R23": (21.0, 49.0, 90), "R24": (23.0, 49.0, 90),
+    # relay driver (between the relay's coil pins and the module) and the NTC beside it
+    "R21": (59.0, 63.6, 90), "R22": (60.6, 63.6, 90), "Q1": (64.0, 63.6, 0), "D3": (69.4, 63.6, 0),
+    "TH1": (74.0, 64.0, 90), "R25": (75.6, 64.0, 90), "C25": (74.8, 67.2, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
     # test holes (TEST_HOLES): three rows in the open ground left of the 5 V converter, 5 mm
     # apart and on a 3.2 mm pitch so each hole's label fits above it, on both sides
@@ -473,9 +491,29 @@ def place_petro(c):
     return p
 
 
+ISO_SLOT_W = 1.5
+ISO_ROW_IN = 3.55       # the isolators' pad rows' inner edges, either side of ISO_Y
+
+
+def island_area():
+    """The safe I/O island (SELV): from the isolators' island-side pad rows down to the bottom
+    edge, x 6.5 to 46.5 (8 mm short of the module's pads). Its router and its ISO_GND pour keep
+    inside; everything else keeps 8 mm from it (lv_area), bar the isolators' own board-side pads,
+    7.1 mm away across the slot."""
+    top = ISO_Y + ISO_ROW_IN
+    return [(6.5, top), (46.5, top), (46.5, H - 0.5), (6.5, H - 0.5)]
+
+
+def island_zones():
+    """ISO_GND on both layers over the island, below the mains pours in priority."""
+    return [Zone("ISO_GND", CU, island_area(), priority=0, clearance=0.2, min_width=0.25)]
+
+
 def slots():
-    """None on rev B: there is no barrier to lengthen."""
-    return []
+    """One slot under the safe I/O island's three isolators, along the barrier between their pad
+    rows (7.1 mm apart) and past the outer two: every surface path from a board-side pad to an
+    island pad goes round an end, which makes it more than 8 mm (rules.barrier_creepage)."""
+    return [Slot(ISO_X[0] - 9.0, ISO_Y, ISO_X[2] + 7.0, ISO_Y, ISO_SLOT_W)]
 
 
 def fuse_box():
@@ -662,12 +700,18 @@ def hand_wiring(c, p):
 # --- the low-voltage router's area -----------------------------------------------------------------
 # One Freerouting pass for every low-voltage net (the rest group, at neutral), in this area: the
 # low-voltage side, the corridor under F1 and the metering corner, each edge 2.5 mm from the mains
-# pours. Keep-outs (lv_keepouts) round every pad of another group, the hand-routed supply tracks and
-# the mounting holes keep it off what the router can't see.
+# pours, and 8 mm short of the safe I/O island (bottom left). Keep-outs (lv_keepouts) round every
+# pad of another group, the hand-routed supply tracks and the mounting holes keep it off what the
+# router can't see.
+LV_ISLAND_X = 46.5 + 8.0         # island_area's right edge + 8 mm
+LV_ISLAND_Y = ISO_Y + ISO_ROW_IN - 8.0  # its top edge - 8 mm
+
+
 def lv_area():
     return [(12.5, 9.0), (24.0, 9.0), (24.0, 10.6), (37.5, 10.6), (37.5, 38.0), (54.5, 38.0),
             (54.5, 44.0), (73.5, 44.0), (73.5, 52.0), (84.0, 52.0),
-            (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (0.5, H - 0.5), (0.5, 38.0),
+            (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (LV_ISLAND_X, H - 0.5),
+            (LV_ISLAND_X, LV_ISLAND_Y), (0.5, LV_ISLAND_Y), (0.5, 38.0),
             (29.5, 38.0), (29.5, 26.0), (22.5, 26.0), (22.5, 22.9), (16.5, 22.9), (16.5, 18.5),
             (12.5, 18.5)]
 
@@ -720,17 +764,15 @@ _LV_KEEP_CACHE = _LazyKeep()
 
 
 def pad_extra(c):
-    """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND pads, J3's and J4's
-    GND pins (J3's is the island's: none now), the bulk capacitors' GND leads (their thermal spokes can land on scraps of pour
-    between the supply's keep-outs) and the GND test holes; U1's nine 1.2 mm centre GND pads get
-    a -0.18 mm paste margin (Espressif: a full thermal pad lifts the module)."""
+    """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND and ISO_GND pads, the
+    bulk capacitors' GND leads (their thermal spokes can land on scraps of pour between the
+    supply's keep-outs) and the GND test holes. (The S3's -0.18 mm paste margin on its 1.2 mm
+    centre pads went with it: the C6's nine 0.8 mm pads keep Espressif's footprint as drawn.)"""
     def make(ref):
         def f(pad):
             net = c.net_of(ref, pad.number)
             extra = []
-            if ref == "U1" and net == "GND" and abs(pad.w - 1.2) < 1e-6:
-                extra.append([S("solder_paste_margin"), -0.18])
-            if net in MAINS_POLYS or (net == "GND" and (
+            if net in MAINS_POLYS or (net == "ISO_GND" and pad.kind == "smd") or (net == "GND" and (
                     pad.kind == "smd" or ref in ("C1", "C2", "C4") or ref in TEST_HOLES)):
                 extra.append([S("zone_connect"), 2])
             return extra
