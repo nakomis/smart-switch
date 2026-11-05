@@ -52,7 +52,7 @@ def test_creepage_table_iec_60664_1_pd2_mg3(volts, mm):
 
 def test_creepage_beyond_the_table_is_refused():
     with pytest.raises(ValueError):
-        creepage(401)
+        creepage(631)
 
 
 def test_unknown_group_and_stray_high_current_net_are_refused():

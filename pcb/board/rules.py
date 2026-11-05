@@ -36,6 +36,12 @@ and creepage (checked by barrier_creepage, not KiCad) 8 mm, which a slot under e
 IEC 60664-1 basis: rated voltage 250 V (the rationalised voltage for a 230 V supply), overvoltage
 category II, pollution degree 2, material group III (any FR-4: CTI 175-400 is IIIa). Linear
 interpolation between table rows is permitted by the standard; results round up to 0.05 mm.
+
+DC-bus groups (DC_GROUPS: BUS, the smoothed rectified mains, and SWNODE, a buck's switching node
+riding on it) are not a fraction of the AC supply: while the supply is energised they sit up to the
+rectified peak (V_RATED * sqrt 2, 354 V) above neutral. Their working voltage to an AC group is the
+rms of that DC plus the group's own AC, sqrt(Vpk^2 + (a * Vpk)^2 / 2) for an AC amplitude of a
+times the peak; to neutral, Vpk. With the supply off (F1 or F2 blown) they fall to neutral.
 """
 import math
 from dataclasses import dataclass, field
@@ -52,12 +58,15 @@ HIGH_CURRENT_WIDTH = 4.5         # mm: IPC-2221, 16 A, 20 C rise, 2 oz external 
 # voltage (V rms).
 CREEPAGE_PD2_MG3 = ((10, 0.40), (12.5, 0.42), (16, 0.45), (20, 0.48), (25, 0.50), (32, 0.53),
                     (40, 1.10), (50, 1.20), (63, 1.25), (80, 1.30), (100, 1.40), (125, 1.50),
-                    (160, 1.60), (200, 2.00), (250, 2.50), (320, 3.20), (400, 4.00))
+                    (160, 1.60), (200, 2.00), (250, 2.50), (320, 3.20), (400, 4.00), (500, 5.00),
+                    (630, 6.30))
 
 # The groups:
 #   LINE     live from the terminal to F1
 #   LIVE     after F1: the shunt, the relay's common, and the metering island tied to it
-#   PSU      after F2 (T500 mA): the two Mean Well modules' AC inputs
+#   PSU      after F2 (T500 mA): a supply's AC input
+#   BUS      a non-isolated supply's smoothed DC bus (rectified peak above neutral; DC_GROUPS)
+#   SWNODE   its buck's switching node and what rides on it (DC_GROUPS)
 #   NEUTRAL
 #   LOAD     the relay's switched output to the load terminal
 #   DIV1-4   the voltage divider: neutral -> R -> DIV1 -> R -> ... -> DIV4 -> R -> the BL0939's VP
@@ -65,13 +74,14 @@ CREEPAGE_PD2_MG3 = ((10, 0.40), (12.5, 0.42), (16, 0.45), (20, 0.48), (25, 0.50)
 # Each scenario gives every group its potential as a fraction of the supply, from line live (0) to
 # neutral (1). A blown fuse lets everything after it be pulled to neutral (through the load or a
 # PSU's input), so a fuse's two sides see the full supply.
-GROUPS = ("LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "SWNODE")
+GROUPS = ("LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "SWNODE", "BUS")
+DC_GROUPS = ("BUS", "SWNODE")
 SELV = "SELV"           # non-isolated mode only: an island that keeps REINFORCED from everything
 
 
 def _scenario(live, psu, load, divider_top="LIVE"):
     # SWNODE: a non-isolated buck's switching node (and what rides on it), at the bus's potential
-    p = {"LINE": 0.0, "LIVE": live, "PSU": psu, "NEUTRAL": 1.0, "LOAD": load, "SWNODE": psu}
+    p = {"LINE": 0.0, "LIVE": live, "PSU": psu, "NEUTRAL": 1.0, "LOAD": load, "SWNODE": psu, "BUS": psu}
     top = p[divider_top]
     for k in range(1, 5):                     # DIVk is k fifths of the way from neutral to the top
         p[f"DIV{k}"] = 1.0 + (top - 1.0) * k / 5
@@ -115,8 +125,26 @@ def ipc2221_width(amps, oz, rise=20.0):
 
 
 def working_voltage(g1, g2, divider_top="LIVE"):
-    """Worst-case working voltage (V rms) between two mains groups, over every scenario."""
-    return round(V_RATED * max(abs(p[g1] - p[g2]) for p in scenarios(divider_top).values()), 6)
+    """Worst-case working voltage (V rms, or V DC) between two mains groups, over every scenario.
+    A DC-bus group (DC_GROUPS) is at the rectified peak above neutral while its supply (PSU) is
+    live, and at neutral once it is not."""
+    if g1 == g2:
+        return 0.0
+    vpk = V_RATED * math.sqrt(2)
+    worst = 0.0
+    for p in scenarios(divider_top).values():
+        energised = p["PSU"] == 0.0
+        dc = [g for g in (g1, g2) if g in DC_GROUPS]
+        if len(dc) == 2:
+            v = vpk if energised else 0.0                   # bus to its own switching node
+        elif dc:
+            other = g2 if dc[0] == g1 else g1
+            amp = (1.0 - p[other]) * vpk                    # the other group's AC amplitude above neutral
+            v = math.sqrt(vpk ** 2 + amp ** 2 / 2) if energised else amp / math.sqrt(2)
+        else:
+            v = V_RATED * abs(p[g1] - p[g2])
+        worst = max(worst, v)
+    return round(worst, 6)
 
 
 @dataclass
@@ -129,15 +157,19 @@ class Rules:
     barriers: tuple = ()
     rest: str | None = None          # non-isolated: the group every unnamed net belongs to
     divider_top: str = "LIVE"        # the group the voltage divider hangs from
-    # group -> mm: functional insulation inside a converter, where a short only trips its current
-    # limit (IEC 62368-1 allows less than the table when a short causes no hazard): this spacing
-    # to every other group replaces the table's
+    # group -> (mm, partner groups): functional insulation inside a converter, where a short only
+    # trips its current limit or kills the converter, which its own fuses then contain (IEC
+    # 62368-1 allows less than the table when a short causes no hazard). The spacing applies to
+    # those partners only; to every other group the table's stands (a switching node shorted to
+    # the incoming live would bypass the supply's fuses).
     reduced: dict = field(default_factory=dict)
     # ref -> (mm, (net, net)): a part rated for the voltage across its own leads at its maker's
     # pitch (C1/C2, 400 V electrolytics at 3.5 mm). Its own pads keep mm clearance from each
-    # other; creepage for its net pair drops to mm too, because KiCad's creepage check sees only
-    # nets. Everywhere else the pair keeps the full clearance, and with no slots in the board a
-    # surface path is never shorter than the straight gap, so that still holds the creepage.
+    # other, and so does the net pair's copper where one side is the part's own pad (the track
+    # into one lead, beside the other); creepage for its net pair drops to mm too, because
+    # KiCad's creepage check sees only nets. Everywhere else the pair keeps the full clearance,
+    # and with no slots in the board a surface path is never shorter than the straight gap, so
+    # that still holds the creepage.
     own_leads: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -149,6 +181,15 @@ class Rules:
         stray = set(self.high_current) - set(self.groups)
         if stray:
             raise ValueError(f"high-current nets that are not mains nets: {sorted(stray)}")
+        for g, v in self.reduced.items():
+            if not (isinstance(v, tuple) and len(v) == 2 and set(v[1]) <= set(GROUPS)):
+                raise ValueError(f"reduced[{g!r}] must be (mm, partner groups): {v!r}")
+
+    def reduced_mm(self, a, b):
+        """The reduced spacing between groups a and b, or None if neither reduces it for the other."""
+        hits = [mm for g, o in ((a, b), (b, a)) if g in self.reduced
+                for mm, partners in [self.reduced[g]] if o in partners]
+        return max(hits) if hits else None
 
     def used(self):
         """The mains groups in use (the SELV island is not one)."""
@@ -173,8 +214,9 @@ class Rules:
         if a == b:
             v = working_voltage(a, b, self.divider_top)
             return creepage(v) if v else 0.0
-        if a in self.reduced or b in self.reduced:
-            return max(self.reduced.get(a, 0.0), self.reduced.get(b, 0.0))
+        mm = self.reduced_mm(a, b)
+        if mm is not None:
+            return mm
         v = working_voltage(a, b, self.divider_top)
         return creepage(v) if v else 0.0
 
@@ -221,14 +263,14 @@ class Rules:
                 continue
             v, mm = working_voltage(g, self.rest, self.divider_top), self.spacing(g, self.rest)
             if mm:
-                label = f"{mm:g} mm" if g in self.reduced else f"{v:g} V"
+                label = f"{mm:g} mm" if self.reduced_mm(g, self.rest) is not None else f"{v:g} V"
                 rule(f"{g} to the rest ({label})", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
                      f"A.hasNetclass('{g}') && {selv('B')}")
         for (a, b), (v, mm) in self.matrix().items():
             if a > b or not mm:
                 continue                          # each pair once; nothing between equal potentials
             same = "A.Net != B.Net && " if a == b else ""
-            label = f"{mm:g} mm" if a in self.reduced or b in self.reduced else f"{v:g} V"
+            label = f"{mm:g} mm" if self.reduced_mm(a, b) is not None else f"{v:g} V"
             rule(f"{a} to {b} ({label})", [f"clearance (min {mm:g}mm)", f"creepage (min {mm:g}mm)"],
                  f"{same}A.hasNetclass('{a}') && B.hasNetclass('{b}')")
         rule("mains to edge", [f"edge_clearance (min {MAINS_EDGE}mm)"], mains("A"))
@@ -247,8 +289,11 @@ class Rules:
                  [f"clearance (min {REINFORCED:g}mm)", f"creepage (min {REINFORCED:g}mm)"],
                  f"A.hasNetclass('{SELV}') && !B.hasNetclass('{SELV}')")
         for ref, (mm, (n1, n2)) in self.own_leads.items():
+            pair = f"((A.NetName == '{n1}' && B.NetName == '{n2}') || (A.NetName == '{n2}' && B.NetName == '{n1}'))"
             rule(f"{ref} own leads ({mm:g} mm)", [f"clearance (min {mm:g}mm)"],
                  f"A.memberOfFootprint('{ref}') && B.memberOfFootprint('{ref}')")
+            rule(f"{ref} own leads, copper into them ({mm:g} mm)", [f"clearance (min {mm:g}mm)"],
+                 f"{pair} && (A.memberOfFootprint('{ref}') || B.memberOfFootprint('{ref}'))")
             rule(f"{ref} own leads, creepage ({mm:g} mm)", [f"creepage (min {mm:g}mm)"],
                  f"(A.NetName == '{n1}' && B.NetName == '{n2}') || (A.NetName == '{n2}' && B.NetName == '{n1}')")
         for ref in self.barriers:

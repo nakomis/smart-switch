@@ -43,9 +43,9 @@ def test_ipc2221_width_matches_the_published_formula():
 
 def test_the_switching_node_keeps_a_reduced_functional_spacing(tmp_path):
     """SWNODE (the LNK306's source node and the BP/FB parts riding on it): functional insulation
-    inside the converter, where a short only trips its current limit. 1.0 mm to everything (IPC-2221
-    B4, coated, 301-500 V: 0.8 mm), via Rules.reduced; the DC bus (PSU) keeps the table's 2.5 mm."""
-    r = Rules({**GROUPS_B, "SW": "SWNODE"}, rest="NEUTRAL", reduced={"SWNODE": 1.0})
+    inside the converter, where a short only trips its current limit or kills the converter. 1.0 mm
+    (IPC-2221 B4, coated, 301-500 V: 0.8 mm) to its partners only, via Rules.reduced."""
+    r = Rules({**GROUPS_B, "SW": "SWNODE"}, rest="NEUTRAL", reduced={"SWNODE": (1.0, ("PSU", "NEUTRAL"))})
     assert r.spacing("SWNODE", "NEUTRAL") == 1.0 and r.spacing("SWNODE", "PSU") == 1.0
     assert r.spacing("PSU", "NEUTRAL") == 2.5
     rules = r
@@ -54,6 +54,34 @@ def test_the_switching_node_keeps_a_reduced_functional_spacing(tmp_path):
     (tmp_path / "bad").mkdir()
     bad = _probe(tmp_path / "bad", [Via("SW", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 0.9, 30.0)], rules=rules)
     assert ("clearance", "SWNODE to the rest (1 mm)") in bad
+
+
+def test_the_switching_node_is_never_reduced_to_the_live(tmp_path):
+    """A short from the switching node to the incoming live would bypass the supply's fuses: the
+    reduction stops at its partners, and SW to L_F keeps the DC-bus table spacing (4.35 mm)."""
+    r = Rules({**GROUPS_B, "SW": "SWNODE"}, rest="NEUTRAL", reduced={"SWNODE": (1.0, ("PSU", "NEUTRAL"))})
+    for g in ("LINE", "LIVE", "LOAD"):
+        assert r.spacing("SWNODE", g) == 4.35, g
+    bad = _probe(tmp_path, [Via("SW", 30.0, 30.0), Via("L_F", 30.0 + 0.6 + 2.0, 30.0)], rules=r)
+    assert ("clearance", "LIVE to SWNODE (433.013 V)") in bad
+    (tmp_path / "ok").mkdir()
+    assert _probe(tmp_path / "ok", [Via("SW", 30.0, 30.0), Via("L_F", 30.0 + 0.6 + 4.4, 30.0)], rules=r) == set()
+
+
+def test_reduced_spacing_must_name_its_partners():
+    with pytest.raises(ValueError):
+        Rules(GROUPS_B, rest="NEUTRAL", reduced={"SWNODE": 1.0})
+
+
+def test_the_dc_bus_keeps_its_peak_from_low_voltage_and_more_from_the_live(tmp_path):
+    """The smoothed bus sits at the rectified peak (250 V x sqrt 2, 354 V DC) above neutral:
+    3.55 mm to the rest; to the live, the rms of that DC plus the live's AC (433 V): 4.35 mm."""
+    r = Rules({**GROUPS_B, "VB": "BUS"}, rest="NEUTRAL")
+    assert r.spacing("BUS", "NEUTRAL") == 3.55 and r.spacing("BUS", "LIVE") == 4.35
+    bad = _probe(tmp_path, [Via("VB", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 3.4, 30.0)], rules=r)
+    assert ("clearance", "BUS to the rest (353.553 V)") in bad
+    (tmp_path / "ok").mkdir()
+    assert _probe(tmp_path / "ok", [Via("VB", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 3.6, 30.0)], rules=r) == set()
 
 
 def test_rest_must_be_a_group():

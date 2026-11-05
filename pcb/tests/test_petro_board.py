@@ -169,12 +169,20 @@ def test_diode_or_feeds_5v_from_the_supply_or_usb():
     assert nets_of("F3") == {"VPSU", "VPSU_F"} and nets_of("F4") == {"VBUS_IN", "VBUS"}
 
 
-def test_supply_high_voltage_nets_are_the_psu_group():
-    for n in ("L_PSU", "L_RF", "VBULK1", "VBULK"):
+def test_supply_high_voltage_nets_are_the_psu_bus_and_swnode_groups():
+    for n in ("L_PSU", "L_RF"):
         assert pb.GROUPS[n] == "PSU", n
+    for n in ("VBULK1", "VBULK"):
+        assert pb.GROUPS[n] == "BUS", n
     for n in ("SW", "BP", "FB", "FBH"):
         assert pb.GROUPS[n] == "SWNODE", n
-    assert pb.rules().spacing("SWNODE", "NEUTRAL") == 1.0 and pb.rules().spacing("PSU", "NEUTRAL") == 2.5
+    r = pb.rules()
+    assert r.spacing("PSU", "NEUTRAL") == 2.5 and r.spacing("BUS", "NEUTRAL") == 3.55
+    assert r.spacing("BUS", "LIVE") == 4.35 and r.spacing("BUS", "PSU") == 4.35
+    for g in ("PSU", "BUS", "NEUTRAL"):                  # inside the converter
+        assert r.spacing("SWNODE", g) == pb.SWNODE_MM, g
+    for g in ("LINE", "LIVE", "LOAD"):                   # never reduced to the live or the load
+        assert r.spacing("SWNODE", g) == 4.35, g
 
 
 # --- metering ------------------------------------------------------------------------------------------

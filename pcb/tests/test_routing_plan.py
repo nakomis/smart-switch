@@ -12,7 +12,7 @@ from board.gnd import pad_boxes
 C = pb.build_petro()
 P = pb.place_petro(C)
 R = pb.rules()
-HAND_NETS = set(pb.PSU_NETS) | set(pb.SWNODE_NETS)
+HAND_NETS = set(pb.SUPPLY_HV_NETS) | set(pb.SWNODE_NETS)
 
 
 def _seg_box_dist(t, b):
@@ -75,18 +75,28 @@ def test_every_supply_net_is_hand_routed_pad_to_pad(hand, net):
     assert _connected(net, tracks, vias), net
 
 
+def _own_lead(ref, n1, n2):
+    """The reduced spacing where copper of a rated part's own net pair meets its pad (OWN_LEADS)."""
+    mm, pair = pb.OWN_LEADS.get(ref, (None, ()))
+    return mm if {n1, n2} == set(pair) else None
+
+
 def test_hand_tracks_keep_the_matrix_spacing_from_other_pads(hand):
+    from board.rules import _pad_box
     tracks, _ = hand
+    pads = [(ref, C.net_of(ref, q.number), list(_pad_box(P, ref, q)))
+            for ref in C.instances for q in C.instances[ref].part.footprint.pads]
     bad = []
     for t in tracks:
         g = _group(t.net)
-        for net, *b in pad_boxes(C, P):
+        for ref, net, b in pads:
             if net == t.net or net is None:
                 continue
-            need = R.spacing(g, _group(net))
+            own = _own_lead(ref, t.net, net)
+            need = own if own is not None else R.spacing(g, _group(net))
             d = _seg_box_dist(t, b)
             if need and d < need - 1e-6:
-                bad.append((t.net, net, round(d, 2), need))
+                bad.append((t.net, ref, net, round(d, 2), need))
     assert bad == []
 
 

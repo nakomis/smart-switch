@@ -105,7 +105,7 @@ def test_drc_is_clean_apart_from_unrouted_signals(filled):
 
 def test_the_pours_and_hand_wiring_connect_every_mains_and_supply_pad(filled):
     drc, _, _ = filled
-    nets = set(pb.MAINS_POLYS) | set(pb.PSU_NETS) | set(pb.SWNODE_NETS)
+    nets = set(pb.MAINS_POLYS) | set(pb.SUPPLY_HV_NETS) | set(pb.SWNODE_NETS)
     stray = [u for u in drc["unconnected_items"]
              if any(f"[{n}]" in i["description"] for n in nets for i in u["items"])]
     assert stray == []

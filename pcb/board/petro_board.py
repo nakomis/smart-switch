@@ -77,15 +77,22 @@ IO_PINS = {"1": "+3V3", "2": "GND", "3": "SPI_SCLK", "4": "SPI_MOSI", "5": "SPI_
            "6": "SPI_CS", "7": "I2C_SDA", "8": "I2C_SCL", "9": "IO_IN", "10": "IO_OUT"}
 
 # --- the mains rules (non-isolated mode: every other net sits at neutral) --------------------------
-# The supply's high-voltage nets are the PSU group: after F2, at the rectified live (the switching
-# node and the LNK306's BP/FB, which ride on it, included).
-PSU_NETS = ("L_PSU", "L_RF", "VBULK1", "VBULK")
+# The supply's high-voltage nets: its AC input after F2 and the fusible resistor (PSU), and the
+# smoothed DC bus after the rectifier (BUS: the rectified peak above neutral, so 3.55 mm to GND and
+# 4.35 mm to the live, rules.DC_GROUPS).
+PSU_NETS = ("L_PSU", "L_RF")
+BUS_NETS = ("VBULK1", "VBULK")
+SUPPLY_HV_NETS = PSU_NETS + BUS_NETS
 # The LNK306's switching node and what rides on it (BYPASS, FEEDBACK, the sampled output): functional
-# insulation inside the converter, where a short only trips its current limit: 1.0 mm (rules.reduced).
+# insulation inside the converter, where a short to GND only trips its current limit and a short to
+# its input or bus kills the LNK306, which F2 and the fusible resistor then contain: SWNODE_MM to
+# those (rules.reduced). To the live, the load and the divider it keeps the table's spacing.
 SWNODE_NETS = ("SW", "BP", "FB", "FBH")
+SWNODE_MM = 1.0
 GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "N_IN": "NEUTRAL", "N_OUT": "NEUTRAL", "L_OUT": "LOAD",
           "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
-          **{n: "PSU" for n in PSU_NETS}, **{n: "SWNODE" for n in SWNODE_NETS}}
+          **{n: "PSU" for n in PSU_NETS}, **{n: "BUS" for n in BUS_NETS},
+          **{n: "SWNODE" for n in SWNODE_NETS}}
 HIGH_CURRENT = {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
 # Hand-fit (5 Nov 2026): the mains parts, bought from authorised distributors (DESIGN.md §3.2) and
 # soldered by Martin; left off the fab's BOMs and CPL, listed in hand-fit.csv. The mains terminals,
@@ -96,13 +103,14 @@ BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on
 
 def rules():
     return Rules(GROUPS, high_current=HIGH_CURRENT, rest="NEUTRAL", divider_top="LINE",
-                 reduced={"SWNODE": 1.0}, own_leads=OWN_LEADS)
+                 reduced={"SWNODE": (SWNODE_MM, ("PSU", "BUS", "NEUTRAL"))}, own_leads=OWN_LEADS)
 
 
 # The bulk capacitors are 400 V parts at their maker's 3.5 mm pitch: 1.9 mm between their own
 # pads, which their rating covers (IPC-2221 B4 asks 0.8 mm for 325 V, coated). Nothing else on
 # VBULK1/VBULK comes nearer GND than the 2.5 mm the matrix asks.
-OWN_LEADS = {"C1": (1.0, ("VBULK1", "GND")), "C2": (1.0, ("VBULK", "GND"))}
+OWN_LEADS = {"C1": (1.0, ("VBULK1", "GND")), "C2": (1.0, ("VBULK", "GND")),
+             "D7": (1.0, ("L_RF", "VBULK1"))}        # the 1 kV rectifier across its own SMA pads
 
 
 def build_petro():
@@ -384,8 +392,10 @@ AT = {
     "C13": (29.05, 14.7, 90), "C14": (30.85, 14.7, 90), "C15": (32.65, 14.7, 90), "C16": (34.45, 14.7, 90),
     "C17": (24.6, 18.0, 90), "R17": (23.0, 18.0, 90), "C12": (37.0, 17.6, 90), "R18": (24.4, 24.4, 90),
     # the supply block: F2 holder, fusible resistor, rectifier, pi filter, LNK306 buck
-    "R1": (91.0, 53.8, 180), "D7": (79.6, 56.0, 90),
-    "C1": (81.5, 64.0, 0), "L1": (89.6, 64.0, 270), "C2": (97.5, 64.0, 0),
+    # R1 2.4 mm right of rev B's first place and C1 turned, its bus pad towards L1: the DC bus
+    # keeps 4.35 mm from the AC input and 3.55 mm from GND (rules.DC_GROUPS)
+    "R1": (93.4, 53.8, 180), "D7": (79.6, 56.0, 90),
+    "C1": (81.5, 64.0, 180), "L1": (89.6, 64.0, 270), "C2": (97.5, 64.0, 0),
     "U4": (88.8, 73.0, 180), "C3": (92.4, 72.4, 270), "R2": (94.0, 69.4, 180), "R3": (94.0, 72.4, 270),
     "C5": (98.25, 70.8, 180), "D8": (81.7, 70.5, 180),
     # the output inductor under the relay driver, left of the bulk capacitors; the output capacitor
@@ -414,7 +424,7 @@ AT = {
     "SW1": (49.5, 45.6, 0), "R20": (54.8, 49.6, 90),
     "D1": (58.5, 44.5, 0), "C24": (58.0, 49.0, 90), "R23": (61.0, 49.0, 90), "R24": (56.6, 49.0, 90),
     # relay driver (between the relay's coil pins and the module) and the NTC beside it
-    "R21": (63.9, 64.35, 90), "R22": (66.3, 64.35, 90), "Q1": (69.1, 63.7, 0), "D3": (73.7, 63.4, 0),
+    "R21": (63.9, 64.35, 90), "R22": (66.3, 64.35, 90), "Q1": (68.7, 63.7, 0), "D3": (73.0, 63.65, 0),
     # the NTC beside the relay's left-hand side, above the module
     "TH1": (58.5, 55.5, 90), "R25": (60.1, 55.5, 90), "C25": (59.3, 58.4, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
@@ -576,10 +586,14 @@ def supply_tracks(c, p):
     x3 = xy("XF3", "2")
     t += _route("L_PSU", "F.Cu", HV_W, x3, (x3[0], 51.0), xy("R1", "1"))
     (rx, ry), (dx, dy) = xy("R1", "2"), xy("D7", "2")
-    t += _route("L_RF", "F.Cu", HV_W, (rx, ry), (dx, ry), (dx, dy))
+    # into D7's anode on its far side from the cathode, and out of the cathode on its far side, so
+    # the two tracks keep the DC bus's 4.35 mm from each other (the diode's own pads are rated)
+    t += _route("L_RF", "F.Cu", HV_W, (rx, ry - 0.4), (dx, dy - 0.4))
     k7, c1, l1a = xy("D7", "1"), xy("C1", "1"), xy("L1", "1")
-    t += _route("VBULK1", "F.Cu", HV_W, k7, (k7[0], 59.5), (k7[0], c1[1]))        # a node for the branch
-    t += _route("VBULK1", "F.Cu", HV_W, (k7[0], 59.5), (l1a[0], 59.5), l1a)
+    k7 = (k7[0], k7[1] + 0.4)
+    # down from D7 and across above C1 to L1, with a branch down into C1's bus pad (its east lead)
+    t += _route("VBULK1", "F.Cu", HV_W, k7, (k7[0], 59.5), (c1[0], 59.5), (l1a[0], 59.5), l1a)
+    t += _route("VBULK1", "F.Cu", HV_W, (c1[0], 59.5), c1)
     l1b, c2, d = xy("L1", "2"), xy("C2", "1"), xy("U4", "4")
     # Into C2's + pad short of its centre, and down to D along L1's pad edge: 2.5 mm from C2's
     # GND pad and 1 mm from FB.

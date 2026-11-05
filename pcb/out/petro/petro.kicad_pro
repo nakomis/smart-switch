@@ -104,6 +104,13 @@
         "via_drill": 0.3
       },
       {
+        "name": "BUS",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
         "name": "Mains16A",
         "clearance": 0.15,
         "track_width": 4.5,
@@ -185,11 +192,11 @@
         "pattern": "SW"
       },
       {
-        "netclass": "PSU",
+        "netclass": "BUS",
         "pattern": "VBULK"
       },
       {
-        "netclass": "PSU",
+        "netclass": "BUS",
         "pattern": "VBULK1"
       },
       {
