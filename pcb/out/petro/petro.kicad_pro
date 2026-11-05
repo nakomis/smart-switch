@@ -1,0 +1,224 @@
+{
+  "meta": {
+    "filename": "petro.kicad_pro",
+    "version": 1
+  },
+  "board": {
+    "design_settings": {
+      "rules": {
+        "min_clearance": 0.15,
+        "min_track_width": 0.15,
+        "min_via_diameter": 0.5,
+        "min_through_hole_diameter": 0.3,
+        "min_copper_edge_clearance": 0.3
+      }
+    }
+  },
+  "net_settings": {
+    "meta": {
+      "version": 3
+    },
+    "classes": [
+      {
+        "name": "Default",
+        "clearance": 0.15,
+        "track_width": 0.15,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "Power",
+        "clearance": 0.2,
+        "track_width": 0.3,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "LINE",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "LIVE",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "PSU",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "NEUTRAL",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "LOAD",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "DIV1",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "DIV2",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "DIV3",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "DIV4",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "SWNODE",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "BUS",
+        "clearance": 0.15,
+        "track_width": 1.0,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "Mains16A",
+        "clearance": 0.15,
+        "track_width": 4.5,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
+      }
+    ],
+    "netclass_patterns": [
+      {
+        "netclass": "Power",
+        "pattern": "+*"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "GND"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "VBUS*"
+      },
+      {
+        "netclass": "SWNODE",
+        "pattern": "BP"
+      },
+      {
+        "netclass": "DIV1",
+        "pattern": "DIV1"
+      },
+      {
+        "netclass": "DIV2",
+        "pattern": "DIV2"
+      },
+      {
+        "netclass": "DIV3",
+        "pattern": "DIV3"
+      },
+      {
+        "netclass": "DIV4",
+        "pattern": "DIV4"
+      },
+      {
+        "netclass": "SWNODE",
+        "pattern": "FB"
+      },
+      {
+        "netclass": "SWNODE",
+        "pattern": "FBH"
+      },
+      {
+        "netclass": "LIVE",
+        "pattern": "L_F"
+      },
+      {
+        "netclass": "LINE",
+        "pattern": "L_IN"
+      },
+      {
+        "netclass": "LOAD",
+        "pattern": "L_OUT"
+      },
+      {
+        "netclass": "PSU",
+        "pattern": "L_PSU"
+      },
+      {
+        "netclass": "PSU",
+        "pattern": "L_RF"
+      },
+      {
+        "netclass": "NEUTRAL",
+        "pattern": "N_IN"
+      },
+      {
+        "netclass": "NEUTRAL",
+        "pattern": "N_OUT"
+      },
+      {
+        "netclass": "SWNODE",
+        "pattern": "SW"
+      },
+      {
+        "netclass": "BUS",
+        "pattern": "VBULK"
+      },
+      {
+        "netclass": "BUS",
+        "pattern": "VBULK1"
+      },
+      {
+        "netclass": "Mains16A",
+        "pattern": "L_F"
+      },
+      {
+        "netclass": "Mains16A",
+        "pattern": "L_IN"
+      },
+      {
+        "netclass": "Mains16A",
+        "pattern": "L_OUT"
+      },
+      {
+        "netclass": "Mains16A",
+        "pattern": "N_IN"
+      },
+      {
+        "netclass": "Mains16A",
+        "pattern": "N_OUT"
+      }
+    ]
+  }
+}

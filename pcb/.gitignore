@@ -1,0 +1,20 @@
+.venv/
+.pytest_cache/
+__pycache__/
+out/tmp/
+out/*/tmp/
+out/*/gerbers/
+# placement scratch (board.sketch, and the unrouted board DRC'd while placing)
+out/sketch.png
+out/placed/
+# development builds (build.py --out out/dev): out/petro/ is the ordered one
+out/dev/
+*.dsn
+*.ses
+*.kicad_prl
+# Freerouting 2.5.0 (64 MB): copy it in, see README.md
+freerouting/
+!tests/data/*.ses
+# 3D models and the board STEP: fetched/written by build.py --step
+footprints/lcsc.3dshapes/
+out/*/*.step

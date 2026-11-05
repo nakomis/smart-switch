@@ -1,0 +1,180 @@
+"""Petro's placement, revision B (non-isolated): every part on the board and clear of the others,
+every pair of pads on different parts as far apart as the working-voltage matrix needs (the rest
+at neutral), all copper 3 mm from the mounting holes, the antenna, the LED ring and F1's clips."""
+import math
+
+import pytest
+
+from board import petro_board as pb
+from board.parts import ESP32C6_ANTENNA as ESP32_ANTENNA
+from board.placement import rotate
+from board.rules import MAINS_EDGE
+
+C = pb.build_petro()
+P = pb.place_petro(C)
+R = pb.rules()
+
+# SMD parts low enough to sit under F1's fuse body (it is held about 4 mm up by its clips).
+LOW = {"C33N", "C100N", "C1U", "C10U", "R1K", "R10K", "R470", "R390K", "C100N6"}
+
+
+def _box(ref):
+    x, y, rot = P.at[ref]
+    b = C.instances[ref].part.body
+    pts = [rotate(px, py, rot) for px in (b[0], b[2]) for py in (b[1], b[3])]
+    return (x + min(p[0] for p in pts), y + min(p[1] for p in pts),
+            x + max(p[0] for p in pts), y + max(p[1] for p in pts))
+
+
+def _pads(ref):
+    """(net, box) of every copper pad of ref, in board coordinates."""
+    x, y, rot = P.at[ref]
+    out = []
+    for pad in C.instances[ref].part.footprint.pads:
+        if pad.kind == "np_thru_hole":
+            continue
+        corners = [rotate(px, py, rot) for px in (pad.x - pad.w / 2, pad.x + pad.w / 2)
+                   for py in (pad.y - pad.h / 2, pad.y + pad.h / 2)]
+        out.append((C.net_of(ref, pad.number) if pad.number else None,
+                    (x + min(c[0] for c in corners), y + min(c[1] for c in corners),
+                     x + max(c[0] for c in corners), y + max(c[1] for c in corners))))
+    return out
+
+
+def _overlap(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _gap(a, b):
+    dx = max(a[0] - b[2], 0.0, b[0] - a[2])
+    dy = max(a[1] - b[3], 0.0, b[1] - a[3])
+    return math.hypot(dx, dy)
+
+
+def _group(net):
+    return pb.GROUPS.get(net, R.rest) if net else R.rest
+
+
+def test_every_part_is_placed():
+    assert set(P.at) == set(C.instances)
+
+
+def test_board_is_120_by_80_with_rounded_corners():
+    assert P.outline == (0.0, 0.0, 120.0, 80.0)
+    assert pb.CORNER_R == 4.0 and pb.HOLES["H1"] == (pb.CORNER_R, pb.CORNER_R)     # each arc centred on its hole
+
+
+def test_bodies_do_not_overlap():
+    refs = sorted(C.instances)
+    bad = [(a, b) for i, a in enumerate(refs) for b in refs[i + 1:] if _overlap(_box(a), _box(b))]
+    assert bad == []
+
+
+def test_only_low_parts_sit_under_the_fuse():
+    f = pb.fuse_box()
+    under = [r for r in C.instances if _overlap(_box(r), f) and not r.startswith("XF")]
+    assert all(C.instances[r].part.key in LOW for r in under), under
+
+
+def test_everything_is_on_the_board_except_the_antenna():
+    for ref in C.instances:
+        b = _box(ref)
+        if ref == "U1":
+            b = (b[0], b[1], b[2], b[3] - (ESP32_ANTENNA[3] - ESP32_ANTENNA[1]))
+        assert b[0] >= -1e-6 and b[1] >= -1e-6 and b[2] <= pb.W + 1e-6 and b[3] <= pb.H + 1e-6, (ref, b)
+
+
+def test_the_antenna_overhangs_the_bottom_edge():
+    x, y, rot = P.at["U1"]
+    assert rot == 180
+    assert y - ESP32_ANTENNA[3] == pytest.approx(pb.H, abs=0.01)
+
+
+def test_pads_of_different_parts_keep_the_matrix_spacing():
+    """Every pair of pads on different parts, on nets of different potential groups, at least
+    the creepage for their working voltage apart (the rest of the nets at neutral)."""
+    pads = [(ref, net, box) for ref in C.instances for net, box in _pads(ref)]
+    bad = []
+    for i, (ra, na, ba) in enumerate(pads):
+        ga = _group(na)
+        for rb, nb, bb in pads[i + 1:]:
+            if ra == rb or na == nb:
+                continue
+            gb = _group(nb)
+            need = R.spacing(ga, gb)
+            if need and _gap(ba, bb) < need - 1e-6:
+                bad.append((ra, na, rb, nb, round(_gap(ba, bb), 2), need))
+    assert bad == []
+
+
+@pytest.mark.parametrize("h", sorted(pb.HOLES) + sorted(pb.TOOLING))
+def test_all_copper_keeps_3mm_from_the_mounting_and_tooling_holes(h):
+    hx, hy = {**pb.HOLES, **pb.TOOLING}[h]
+    tooling = h in pb.TOOLING
+    assert C.instances[h].part.key == ("TOOLING" if tooling else "MHN")
+    r = (pb.TOOLING_DRILL if tooling else 3.2) / 2 + MAINS_EDGE
+    for ref in C.instances:
+        if ref == h:
+            continue
+        for net, b in _pads(ref):
+            d = math.hypot(max(b[0] - hx, 0, hx - b[2]), max(b[1] - hy, 0, hy - b[3]))
+            assert d >= r - 1e-6, (h, ref, net, round(d, 2))
+
+
+def test_mains_pads_keep_3mm_from_the_edges():
+    for ref in C.instances:
+        for net, b in _pads(ref):
+            if net in pb.GROUPS:
+                assert min(b[0], b[1], pb.W - b[2], pb.H - b[3]) >= MAINS_EDGE - 1e-6, (ref, net)
+
+
+def test_f1_clips_hold_a_32mm_fuse():
+    a, b = P.at["XF1"], P.at["XF2"]
+    assert b[0] - a[0] == pytest.approx(pb.F1_CLIP_PITCH) and a[1] == b[1]
+
+
+def test_led_ring_is_clear():
+    ring = pb.led_ring()
+    for ref in C.instances:
+        if ref != "D1":
+            assert not _overlap(_box(ref), ring), ref
+
+
+def test_the_shunt_sits_in_the_neutral_strip_with_n_in_west():
+    (x1, _), (x2, _) = pb.pad_xy(C, P, "RS1", "1"), pb.pad_xy(C, P, "RS1", "4")
+    assert C.net_of("RS1", "1") == "N_IN" and x1 < x2
+    assert P.at["RS1"][1] < 10
+
+
+def test_every_test_hole_is_on_a_low_voltage_net():
+    for ref, net in pb.TEST_HOLES.items():
+        assert net not in pb.GROUPS
+
+
+# --- J3 ----------------------------------------------------------------------------------------------
+
+def test_j3s_pull_resistors_sit_above_their_pins():
+    for ref, pin in (("R26", "7"), ("R27", "8"), ("R28", "9")):
+        assert P.at[ref][0] == pytest.approx(pb.pad_xy(C, P, "J3", pin)[0]), ref
+        assert _box(ref)[3] < _box("J3")[1], ref
+
+
+def test_tooling_holes_sit_in_the_low_voltage_area_far_from_the_mains_pours():
+    """JLCPCB would drill its own in the corners, two of which are mains; ours keep clear."""
+    for h, (x, y) in pb.TOOLING.items():
+        assert pb._in_poly(x, y, pb.lv_area()), h
+        for net, poly in pb.MAINS_POLYS.items():
+            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+            d = math.hypot(max(min(xs) - x, 0, x - max(xs)), max(min(ys) - y, 0, y - max(ys)))
+            assert d >= 6.0, (h, net, round(d, 2))
+    (ax, ay), (bx, by) = pb.TOOLING.values()
+    assert math.hypot(ax - bx, ay - by) > 100            # as far apart as the board allows
+
+
+def test_the_mov_sits_across_live_and_the_incoming_neutral_off_the_shunt():
+    """RV1's leads land on the L_F pour and the N_IN pour (a surge returns to the supply without
+    crossing the shunt), and the shunt sits east of it, in the neutral strip."""
+    (lx, ly), (nx, ny) = pb.pad_xy(C, P, "RV1", "1"), pb.pad_xy(C, P, "RV1", "2")
+    assert pb._in_poly(lx, ly, pb.MAINS_POLYS["L_F"]) and pb._in_poly(nx, ny, pb.MAINS_POLYS["N_IN"])
+    assert pb._in_poly(nx, ny, pb.MAINS_POLYS_BCU["N_IN"])
+    assert P.at["RS1"][0] > nx + 10
