@@ -479,7 +479,7 @@ static void show_led(int64_t now, ctl_mode mode, bool relay, bool tripped)
             .ota = ota_busy(),
             .provisioned = provisioned,
             .wifi_up = net_wifi_up(),
-            .mqtt_up = net_mqtt_connected(),
+            .mqtt_up = net_subscribed(),
             .mode = mode,
             .relay = relay,
         };
@@ -515,6 +515,7 @@ static bool step(void)
     bool relay = apply_locked();
     ctl_mode mode = ctl.mode;
     bool tripped = ctl.trip != CTL_TRIP_NONE;
+    bool cycling = ctl.cycle.active;
     give();
 
     if (!have_stored_mode || mode != stored_mode)
@@ -527,7 +528,8 @@ static bool step(void)
     }
     show_led(now, mode, relay, tripped);
 
-    bool changed = !first && (mode != last_mode || relay != last_relay || tripped != last_trip);
+    // A relay cycle's own switching isn't a change (500 cycles would be 1000 statuses); its end is.
+    bool changed = !first && (mode != last_mode || (relay != last_relay && !cycling) || tripped != last_trip);
     if (changed)
         ESP_LOGI(TAG, "mode %s, relay %s%s", ctl_mode_name(mode), relay ? "on" : "off", tripped ? ", tripped" : "");
     first = false;
