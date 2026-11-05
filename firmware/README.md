@@ -55,6 +55,16 @@ Release it before resetting unless that's what you want.
 Bump `esp32c6/version.txt` with every firmware change. `sdkconfig`, `build/` and
 `managed_components/` are not committed; `sdkconfig.defaults` and `dependencies.lock` are.
 
+### Publishing (CI, PETRO-9)
+
+A PR that touches `firmware/` fails if `version.txt` is already in the sandbox bucket. Its merge
+takes the deployment tracker's next version for project `petro` (patch, or `--bump-minor` /
+`--bump-major` alone on a line of the PR description), or `version.txt` if that's ahead, builds the
+image stamped with it, and `scripts/ci-publish.sh` puts it at
+`s3://nakomis-firmware-sandbox/petro/<x.y.z>/firmware.bin`, where Fleet offers it. Once Martin
+approves the `production` environment, the same bytes go to `nakomis-firmware-prod`. Each publish is
+recorded in the tracker. A published version is never replaced.
+
 ## Provisioning
 
 Credentials live only in the `prov` NVS partition (0x12000, 24 KB), namespace `petro`, written by
