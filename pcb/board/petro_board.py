@@ -756,11 +756,37 @@ def kelvin_route(c, p):
     return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA)]
 
 
+ISO_DROP_GAP = 0.45        # mm from a ground pin's end to its via's copper (Freerouting's hole
+                           # clearance: 0.26 mm from the 0.3 mm hole to the pin)
+
+
+def isolator_drops(c, p):
+    """(tracks, vias): a via past the outer end of each isolator ground pin, on its own side
+    (board side up, island side down), joined to the pin by a short track. The signal tracks to
+    the neighbouring pins otherwise fence the pin's bit of pour off, with no via under it."""
+    from board.rules import _pad_box
+    size, drill = KELVIN_VIA
+    tracks, vias = [], []
+    for ref in BARRIERS:
+        for pad in c.instances[ref].part.footprint.pads:
+            net = c.net_of(ref, pad.number)
+            if net not in ("GND", "ISO_GND"):
+                continue
+            x, y = pad_xy(c, p, ref, pad.number)
+            x0, y0, x1, y1 = _pad_box(p, ref, pad)
+            vy = y1 + ISO_DROP_GAP + size / 2 if net == "ISO_GND" else y0 - ISO_DROP_GAP - size / 2
+            vy = round(vy, 3)
+            tracks.append(Track(net, "F.Cu", x, y, x, vy, 0.25))
+            vias.append(Via(net, x, vy, size, drill))
+    return tracks, vias
+
+
 def hand_wiring(c, p):
     """(tracks, vias) routed by hand: the divider chain, the supply's high-voltage nets, the
-    Kelvin pair."""
+    Kelvin pair, the isolators' ground drops."""
     kt, kv = kelvin_route(c, p)
-    return divider_tracks(c, p) + supply_tracks(c, p) + kt, kv
+    it, iv = isolator_drops(c, p)
+    return divider_tracks(c, p) + supply_tracks(c, p) + kt + it, kv + iv
 
 
 # --- the low-voltage router's area -----------------------------------------------------------------

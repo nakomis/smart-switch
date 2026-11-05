@@ -100,6 +100,9 @@ def test_the_kelvin_pair_leaves_the_shunt_through_vias_beside_its_sense_pads(han
 
 
 def test_the_low_voltage_area_keeps_off_every_hand_track_of_another_group(hand):
+    """(Bar the stretch of an isolator drop that lies on its own pad: the slot covers that.)"""
+    from board.rules import _pad_box
+    iso_pads = [_pad_box(P, ref, q) for ref in pb.BARRIERS for q in C.instances[ref].part.footprint.pads]
     tracks, _ = hand
     for t in tracks:
         need = R.spacing(_group(t.net), R.rest)
@@ -108,6 +111,8 @@ def test_the_low_voltage_area_keeps_off_every_hand_track_of_another_group(hand):
         for i in range(21):
             x = t.x1 + (t.x2 - t.x1) * i / 20
             y = t.y1 + (t.y2 - t.y1) * i / 20
+            if any(o[0] <= x <= o[2] and o[1] <= y <= o[3] for o in iso_pads):
+                continue
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7)):
                 r = t.width / 2 + need - 0.05
                 if pb.in_lv(x + dx * r, y + dy * r):
@@ -179,6 +184,31 @@ def test_where_the_low_voltage_router_may_go_keeps_8mm_from_the_island():
             d = math.hypot(max(min(xs) - x, 0, x - max(xs)), max(min(ys) - y, 0, y - max(ys)))
             if d < 8.0 - 0.05 and not any(b[0] <= x <= b[2] and b[1] <= y <= b[3] for b in own):
                 assert not pb.in_lv(x, y, keep), (round(x, 2), round(y, 2), round(d, 2))
+
+
+def test_every_isolator_ground_pin_has_a_via_past_its_end():
+    """So the router has to join it to its ground: the signal tracks to the neighbouring pins
+    otherwise fence a pin's bit of pour off with no via under it."""
+    from board.rules import _pad_box
+    tracks, vias = pb.isolator_drops(C, P)
+    for ref in pb.BARRIERS:
+        for pad in C.instances[ref].part.footprint.pads:
+            net = C.net_of(ref, pad.number)
+            if net not in ("GND", "ISO_GND"):
+                continue
+            b = _pad_box(P, ref, pad)
+            mine = [v for v in vias if v.net == net and b[0] <= v.x <= b[2]]
+            assert len(mine) == 1, (ref, pad.number)
+            v = mine[0]
+            gap = min(abs(v.y - b[1]), abs(v.y - b[3])) - v.size / 2
+            assert 0.4 <= gap <= 1.0 and not (b[1] <= v.y <= b[3]), (ref, pad.number, gap)   # past its end
+            outward = (v.y > b[3]) == (net == "ISO_GND")            # island side down, board side up
+            assert outward, (ref, pad.number)
+            inside = pb.in_island if net == "ISO_GND" else pb.in_lv
+            keep = pb.island_keepouts(C, P) if net == "ISO_GND" else pb.lv_keepouts(C, P)
+            assert inside(v.x, v.y, keep), (ref, pad.number)
+            assert any(t.net == net and {(t.x1, t.y1), (t.x2, t.y2)} == {pb.pad_xy(C, P, ref, pad.number), (v.x, v.y)}
+                       for t in tracks), (ref, pad.number)
 
 
 def test_each_routers_area_holds_its_isolator_pads_whole():
