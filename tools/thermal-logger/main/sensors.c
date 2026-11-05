@@ -52,7 +52,7 @@ static bool mlx_init(void)
         ESP_LOGE(TAG, "MLX90640 mode or refresh rate not accepted");
         return false;
     }
-    ESP_LOGI(TAG, "MLX90640 ready: chess mode, 2 Hz, emissivity 0.%02d", CONFIG_ZATT_EMISSIVITY_PERCENT);
+    ESP_LOGI(TAG, "MLX90640 ready: chess mode, 2 Hz, emissivity %d%%", CONFIG_ZATT_EMISSIVITY_PERCENT);
     return true;
 }
 
@@ -78,7 +78,8 @@ static void sensors_task(void *arg)
         }
         float ta = NAN;
         bool both = true;
-        for (int i = 0; i < 2; i++)
+        unsigned seen = 0;  // bit per subpage read
+        for (int tries = 0; seen != 3 && tries < 6; tries++)
         {
             int sp = MLX90640_GetFrameData(MLX_ADDR, frame_data);
             if (sp < 0)
@@ -86,9 +87,17 @@ static void sensors_task(void *arg)
                 both = false;
                 break;
             }
+            if (sp > 1)
+                continue;
+            seen |= 1u << sp;
             ta = MLX90640_GetTa(frame_data, &params);
             float tr = ta - CONFIG_ZATT_REFLECTED_SHIFT_C;
             MLX90640_CalculateTo(frame_data, &params, CONFIG_ZATT_EMISSIVITY_PERCENT / 100.0f, tr, to);
+        }
+        if (both && seen != 3)
+            both = false;  // never saw both subpages: don't publish a half frame
+        if (both)
+        {
             MLX90640_BadPixelsCorrection(params.brokenPixels, to, MODE_CHESS, &params);
             MLX90640_BadPixelsCorrection(params.outlierPixels, to, MODE_CHESS, &params);
         }

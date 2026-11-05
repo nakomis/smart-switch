@@ -20,6 +20,7 @@
 static const char *TAG = "metrics";
 
 #define TIMEOUT_MS 4000
+#define MAX_FRAME_AGE_S 3.0
 
 static char url[160];
 static char auth[8 + 4 * ((33 + 65 + 2) / 3) + 1];
@@ -53,7 +54,11 @@ static int build(void)
     prom_init(&p, body, sizeof(body));
     sensors_snapshot(&snap);
     zatt_frame_stats_t fs;
-    if (snap.frames > 0 && zatt_frame_stats(snap.to, &fs))
+    double age = snap.frames > 0 ? (esp_timer_get_time() - snap.frame_us) / 1e6 : NAN;
+    if (snap.frames > 0)
+        prom_gauge(&p, "zatt_frame_age_seconds", NULL, NULL, age);
+    // A stalled sensor must not look live: frame-derived gauges are skipped when the frame is stale.
+    if (snap.frames > 0 && age < MAX_FRAME_AGE_S && zatt_frame_stats(snap.to, &fs))
     {
         prom_gauge(&p, "zatt_frame_max_celsius", NULL, NULL, fs.max);
         prom_gauge(&p, "zatt_frame_min_celsius", NULL, NULL, fs.min);

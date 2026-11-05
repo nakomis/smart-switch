@@ -41,10 +41,14 @@ static void put_num(char **p, char *end, float v, const char *fmt)
 static esp_err_t get_frame(httpd_req_t *req)
 {
     size_t cap = 9000;
-    char *out = malloc(cap + sizeof(zatt_snapshot_t));
-    if (out == NULL)
+    char *out = malloc(cap);
+    zatt_snapshot_t *s = malloc(sizeof(*s));
+    if (out == NULL || s == NULL)
+    {
+        free(out);
+        free(s);
         return httpd_resp_send_500(req);
-    zatt_snapshot_t *s = (zatt_snapshot_t *)(out + cap);
+    }
     sensors_snapshot(s);
     char *p = out, *end = out + cap;
     p += snprintf(p, end - p, "{\"w\":%d,\"h\":%d,\"frames\":%u,\"up\":%lld,\"ta\":", ZATT_W, ZATT_H,
@@ -71,6 +75,7 @@ static esp_err_t get_frame(httpd_req_t *req)
         put_num(&p, end, s->frames ? s->to[i] : NAN, "%.1f");
     }
     p += snprintf(p, end - p, "]}");
+    free(s);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     esp_err_t err = httpd_resp_send(req, out, p - out);
@@ -87,9 +92,11 @@ static bool token_ok(httpd_req_t *req)
         return false;
     const char *given = h + 7;
     size_t n = strlen(token);
-    unsigned diff = strlen(given) ^ n;  // constant-time over the token's length
+    if (strlen(given) != n)
+        return false;
+    volatile unsigned char diff = 0;  // constant-time over the fixed length
     for (size_t i = 0; i < n; i++)
-        diff |= (unsigned char)given[i] ^ (unsigned char)token[i];
+        diff |= (unsigned char)(given[i] ^ token[i]);
     return diff == 0;
 }
 
@@ -97,12 +104,14 @@ static esp_err_t post_spots(httpd_req_t *req)
 {
     if (!token_ok(req))
     {
+        httpd_resp_set_hdr(req, "Connection", "close");
         httpd_resp_set_status(req, token[0] ? "401 Unauthorized" : "403 Forbidden");
         return httpd_resp_sendstr(req, "token required\n");
     }
     char buf[512];
     if (req->content_len == 0 || req->content_len >= sizeof(buf))
     {
+        httpd_resp_set_hdr(req, "Connection", "close");
         httpd_resp_set_status(req, "400 Bad Request");
         return httpd_resp_sendstr(req, "bad body size\n");
     }
@@ -117,7 +126,7 @@ static esp_err_t post_spots(httpd_req_t *req)
     buf[got] = 0;
 
     // Validate everything first, then apply, so a bad request changes nothing.
-    cJSON *root = cJSON_Parse(buf);
+    cJSON *root = cJSON_ParseWithOpts(buf, NULL, 1);
     zatt_rect_t next[ZATT_NSPOTS];
     bool set[ZATT_NSPOTS] = {false};
     bool ok = cJSON_IsObject(root);
@@ -137,7 +146,7 @@ static esp_err_t post_spots(httpd_req_t *req)
             for (int k = 0; k < 4; k++)
             {
                 cJSON *n = cJSON_GetArrayItem(it, k);
-                if (!cJSON_IsNumber(n) || n->valueint < 0 || n->valueint > 127)
+                if (!cJSON_IsNumber(n) || n->valuedouble != (double)n->valueint || n->valueint < 0 || n->valueint > 127)
                     ok = false;
                 else
                     v[k] = n->valueint;
@@ -155,6 +164,7 @@ static esp_err_t post_spots(httpd_req_t *req)
     cJSON_Delete(root);
     if (!ok)
     {
+        httpd_resp_set_hdr(req, "Connection", "close");
         httpd_resp_set_status(req, "400 Bad Request");
         return httpd_resp_sendstr(req, "expected {\"T1\":[x0,y0,x1,y1] or null, ...}, inside 32x24\n");
     }

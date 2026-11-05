@@ -41,7 +41,7 @@ void wifi_start(const prov_t *p)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL));
     wifi_config_t cfg = {0};
     strlcpy((char *)cfg.sta.ssid, p->wifi_ssid, sizeof(cfg.sta.ssid));
-    strlcpy((char *)cfg.sta.password, p->wifi_pass, sizeof(cfg.sta.password));
+    memcpy(cfg.sta.password, p->wifi_pass, strnlen(p->wifi_pass, sizeof(cfg.sta.password)));  // 64 hex chars = a raw PSK
     cfg.sta.threshold.authmode = p->wifi_pass[0] ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));

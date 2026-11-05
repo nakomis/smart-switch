@@ -52,6 +52,7 @@ mkdir -p "$dir"
 if [ -z "${IDF_PATH:-}" ]; then
     for c in "$HOME/esp/v5.5/esp-idf" "$HOME/esp/esp-idf"; do [ -f "$c/export.sh" ] && IDF_PATH=$c && break; done
 fi
+[ -f "${IDF_PATH:-}/export.sh" ] || { echo "no ESP-IDF found: set IDF_PATH to an ESP-IDF 5.5 checkout" >&2; exit 1; }
 # shellcheck disable=SC1091
 . "$IDF_PATH/export.sh" > /dev/null 2>&1   # for its Python (the NVS partition generator) and esptool
 
@@ -95,7 +96,7 @@ python3 - "$dir" <<'PY'
 import csv, os, sys
 d = sys.argv[1]
 e = os.environ
-limits = {"ZATT_SSID": 32, "ZATT_WIFI_PASS": 63, "ZATT_MURL": 127, "ZATT_MUSER": 32, "ZATT_MPASS": 64, "ZATT_TOKEN": 64}
+limits = {"ZATT_SSID": 32, "ZATT_WIFI_PASS": 64, "ZATT_MURL": 127, "ZATT_MUSER": 32, "ZATT_MPASS": 64, "ZATT_TOKEN": 64}
 for k, n in limits.items():
     if len(e[k].encode()) > n:
         sys.exit(f"{k} too long for prov ({n} bytes)")

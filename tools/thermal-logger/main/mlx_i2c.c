@@ -4,6 +4,8 @@
 
 #include "MLX90640_I2C_Driver.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 #include "zatt.h"
 
@@ -37,6 +39,8 @@ int MLX90640_I2CRead(uint8_t slaveAddr, uint16_t startAddress, uint16_t nMemAddr
     (void)slaveAddr;  // one MLX90640 on the bus, at 0x33
     if (dev == NULL)
         return -1;
+    if (nMemAddressRead == 1 && startAddress == 0x8000)
+        vTaskDelay(pdMS_TO_TICKS(5));  // the API polls the status register flat out; don't hammer the bus
     uint8_t cmd[2] = {startAddress >> 8, startAddress & 0xFF};
     size_t n = (size_t)nMemAddressRead * 2;
     uint8_t *raw = malloc(n);
