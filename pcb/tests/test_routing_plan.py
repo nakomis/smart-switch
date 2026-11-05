@@ -254,12 +254,34 @@ def test_every_isolator_ground_pin_has_a_via_past_its_end():
 def test_a_b_cu_ground_spine_joins_the_isolators_board_side_ground_vias():
     """Fixed before routing, so no signal track can wall the isolators' ground off."""
     tracks, vias = pb.isolator_drops(C, P)
-    gv = sorted((v for v in vias if v.net == "GND"), key=lambda v: v.x)
+    gv = [v for v in vias if v.net == "GND"]
     spine = [t for t in tracks if t.net == "GND" and t.layer == "B.Cu"]
     assert spine
     pts = {(round(x, 3), round(y, 3)) for t in spine for x, y in ((t.x1, t.y1), (t.x2, t.y2))}
     assert all((round(v.x, 3), round(v.y, 3)) in pts for v in gv)
-    assert len(spine) == len(gv) - 1                                   # a chain, end to end
+    # one connected piece
+    par = {pt: pt for pt in pts}
+
+    def f(a):
+        while par[a] != a:
+            a = par[a]
+        return a
+    for t in spine:
+        par[f((round(t.x1, 3), round(t.y1, 3)))] = f((round(t.x2, 3), round(t.y2, 3)))
+    assert len({f(pt) for pt in pts}) == 1
+
+
+def test_the_isolators_board_side_decoupling_grounds_drop_to_the_spine():
+    """C36's ground was left in a scrap of pour: each board-side decoupling capacitor's GND pad
+    has a via past its end, on the spine."""
+    from board.rules import _pad_box
+    tracks, vias = pb.isolator_drops(C, P)
+    for ref in pb.ISO_DECOUPLING:
+        pad = next(q for q in C.instances[ref].part.footprint.pads if C.net_of(ref, q.number) == "GND")
+        b = _pad_box(P, ref, pad)
+        mine = [v for v in vias if v.net == "GND" and b[0] <= v.x <= b[2] and v.y < b[1]]
+        assert len(mine) == 1, ref
+        assert b[1] - (mine[0].y + mine[0].size / 2) >= 0.4, ref
 
 
 def test_each_routers_area_holds_its_isolator_pads_whole():

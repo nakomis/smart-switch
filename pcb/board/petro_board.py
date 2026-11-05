@@ -470,8 +470,8 @@ AT = {
     "R26": (14.1, 57.6, 90), "C34": (24.0, 57.6, 90), "C36": (37.2, 57.6, 90),
     "R28": (32.5, 57.6, 90), "R30": (34.1, 57.6, 90),
     # the module, bottom middle (antenna past the bottom edge), its supply and EN at its right
-    "U1": (65.0, H - U1_EDGE, 180),
-    "C21": (75.6, 82.6, 90), "C22": (77.2, 82.6, 90), "R19": (75.6, 79.0, 90), "C23": (77.2, 79.0, 90),
+    "U1": (66.0, H-U1_EDGE, 180),
+    "C21": (76.6, 82.6, 90), "C22": (78.2, 82.6, 90), "R19": (76.6, 79.0, 90), "C23": (78.2, 79.0, 90),
     # 3.3 V, the debug pads, button and LED: the open ground above the island
     "U2": (49.0, 53.0, 0), "C18": (45.6, 53.0, 90), "C19": (52.4, 53.0, 90), "C20": (54.0, 53.0, 90),
     "TP1": (42.4, 46.5, 0),
@@ -760,6 +760,7 @@ def kelvin_route(c, p):
     return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA)]
 
 
+ISO_DECOUPLING = ("C26", "C27", "C28", "C29", "C34", "C36")     # the isolators' board-side caps
 ISO_DROP_GAP = 0.45        # mm from a ground pin's end to its via's copper (Freerouting's hole
                            # clearance: 0.26 mm from the 0.3 mm hole to the pin)
 
@@ -784,8 +785,21 @@ def isolator_drops(c, p):
             vias.append(Via(net, x, vy, size, drill))
     # The board side's vias, joined end to end on B.Cu: a spine the router must cross on F.Cu, so
     # no signal track can wall the isolators' ground off (it did, twice, through the pour).
-    gv = sorted((v for v in vias if v.net == "GND"), key=lambda v: v.x)
-    tracks += [Track("GND", "B.Cu", a.x, a.y, b.x, b.y, 0.4) for a, b in zip(gv, gv[1:])]
+    nodes = sorted(((v.x, v.y) for v in vias if v.net == "GND"))
+    spine_y = sum(y for _, y in nodes) / len(nodes)
+    # Their decoupling capacitors' GND pads (the end away from the isolators): a via past that end,
+    # dropping on B.Cu to a node on the spine (C36's ground was left in a scrap of pour).
+    for ref in ISO_DECOUPLING:
+        pad = next(q for q in c.instances[ref].part.footprint.pads if c.net_of(ref, q.number) == "GND")
+        x, y = pad_xy(c, p, ref, pad.number)
+        x0, y0, x1, y1 = _pad_box(p, ref, pad)
+        vy = round(y0 - ISO_DROP_GAP - size / 2, 3)
+        tracks.append(Track("GND", "F.Cu", x, y, x, vy, 0.25))
+        vias.append(Via("GND", x, vy, size, drill))
+        tracks.append(Track("GND", "B.Cu", x, vy, x, round(spine_y, 3), 0.4))
+        nodes.append((x, round(spine_y, 3)))
+    nodes.sort()
+    tracks += [Track("GND", "B.Cu", *a, *b, 0.4) for a, b in zip(nodes, nodes[1:])]
     return tracks, vias
 
 
