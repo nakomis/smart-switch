@@ -20,8 +20,9 @@ import sys
 
 NAMESPACE = "petro"  # PROV_NAMESPACE in prov.h
 
-# Every key prov.c's PROV_KEYS lists, in its order, with the most bytes each may hold here. The
-# firmware's buffers must be at least this plus one for the NUL. The NVS limit for a string is 4000.
+# Every key prov.c's PROV_KEYS lists, in its order, with the most bytes each may hold here (cert and
+# key: under 4000, NVS's limit for a string including its NUL). The firmware's buffers must be at
+# least this plus one for the NUL.
 LIMITS = {
     "wifi_ssid": 32,      # ESP-IDF's wifi_config_t
     "wifi_pass": 63,
@@ -60,7 +61,8 @@ def rows_for(d, endpoint, thing, env):
     for key, path in files.items():
         if not os.path.isfile(path) or os.path.getsize(path) == 0:
             raise ValueError(f"no {os.path.basename(path)} in {d}")
-        if os.path.getsize(path) > LIMITS[key]:
+        # NVS stores the string with its NUL, and 4000 bytes is its limit for one.
+        if os.path.getsize(path) >= LIMITS[key]:
             raise ValueError(f"{os.path.basename(path)} is longer than prov allows ({LIMITS[key]} bytes)")
 
     rows = [(NAMESPACE, "namespace", "", "")]

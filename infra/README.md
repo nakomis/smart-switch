@@ -17,7 +17,10 @@ GithubCiStack (the CI role, and publishing firmware to Fleet's bucket) arrives w
 
 `devices.json` lists each environment's units (prod `b1` to `b5`, the five rev B boards; sandbox `b1`
 for the bench). It's committed, so every deploy declares every unit: **one left out of a deploy has
-its Thing deleted**. Add a unit there, deploy, then provision it (`firmware/README.md`, Provisioning).
+its Thing deleted**, but not its certificate, which stays active with the
+policy attached (it can't connect without its Thing, but it's still a live credential). Before
+removing a unit, delete its certificates by hand: `detach-policy`, `detach-thing-principal`,
+`update-certificate --new-status INACTIVE`, `delete-certificate`. Add a unit there, deploy, then provision it (`firmware/README.md`, Provisioning).
 
 Each Thing carries the attributes Fleet (nakomis-fleet) reads: `project=petro`,
 `deviceType=smart-switch`, `capabilities=ota` (plain OTA; `ota-signed` when PETRO-9 signs builds).

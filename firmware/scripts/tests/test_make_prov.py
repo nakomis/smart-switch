@@ -102,7 +102,7 @@ def test_rejects_missing_or_huge_key(certs):
     (certs / "device.pem.key").write_text("")
     with pytest.raises(ValueError, match="no device.pem.key"):
         make_prov.rows_for(str(certs), ENDPOINT, "petro-prod-b1", ENV)
-    (certs / "device.pem.key").write_text("x" * 4001)
+    (certs / "device.pem.key").write_text("x" * 4000)  # no room left for the NUL
     with pytest.raises(ValueError, match="longer"):
         make_prov.rows_for(str(certs), ENDPOINT, "petro-prod-b1", ENV)
 

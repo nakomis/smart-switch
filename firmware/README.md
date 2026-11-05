@@ -96,7 +96,7 @@ Each run, safe to repeat:
 | `wifi_ssid`, `wifi_pass` | The house Wi-Fi | 32, 63 |
 | `endpoint` | IoT Core's ATS data endpoint | 127 |
 | `thing` | The Thing's name, also the MQTT client id and the vmauth user | 128 |
-| `cert`, `key` | The device certificate and private key, PEM | 4000 each |
+| `cert`, `key` | The device certificate and private key, PEM | 3999 each (NVS's 4000 with the NUL) |
 | `metrics_url` | vmauth's **base** URL, `http://172.29.0.33:8427` (`METRICS_URL`, or `none`): the firmware appends the write path, as tinycrypt does (`/write`, InfluxDB line protocol) | 127 |
 | `metrics_user`, `metrics_pass` | The vmauth user (the Thing's name) and its password | 32, 64 |
 

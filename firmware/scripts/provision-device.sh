@@ -87,18 +87,40 @@ prov_size=$(awk -F', *' '$1 == "prov" { print $5 }' "${fw}/esp32c6/partitions.cs
 echo "provisioning ${thing} in ${env} (profile ${AWS_PROFILE})"
 aws iot describe-thing --thing-name "$thing" > /dev/null   # fails here if PetroDeviceStack lacks this unit
 
+# True if IoT Core no longer has this certificate.
+gone() {
+    local err
+    if err=$(aws iot describe-certificate --certificate-id "$1" 2>&1 > /dev/null); then return 1; fi
+    case "$err" in *ResourceNotFoundException*) return 0 ;; esac
+    echo "can't check certificate $1: ${err}" >&2
+    exit 1
+}
+
+# Detach, deactivate and delete one certificate. Each step may legitimately fail (already detached,
+# already inactive, detaching still propagating), so what counts is the end: IoT Core deletes only a
+# certificate with no Thing and no policy left, and if it isn't gone, we stop.
 retire() {
     local arn=$1 id=${1##*/}
+    if gone "$id"; then echo "certificate ${id} is already gone"; return; fi
     aws iot detach-policy --policy-name "$policy" --target "$arn" 2> /dev/null || true
-    aws iot detach-thing-principal --thing-name "$thing" --principal "$arn"
-    aws iot update-certificate --certificate-id "$id" --new-status INACTIVE
+    aws iot detach-thing-principal --thing-name "$thing" --principal "$arn" 2> /dev/null || true
+    aws iot update-certificate --certificate-id "$id" --new-status INACTIVE 2> /dev/null || true
     # Detaching from a Thing is eventually consistent; deletion can lag a few seconds behind.
     for _ in 1 2 3 4 5 6; do aws iot delete-certificate --certificate-id "$id" 2> /dev/null && break; sleep 5; done
+    if ! gone "$id"; then
+        echo "couldn't retire certificate ${id}: check what's still attached (aws iot list-principal-things," >&2
+        echo "list-attached-policies), delete it by hand, then rerun" >&2
+        exit 1
+    fi
     echo "retired certificate ${id}"
 }
 
 if $new; then
-    for arn in $(aws iot list-thing-principals --thing-name "$thing" --query 'principals' --output text); do
+    # The Thing's certificates, and the one recorded here: a run that died between making and
+    # attaching it left one the Thing doesn't know about.
+    arns=$(aws iot list-thing-principals --thing-name "$thing" --query 'principals[]' --output text)
+    if [ -s "${dir}/certificate-arn" ]; then arns="${arns} $(cat "${dir}/certificate-arn")"; fi
+    for arn in $(echo "$arns" | tr -s ' \t' '\n' | grep '^arn:' | sort -u); do
         retire "$arn"
     done
     rm -f "${dir}/device.pem.crt" "${dir}/device.pem.key" "${dir}/certificate-arn"
@@ -113,11 +135,12 @@ if [ ! -s "${dir}/device.pem.key" ] || [ ! -s "${dir}/certificate-arn" ]; then
 fi
 cert_arn=$(cat "${dir}/certificate-arn")
 
+# Never attach a certificate that isn't active.
+status=$(aws iot describe-certificate --certificate-id "${cert_arn##*/}" --query certificateDescription.status --output text)
+[ "$status" = ACTIVE ] || { echo "certificate ${cert_arn##*/} is ${status}: rerun with --new" >&2; exit 1; }
 # Both attachments are idempotent, so every run repairs a half-finished earlier one.
 aws iot attach-policy --policy-name "$policy" --target "$cert_arn"
 aws iot attach-thing-principal --thing-name "$thing" --principal "$cert_arn"
-status=$(aws iot describe-certificate --certificate-id "${cert_arn##*/}" --query certificateDescription.status --output text)
-[ "$status" = ACTIVE ] || { echo "certificate ${cert_arn##*/} is ${status}: rerun with --new" >&2; exit 1; }
 
 endpoint=$(aws iot describe-endpoint --endpoint-type iot:Data-ATS --query endpointAddress --output text)
 
@@ -142,8 +165,18 @@ if [ -n "${IDF_PYTHON:-}" ]; then
     python=$IDF_PYTHON
 else
     IDF_PATH="${IDF_PATH:-$HOME/esp/v5.5/esp-idf}"
+    [ -f "$IDF_PATH/export.sh" ] || { echo "no ESP-IDF at ${IDF_PATH} (set IDF_PATH or IDF_PYTHON)" >&2; exit 1; }
+    # For its Python: the NVS partition generator, esptool. export.sh isn't written for set -u.
+    set +u
     # shellcheck disable=SC1091
-    . "$IDF_PATH/export.sh" > /dev/null 2>&1   # for its Python: the NVS partition generator, esptool
+    if ! . "$IDF_PATH/export.sh" > "${dir}/idf-export.log" 2>&1; then
+        set -u
+        echo "sourcing ${IDF_PATH}/export.sh failed: see ${dir}/idf-export.log" >&2
+        exit 1
+    fi
+    set -u
+    rm -f "${dir}/idf-export.log"
+    command -v python > /dev/null || { echo "no python after sourcing ${IDF_PATH}/export.sh" >&2; exit 1; }
     python=python
 fi
 keys=$("$python" "${here}/make_prov.py" "$dir" "$endpoint" "$thing" "$prov_size")
