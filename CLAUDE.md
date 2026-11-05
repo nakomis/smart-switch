@@ -53,13 +53,20 @@ reasoning is in `docs/DESIGN.md`.
 
 1. Design review before ordering (DRC, creepage, fuse coordination, relay ratings,
    `superpowers:requesting-code-review`, `cabal` opinions).
-2. Bench, USB only, mains unplugged.
-3. First mains power-up: RCD-protected socket, unit closed in its case, a lamp load.
+2. Bench, USB only, mains unplugged. 2b: the supply from a bench DC supply (≤ 60 V, F2 out).
+3. First mains power-up: RCD-protected socket, unit closed in its case, a dim bulb, then a lamp
+   load.
 4. Load and thermal: 10 A for ≥ 1 h (< 30 °C rise, nothing above ~70 °C), then hundreds of
    full-load relay cycles.
 
 **Martin does all mains work himself; Claude writes the procedures.** Never press order or pay at
 a fab: fill the baskets and stop.
+
+The procedures and results are in `docs/testing/` (Gate 1 passed 5 Nov 2026). Its README lists
+what the gates need from the firmware, the USB console commands and the `petro_*` metrics: they
+are PETRO-3's acceptance tests. Devices report to Fleet **and VictoriaMetrics** (through vmauth,
+with a per-device credential in `prov`, as tinycrypt). Progress from order to Go Live:
+https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land).
 
 ## Repository layout
 
