@@ -1,0 +1,362 @@
+2026-11-05 01:42:40.870 INFO   Freerouting v2.5.0 (build-date: 2026-10-05)
+2026-11-05 01:42:41.118 INFO   Hardware: 18 CPU cores, 553 CPU score, 6144 MB RAM
+2026-11-05 01:42:41.119 WARN   Deprecated settings path '-mp / --router.max_passes'; use '--router.autorouter.max_passes' instead. The old path will be removed in a future release.
+2026-11-05 01:42:41.119 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-11-05 01:42:42.144 WARN   Deprecated settings path 'router.max_passes'; use 'router.autorouter.max_passes' instead. The old path will be removed in a future release.
+2026-11-05 01:42:42.406 INFO   [118D11\DB00A9] Loading board file 'board.dsn'...
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP13' pin '1' (ID 429) is outside board outline at (37100,-47000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP12' pin '1' (ID 428) is outside board outline at (33900,-47000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP11' pin '1' (ID 427) is outside board outline at (30700,-47000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP10' pin '1' (ID 426) is outside board outline at (27500,-47000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP9' pin '1' (ID 425) is outside board outline at (33900,-42000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP8' pin '1' (ID 424) is outside board outline at (30700,-42000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP7' pin '1' (ID 423) is outside board outline at (27500,-42000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP6' pin '1' (ID 422) is outside board outline at (40300,-52000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP5' pin '1' (ID 421) is outside board outline at (37100,-52000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP4' pin '1' (ID 420) is outside board outline at (33900,-52000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP3' pin '1' (ID 419) is outside board outline at (30700,-52000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'TP2' pin '1' (ID 418) is outside board outline at (27500,-52000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'H4' pin '' (ID 417) is outside board outline at (116000,-81000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'H2' pin '' (ID 415) is outside board outline at (116000,-4000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'H1' pin '' (ID 414) is outside board outline at (4000,-4000).
+2026-11-05 01:42:42.438 WARN   Design Error: Component 'C36' pin '1' (ID 401) is outside board outline at (37200,-58020).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'C36' pin '2' (ID 400) is outside board outline at (37200,-57180).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'R30' pin '1' (ID 397) is outside board outline at (34100,-58030).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'R30' pin '2' (ID 396) is outside board outline at (34100,-57170).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'R28' pin '1' (ID 393) is outside board outline at (32500,-58030).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'R28' pin '2' (ID 392) is outside board outline at (32500,-57170).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '8' (ID 383) is outside board outline at (32760,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '7' (ID 382) is outside board outline at (34030,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '6' (ID 381) is outside board outline at (35300,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '5' (ID 380) is outside board outline at (36570,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '4' (ID 379) is outside board outline at (37830,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '3' (ID 378) is outside board outline at (39110,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '2' (ID 377) is outside board outline at (40380,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'U9' pin '1' (ID 376) is outside board outline at (41650,-61250).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'C34' pin '1' (ID 373) is outside board outline at (24000,-58020).
+2026-11-05 01:42:42.439 WARN   Design Error: Component 'C34' pin '2' (ID 372) is outside board outline at (24000,-57180).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '8' (ID 363) is outside board outline at (19560,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '7' (ID 362) is outside board outline at (20830,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '6' (ID 361) is outside board outline at (22100,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '5' (ID 360) is outside board outline at (23370,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '4' (ID 359) is outside board outline at (24630,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '3' (ID 358) is outside board outline at (25910,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '2' (ID 357) is outside board outline at (27180,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'U8' pin '1' (ID 356) is outside board outline at (28450,-61250).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'C29' pin '1' (ID 341) is outside board outline at (12500,-58020).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'C29' pin '2' (ID 340) is outside board outline at (12500,-57180).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'C28' pin '1' (ID 339) is outside board outline at (8500,-58020).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'C28' pin '2' (ID 338) is outside board outline at (8500,-57180).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'C27' pin '1' (ID 337) is outside board outline at (7000,-58020).
+2026-11-05 01:42:42.440 WARN   Design Error: Component 'C27' pin '2' (ID 336) is outside board outline at (7000,-57180).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'C26' pin '1' (ID 335) is outside board outline at (5000,-58300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'C26' pin '2' (ID 334) is outside board outline at (5000,-56900).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'R26' pin '1' (ID 333) is outside board outline at (14100,-58030).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'R26' pin '2' (ID 332) is outside board outline at (14100,-57170).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '1' (ID 331) is outside board outline at (15210,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '2' (ID 330) is outside board outline at (13940,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '3' (ID 329) is outside board outline at (12670,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '4' (ID 328) is outside board outline at (11400,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '5' (ID 327) is outside board outline at (10130,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '6' (ID 326) is outside board outline at (8870,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '7' (ID 325) is outside board outline at (7590,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '8' (ID 324) is outside board outline at (6320,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '9' (ID 323) is outside board outline at (5050,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'U7' pin '10' (ID 322) is outside board outline at (3780,-61300).
+2026-11-05 01:42:42.441 WARN   Design Error: Component 'TP1' pin '5' (ID 311) is outside board outline at (42400,-51580).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'TP1' pin '4' (ID 310) is outside board outline at (42400,-49040).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'TP1' pin '3' (ID 309) is outside board outline at (42400,-46500).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'TP1' pin '2' (ID 308) is outside board outline at (42400,-43960).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'TP1' pin '1' (ID 307) is outside board outline at (42400,-41420).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'C25' pin '1' (ID 306) is outside board outline at (78780,-72600).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'C25' pin '2' (ID 305) is outside board outline at (79620,-72600).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R25' pin '1' (ID 304) is outside board outline at (80000,-75930).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R25' pin '2' (ID 303) is outside board outline at (80000,-75070).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'TH1' pin '1' (ID 302) is outside board outline at (78400,-76250).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'TH1' pin '2' (ID 301) is outside board outline at (78400,-74750).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'C24' pin '1' (ID 300) is outside board outline at (58000,-49420).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'C24' pin '2' (ID 299) is outside board outline at (58000,-48580).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R24' pin '1' (ID 298) is outside board outline at (56600,-49430).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R24' pin '2' (ID 297) is outside board outline at (56600,-48570).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R23' pin '1' (ID 296) is outside board outline at (61000,-49430).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R23' pin '2' (ID 295) is outside board outline at (61000,-48570).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'D1' pin '3' (ID 294) is outside board outline at (57850,-43850).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'D1' pin '4' (ID 293) is outside board outline at (57850,-45150).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'D1' pin '1' (ID 292) is outside board outline at (59150,-45150).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'D1' pin '2' (ID 291) is outside board outline at (59150,-43850).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R22' pin '1' (ID 290) is outside board outline at (60600,-64030).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R22' pin '2' (ID 289) is outside board outline at (60600,-63170).
+2026-11-05 01:42:42.442 WARN   Design Error: Component 'R21' pin '1' (ID 288) is outside board outline at (59000,-64030).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'R21' pin '2' (ID 287) is outside board outline at (59000,-63170).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'D3' pin '1' (ID 286) is outside board outline at (67670,-63600).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'D3' pin '2' (ID 285) is outside board outline at (71130,-63600).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'Q1' pin '3' (ID 284) is outside board outline at (63000,-63600).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'Q1' pin '2' (ID 283) is outside board outline at (65000,-62650).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'Q1' pin '1' (ID 282) is outside board outline at (65000,-64550).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'R20' pin '1' (ID 281) is outside board outline at (54800,-50030).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'R20' pin '2' (ID 280) is outside board outline at (54800,-49170).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'SW1' pin '4' (ID 279) is outside board outline at (52750,-47850).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'SW1' pin '3' (ID 278) is outside board outline at (46250,-47850).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'SW1' pin '2' (ID 277) is outside board outline at (52750,-43350).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'SW1' pin '1' (ID 276) is outside board outline at (46250,-43350).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'C23' pin '1' (ID 275) is outside board outline at (77200,-79420).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'C23' pin '2' (ID 274) is outside board outline at (77200,-78580).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'R19' pin '1' (ID 273) is outside board outline at (75600,-79430).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'R19' pin '2' (ID 272) is outside board outline at (75600,-78570).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'C22' pin '1' (ID 271) is outside board outline at (77200,-83020).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'C22' pin '2' (ID 270) is outside board outline at (77200,-82180).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'C21' pin '1' (ID 269) is outside board outline at (75600,-83300).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'C21' pin '2' (ID 268) is outside board outline at (75600,-81900).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'U1' pin '37' (ID 267) is outside board outline at (65260,-77030).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'U1' pin '36' (ID 266) is outside board outline at (66500,-77030).
+2026-11-05 01:42:42.443 WARN   Design Error: Component 'U1' pin '35' (ID 265) is outside board outline at (67750,-77030).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '34' (ID 264) is outside board outline at (67750,-78280).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '33' (ID 263) is outside board outline at (66500,-78280).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '32' (ID 262) is outside board outline at (65260,-78280).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '31' (ID 261) is outside board outline at (65260,-79530).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '30' (ID 260) is outside board outline at (66500,-79530).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '29' (ID 259) is outside board outline at (67750,-79530).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '28' (ID 258) is outside board outline at (56250,-84000).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '27' (ID 257) is outside board outline at (56250,-82740).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '26' (ID 256) is outside board outline at (56250,-81470).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '25' (ID 255) is outside board outline at (56250,-80200).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '24' (ID 254) is outside board outline at (56250,-78930).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '23' (ID 253) is outside board outline at (56250,-77650).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '22' (ID 252) is outside board outline at (56250,-76380).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '21' (ID 251) is outside board outline at (56250,-75120).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '20' (ID 250) is outside board outline at (56250,-73850).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '19' (ID 249) is outside board outline at (56250,-72580).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '18' (ID 248) is outside board outline at (56250,-71310).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '17' (ID 247) is outside board outline at (56250,-70040).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '16' (ID 246) is outside board outline at (56250,-68760).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '15' (ID 245) is outside board outline at (56250,-67500).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '14' (ID 244) is outside board outline at (73750,-67500).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '13' (ID 243) is outside board outline at (73750,-68760).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '12' (ID 242) is outside board outline at (73750,-70040).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '11' (ID 241) is outside board outline at (73750,-71310).
+2026-11-05 01:42:42.444 WARN   Design Error: Component 'U1' pin '10' (ID 240) is outside board outline at (73750,-72580).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '9' (ID 239) is outside board outline at (73750,-73850).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '8' (ID 238) is outside board outline at (73750,-75120).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '7' (ID 237) is outside board outline at (73750,-76380).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '6' (ID 236) is outside board outline at (73750,-77650).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '5' (ID 235) is outside board outline at (73750,-78930).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '4' (ID 234) is outside board outline at (73750,-80200).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '3' (ID 233) is outside board outline at (73750,-81470).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '2' (ID 232) is outside board outline at (73750,-82740).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U1' pin '1' (ID 231) is outside board outline at (73750,-84000).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C20' pin '1' (ID 230) is outside board outline at (54000,-53420).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C20' pin '2' (ID 229) is outside board outline at (54000,-52580).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C19' pin '1' (ID 228) is outside board outline at (52400,-53700).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C19' pin '2' (ID 227) is outside board outline at (52400,-52300).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C18' pin '1' (ID 226) is outside board outline at (45600,-53700).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C18' pin '2' (ID 225) is outside board outline at (45600,-52300).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U2' pin '3' (ID 224) is outside board outline at (49950,-54300).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U2' pin '2' (ID 223) is outside board outline at (49000,-54300).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U2' pin '1' (ID 222) is outside board outline at (48050,-54300).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U2' pin '5' (ID 221) is outside board outline at (48050,-51700).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'U2' pin '4' (ID 220) is outside board outline at (49950,-51700).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R18' pin '1' (ID 219) is outside board outline at (24400,-24830).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R18' pin '2' (ID 218) is outside board outline at (24400,-23970).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C17' pin '1' (ID 217) is outside board outline at (24600,-18700).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C17' pin '2' (ID 216) is outside board outline at (24600,-17300).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R17' pin '1' (ID 215) is outside board outline at (23000,-18430).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R17' pin '2' (ID 214) is outside board outline at (23000,-17570).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R16' pin '1' (ID 213) is outside board outline at (24200,-12520).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R16' pin '2' (ID 212) is outside board outline at (24200,-15480).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R15' pin '1' (ID 211) is outside board outline at (19120,-11600).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R15' pin '2' (ID 210) is outside board outline at (22080,-11600).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R14' pin '1' (ID 209) is outside board outline at (18000,-16780).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R14' pin '2' (ID 208) is outside board outline at (18000,-13820).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R13' pin '1' (ID 207) is outside board outline at (18000,-21630).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R13' pin '2' (ID 206) is outside board outline at (18000,-18670).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R12' pin '1' (ID 205) is outside board outline at (18000,-26480).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R12' pin '2' (ID 204) is outside board outline at (18000,-23520).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C16' pin '1' (ID 203) is outside board outline at (34450,-15400).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C16' pin '2' (ID 202) is outside board outline at (34450,-14000).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C15' pin '1' (ID 201) is outside board outline at (32650,-15400).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'C15' pin '2' (ID 200) is outside board outline at (32650,-14000).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R11' pin '1' (ID 199) is outside board outline at (34450,-12530).
+2026-11-05 01:42:42.445 WARN   Design Error: Component 'R11' pin '2' (ID 198) is outside board outline at (34450,-11670).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'R10' pin '1' (ID 197) is outside board outline at (32650,-12530).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'R10' pin '2' (ID 196) is outside board outline at (32650,-11670).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'C14' pin '1' (ID 195) is outside board outline at (30850,-15400).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'C14' pin '2' (ID 194) is outside board outline at (30850,-14000).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'C13' pin '1' (ID 193) is outside board outline at (29050,-15400).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'C13' pin '2' (ID 192) is outside board outline at (29050,-14000).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'R9' pin '1' (ID 191) is outside board outline at (30850,-12530).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'R9' pin '2' (ID 190) is outside board outline at (30850,-11670).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'R8' pin '1' (ID 189) is outside board outline at (29050,-12530).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'R8' pin '2' (ID 188) is outside board outline at (29050,-11670).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'C12' pin '1' (ID 187) is outside board outline at (37000,-18020).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'C12' pin '2' (ID 186) is outside board outline at (37000,-17180).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '9' (ID 185) is outside board outline at (26560,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '10' (ID 184) is outside board outline at (27830,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '11' (ID 183) is outside board outline at (29100,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '12' (ID 182) is outside board outline at (30370,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '13' (ID 181) is outside board outline at (31630,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '14' (ID 180) is outside board outline at (32910,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '15' (ID 179) is outside board outline at (34180,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '16' (ID 178) is outside board outline at (35450,-23270).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '8' (ID 177) is outside board outline at (26560,-17730).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '7' (ID 176) is outside board outline at (27830,-17730).
+2026-11-05 01:42:42.446 WARN   Design Error: Component 'U3' pin '6' (ID 175) is outside board outline at (29100,-17730).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U3' pin '5' (ID 174) is outside board outline at (30370,-17730).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U3' pin '4' (ID 173) is outside board outline at (31630,-17730).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U3' pin '3' (ID 172) is outside board outline at (32910,-17730).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U3' pin '2' (ID 171) is outside board outline at (34180,-17730).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U3' pin '1' (ID 170) is outside board outline at (35450,-17730).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U6' pin '6' (ID 169) is outside board outline at (110050,-48800).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U6' pin '4' (ID 168) is outside board outline at (111950,-48800).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U6' pin '3' (ID 167) is outside board outline at (111950,-51200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U6' pin '2' (ID 166) is outside board outline at (111000,-51200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U6' pin '1' (ID 165) is outside board outline at (110050,-51200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'U6' pin '5' (ID 164) is outside board outline at (111000,-48800).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'R7' pin '1' (ID 163) is outside board outline at (112500,-55930).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'R7' pin '2' (ID 162) is outside board outline at (112500,-55070).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D6' pin '1' (ID 161) is outside board outline at (106300,-58500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D6' pin '2' (ID 160) is outside board outline at (110700,-58500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D2' pin '1' (ID 159) is outside board outline at (105500,-54130).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D2' pin '2' (ID 158) is outside board outline at (105500,-50870).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'F4' pin '2' (ID 157) is outside board outline at (108000,-51050).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'F4' pin '1' (ID 156) is outside board outline at (108000,-53950).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '7' (ID 155) is outside board outline at (118510,-54800).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '6' (ID 154) is outside board outline at (118510,-48200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '5' (ID 153) is outside board outline at (114490,-49500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '4' (ID 152) is outside board outline at (114500,-50500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '3' (ID 151) is outside board outline at (114490,-51500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '2' (ID 150) is outside board outline at (114490,-52500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'J4' pin '1' (ID 149) is outside board outline at (114500,-53500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C11' pin '1' (ID 148) is outside board outline at (4000,-54100).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C11' pin '2' (ID 147) is outside board outline at (4000,-52700).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D5' pin '1' (ID 146) is outside board outline at (7400,-52000).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D5' pin '2' (ID 145) is outside board outline at (11800,-52000).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D4' pin '1' (ID 144) is outside board outline at (15200,-53610).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'D4' pin '2' (ID 143) is outside board outline at (20000,-53590).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'F3' pin '2' (ID 142) is outside board outline at (5850,-49200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'F3' pin '1' (ID 141) is outside board outline at (2950,-49200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C10' pin '1' (ID 140) is outside board outline at (14410,-49800).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C10' pin '2' (ID 139) is outside board outline at (17590,-49800).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C9' pin '1' (ID 138) is outside board outline at (14410,-47200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C9' pin '2' (ID 137) is outside board outline at (17590,-47200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'R6' pin '1' (ID 136) is outside board outline at (9850,-47000).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'R6' pin '2' (ID 135) is outside board outline at (11350,-47000).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'R5' pin '1' (ID 134) is outside board outline at (6850,-47000).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'R5' pin '2' (ID 133) is outside board outline at (8350,-47000).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'L3' pin '1' (ID 132) is outside board outline at (12000,-43500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'L3' pin '2' (ID 131) is outside board outline at (15200,-43500).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C8' pin '1' (ID 130) is outside board outline at (4500,-44200).
+2026-11-05 01:42:42.447 WARN   Design Error: Component 'C8' pin '2' (ID 129) is outside board outline at (4500,-42800).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'C7' pin '1' (ID 128) is outside board outline at (11550,-40000).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'C7' pin '2' (ID 127) is outside board outline at (12950,-40000).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'C6' pin '1' (ID 126) is outside board outline at (6410,-40000).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'C6' pin '2' (ID 125) is outside board outline at (9590,-40000).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'U5' pin '4' (ID 124) is outside board outline at (6650,-42550).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'U5' pin '5' (ID 123) is outside board outline at (6650,-43500).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'U5' pin '6' (ID 122) is outside board outline at (6650,-44450).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'U5' pin '1' (ID 121) is outside board outline at (9350,-44450).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'U5' pin '2' (ID 120) is outside board outline at (9350,-43500).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'U5' pin '3' (ID 119) is outside board outline at (9350,-42550).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'R4' pin '1' (ID 118) is outside board outline at (106850,-70800).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'R4' pin '2' (ID 117) is outside board outline at (108350,-70800).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'R3' pin '1' (ID 116) is outside board outline at (94000,-71650).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'R3' pin '2' (ID 115) is outside board outline at (94000,-73150).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'R2' pin '1' (ID 114) is outside board outline at (94750,-69400).
+2026-11-05 01:42:42.448 WARN   Design Error: Component 'R2' pin '2' (ID 113) is outside board outline at (93250,-69400).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C5' pin '1' (ID 112) is outside board outline at (99840,-70800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C5' pin '2' (ID 111) is outside board outline at (96660,-70800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'D9' pin '1' (ID 110) is outside board outline at (102900,-70800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'D9' pin '2' (ID 109) is outside board outline at (102900,-66400).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C4' pin '1' (ID 108) is outside board outline at (107600,-79670).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C4' pin '2' (ID 107) is outside board outline at (107600,-74330).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'D8' pin '2' (ID 106) is outside board outline at (86650,-79400).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'D8' pin '1' (ID 105) is outside board outline at (91350,-79400).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'L2' pin '1' (ID 104) is outside board outline at (94300,-79150).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'L2' pin '2' (ID 103) is outside board outline at (102700,-79150).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C3' pin '1' (ID 102) is outside board outline at (92400,-71700).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C3' pin '2' (ID 101) is outside board outline at (92400,-73100).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '1' (ID 100) is outside board outline at (90700,-70200).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '2' (ID 99) is outside board outline at (89430,-70200).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '4' (ID 98) is outside board outline at (86900,-70200).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '8' (ID 97) is outside board outline at (90700,-75800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '7' (ID 96) is outside board outline at (89430,-75800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '6' (ID 95) is outside board outline at (88170,-75800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'U4' pin '5' (ID 94) is outside board outline at (86900,-75800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C2' pin '1' (ID 93) is outside board outline at (95750,-64000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C2' pin '2' (ID 92) is outside board outline at (99250,-64000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'L1' pin '1' (ID 91) is outside board outline at (89590,-61650).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'L1' pin '2' (ID 90) is outside board outline at (89610,-66350).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C1' pin '1' (ID 89) is outside board outline at (79750,-64000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'C1' pin '2' (ID 88) is outside board outline at (83250,-64000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'D7' pin '1' (ID 87) is outside board outline at (79600,-58570).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'D7' pin '2' (ID 86) is outside board outline at (79600,-53430).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'R1' pin '2' (ID 85) is outside board outline at (83380,-53800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'R1' pin '1' (ID 84) is outside board outline at (98620,-53800).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'XF3' pin '2' (ID 83) is outside board outline at (101250,-45600).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'XF3' pin '1' (ID 82) is outside board outline at (78750,-45600).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'RS1' pin '4' (ID 81) is outside board outline at (33480,-7135).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'RS1' pin '3' (ID 80) is outside board outline at (34430,-5230).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'RS1' pin '2' (ID 79) is outside board outline at (27570,-7770).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'RS1' pin '1' (ID 78) is outside board outline at (28520,-5865).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'K1' pin '2' (ID 77) is outside board outline at (72780,-59100).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'K1' pin '1' (ID 76) is outside board outline at (65220,-59100).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'K1' pin '6' (ID 75) is outside board outline at (72780,-38940).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'K1' pin '8' (ID 74) is outside board outline at (72780,-33900).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'K1' pin '5' (ID 73) is outside board outline at (65220,-38940).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'K1' pin '7' (ID 72) is outside board outline at (65220,-33900).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'RV1' pin '2' (ID 71) is outside board outline at (69750,-9750).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'RV1' pin '1' (ID 70) is outside board outline at (78250,-14250).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'XF2' pin '1_2' (ID 69) is outside board outline at (50400,-32000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'XF2' pin '1' (ID 68) is outside board outline at (42780,-32000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'XF1' pin '1_2' (ID 67) is outside board outline at (23810,-32000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'XF1' pin '1' (ID 66) is outside board outline at (16190,-32000).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'J2' pin '1' (ID 65) is outside board outline at (112000,-23310).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'J2' pin '2' (ID 64) is outside board outline at (112000,-15690).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'J1' pin '1' (ID 63) is outside board outline at (8000,-15690).
+2026-11-05 01:42:42.449 WARN   Design Error: Component 'J1' pin '2' (ID 62) is outside board outline at (8000,-23310).
+2026-11-05 01:42:42.455 INFO   [118D11\DB00A9] Job '118D11\DB00A9' started at 2026-11-05T01:42:42.455719Z.
+2026-11-05 01:42:42.491 INFO   [118D11\DB00A9] Pipeline thread limits: autorouter pass is single-threaded, optimizer.max_threads=17.
+2026-11-05 01:42:42.510 INFO   [118D11\DB00A9] Fanout stage started on board 'd108f4bda01f6a337220bf3620843215' with 48 of 318 SMD pins needing fanout (54 already connected, 216 netless).
+2026-11-05 01:42:42.890 INFO   [118D11\DB00A9] Fanout pass #1 on board 'a4685ce44e27fb7b3661e47a32cacec1' completed in 0.37 seconds with 36 SMD pins fanouted, 1 not routed, 0 insert errors, +6 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-11-05 01:42:43.137 INFO   [118D11\DB00A9] Fanout pass #2 on board '893a3ef9a5906137d7dff5e43b92f181' completed in 0.24 seconds with 26 SMD pins fanouted, 0 not routed, 0 insert errors, +4 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-11-05 01:42:43.282 INFO   [118D11\DB00A9] Fanout pass #3 on board '8d139953c12fee90fe6e242ad616f4ed' completed in 0.14 seconds with 21 SMD pins fanouted, 1 not routed, 0 insert errors, +2 extra vias (0 SMD pins still to check in pass, ripup costs=300).
+2026-11-05 01:42:43.399 INFO   [118D11\DB00A9] Fanout pass #4 on board '238d60b998bad5b85e945b39ff77eb1d' completed in 0.11 seconds with 18 SMD pins fanouted, 1 not routed, 0 insert errors, +2 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-11-05 01:42:43.469 INFO   [118D11\DB00A9] Fanout pass #5 on board 'b91f8c916fcca8be4b0383b35d20ee7a' completed in 0.07 seconds with 10 SMD pins fanouted, 0 not routed, 0 insert errors, +1 extra via (0 SMD pins still to check in pass, ripup costs=500).
+2026-11-05 01:42:43.528 INFO   [118D11\DB00A9] Fanout pass #6 on board '181fba5682177c099b39a33817e874ff' completed in 0.06 seconds with 9 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=600).
+2026-11-05 01:42:43.585 INFO   [118D11\DB00A9] Fanout pass #7 on board '0475b7ec85fcccb5619ca547ee2dc713' completed in 0.05 seconds with 9 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=700).
+2026-11-05 01:42:43.640 INFO   [118D11\DB00A9] Fanout pass #8 on board 'c90aa9bedddd09f0228597fd851dbd7c' completed in 0.05 seconds with 9 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=800).
+2026-11-05 01:42:43.702 INFO   [118D11\DB00A9] Fanout pass #9 on board 'fc1b4bec4494759b3abd3468aaeba265' completed in 0.06 seconds with 9 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=900).
+2026-11-05 01:42:43.702 INFO   Fanout stopped after 9 passes: no progress for 3 consecutive passes.
+2026-11-05 01:42:43.704 INFO   [118D11\DB00A9] Fanout stage completed: started with 102 total SMD pins, completed in 1.19 seconds, escaped pins: 43/102 (42.2%), using 1.16 total CPU seconds, 1.73 GB total allocated, and 168.9 MB peak heap usage.
+2026-11-05 01:42:43.711 INFO   [118D11\DB00A9] Auto-routing stage started on board 'fc1b4bec4494759b3abd3468aaeba265' with baseline score 231.88 for 30 unrouted items.
+2026-11-05 01:42:44.068 INFO   [118D11\DB00A9] Auto-routing pass #1 on board 'fc1b4bec4494759b3abd3468aaeba265' was completed in 0.35 seconds with score 739.13 (9 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.198 INFO   [118D11\DB00A9] Auto-routing pass #2 on board '99ce96cca5da107500fc07372cf62327' was completed in 0.12 seconds with score 884.06 (4 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.269 INFO   [118D11\DB00A9] Auto-routing pass #3 on board '96bb57ea4808eed7c2f49cd709066a8f' was completed in 0.06 seconds with score 942.03 (2 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.305 INFO   [118D11\DB00A9] Auto-routing pass #4 on board '5207c32d5a849482c9763a52fcff7b63' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.339 INFO   [118D11\DB00A9] Auto-routing pass #5 on board '0107402cc919fa0417c53d7ccadd7d86' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.376 INFO   [118D11\DB00A9] Auto-routing pass #6 on board 'd3bc17eecf14e5e7e55dbdbf674a6697' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.411 INFO   [118D11\DB00A9] Auto-routing pass #7 on board 'b9094ed2762dd23e7098b698f8dbbfb2' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.445 INFO   [118D11\DB00A9] Auto-routing pass #8 on board 'd97bbb1357529eb6a500dc61396e8a79' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 0.96 CPU seconds and the job allocated 1.27 GB of memory so far.
+2026-11-05 01:42:44.479 INFO   [118D11\DB00A9] Auto-routing pass #9 on board '4d187f1d36b3fdaaa3db213b1580e3d7' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.516 INFO   [118D11\DB00A9] Auto-routing pass #10 on board '809166af974473bd22cf11d186af378c' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.549 INFO   [118D11\DB00A9] Auto-routing pass #11 on board '7251ccb878c5d60382e647a924fefc7c' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.586 INFO   [118D11\DB00A9] Auto-routing pass #12 on board '33126699d9ef52f42741b1badca96d27' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.620 INFO   [118D11\DB00A9] Auto-routing pass #13 on board 'af0614fdf3c8d553a4c8bbd3cb161fa1' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.653 INFO   [118D11\DB00A9] Auto-routing pass #14 on board '2d2d131092732e911fb58ef5a740d288' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.658 INFO   [118D11\DB00A9] Last-mile rip-up removed 1 blocking trace(s) or via(s) around 2 remaining connection(s).
+2026-11-05 01:42:44.701 INFO   [118D11\DB00A9] Auto-routing pass #15 on board '4fd942f156d5953379a59b5864525909' was completed in 0.04 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.733 INFO   [118D11\DB00A9] Auto-routing pass #16 on board '4e808e35e1b0b2f12843b623838b861a' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.770 INFO   [118D11\DB00A9] Auto-routing pass #17 on board '81a221bcd4c72878ac3f7ffacb363178' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.804 INFO   [118D11\DB00A9] Auto-routing pass #18 on board '13faee5792c092a280951cffed47c02d' was completed in 0.03 seconds with score 942.03 (2 unrouted and 0 violations), using 1.95 CPU seconds and the job allocated 3.08 GB of memory so far.
+2026-11-05 01:42:44.809 INFO   [118D11\DB00A9] Last-mile rip-up removed 1 blocking trace(s) or via(s) around 2 remaining connection(s).
+2026-11-05 01:42:44.811 INFO   [118D11\DB00A9] The router's best score (942.03) has not improved by more than 0.5 points since pass #8. Stopping the auto-router after 18 passes (2 items still unconnected).
+The following connections could not be routed -- please review your design (e.g. check pad clearances, trace width rules, and available routing space):
+  Net 'ISO_GND' (2 unrouted connections):
+    - C31-2  ->  via
+    - via  ->  C32-2
+  Net 'ISO_VIN' (1 unrouted connection):
+    - C33-1  ->  U7-20
+2026-11-05 01:42:44.847 INFO   [118D11\DB00A9] Auto-routing stage completed: started with 46 unrouted nets, completed in 2.35 seconds, final score: 942.03 (2 unrouted and 0 violations), using 1.95 total CPU seconds, 3.08 GB total allocated, and 172.7 MB peak heap usage.
+2026-11-05 01:42:44.855 INFO   [118D11\DB00A9] Skipping optimization stage: the board has 2 unrouted connection(s) (optimizer only runs on completely routed boards).
+2026-11-05 01:42:44.862 INFO   [118D11\DB00A9] Job '118D11\DB00A9' finished with state: COMPLETED (elapsed: 2.41 seconds, finished at UTC: 2026-11-05T01:42:44.862486Z).
+2026-11-05 01:42:44.910 INFO   Saving output file '/Users/nakomis/repos/nakomis/smart-switch/.claude/worktrees/petro-2-board/pcb/out/petro/tmp/island/board.ses' (SES)...
+2026-11-05 01:42:44.912 INFO   Successfully saved output file '/Users/nakomis/repos/nakomis/smart-switch/.claude/worktrees/petro-2-board/pcb/out/petro/tmp/island/board.ses' (27611 bytes).
