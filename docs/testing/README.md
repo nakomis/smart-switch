@@ -29,8 +29,9 @@ Run every gate on **one board first** (B1). The others follow once it has passed
    ties its ground to neutral, or to live in a reversed socket. An earthed scope's ground clip on
    this board is a short to earth. The cabal's reviewers put this first.
 5. **Nothing conductive runs into a powered case**: no probe leads, no thermocouples. The board
-   reports its own readings over Wi-Fi (Fleet and VictoriaMetrics), and temperatures are read
-   from labels that keep their maximum, after unplugging.
+   reports its own readings over Wi-Fi (Fleet and VictoriaMetrics). Gate 4's temperatures come
+   from a battery-powered thermal logger sealed in with it (a non-contact MLX90640), which touches
+   nothing outside.
 6. **Unplugging isn't enough before opening.** C1 and C2 hold up to 354 V DC, and **nothing
    bleeds them**: the LNK306 drains them only until it stops switching, and what is left can stay
    for hours (Gate 2b measures how much).
@@ -52,24 +53,31 @@ Run every gate on **one board first** (B1). The others follow once it has passed
    fast-acting, at least 1.5 kA at 250 V AC; F2 a 5×20 mm ceramic T500 mA (T1A only if Gate 3's
    inrush check calls for it). Never a glass fuse.
 
-## Things to buy before Gates 3 and 4
+## What the gates need
+
+Kept to what Martin already has (5 Nov 2026), plus the few things that are about safety rather
+than measurement.
+
+**Already to hand:** the meter, the bench DC supply, the plug-in power meter, the oil-filled
+radiator (Gate 4's load), a kettle (the real trip test), the MLX90640 (55°), a BMP280 and an
+ESP32 (Gate 4's thermal logger), the V-0 filament (the case, and Gate 4's hood).
+
+**Needed, for safety:**
 
 | Item | For | Notes |
 |---|---|---|
-| Socket tester | 3, 4, Go Live | Shows reversed polarity and a missing earth |
-| 30 mA plug-in RCD | 3, 4 | Unless the consumer unit's RCD is confirmed to cover the socket |
-| Max-reading temperature labels | 4 | The irreversible multi-window kind, about 40–80 °C in 5 °C steps. Enough for 8 spots a run |
-| K-type thermocouple | 4 | Only if the meter has a K-type input and none came with it; for the snapshot once the unit is open (the labels are the main record) |
-| A 2 kW convector or fan heater | 4 | ≈ 8.7 A. Never 3 kW (13 A, above the rating). A hot air gun cycles and is a poor hour-long load |
-| An incandescent lamp of 60–100 W, and a lamp holder with a lead | 3 | For the dim-bulb tester and the lamp load. An LED lamp won't limit current |
-| Spare fuses | 3, 4 | F2 × 5 (T500 mA ceramic), T1A ceramic × 2, F1 × 2 |
-| Nylon M3 screws | 3 | The mounting holes are unplated; nylon keeps the screws insulating |
-| **A discharge tool** | 2b, 3, 4 | A 10 kΩ 5 W resistor between two insulated probes (or test leads with insulated clips), in heat-shrink. τ = RC ≈ 0.1 s, so 5 seconds empties C1 and C2. Never a screwdriver |
-| **An insulation tester (500 V DC)** | 3 | The case is the only barrier, and a meter at ~1 V can't find a creepage path. A 500 V insulation tester or a PAT tester with an insulation test (buy or borrow); with aluminium foil for the outside of the case |
+| Socket tester | 3, 4, Go Live | Shows reversed polarity and a missing earth. Reversal puts the board's GND at 230 V, and nothing on the board can tell |
+| 30 mA plug-in RCD | 3, 4 | **Only if** the consumer unit's RCD isn't confirmed to cover the socket |
+| The fuses | 3, 4 | F1 and F2 (the parts list), not needed for Gates 2 and 2b. A spare F2 is worth having; T1A only if Gate 3's inrush check calls for it |
+| Nylon M3 screws | 3 | The mounting holes are unplated; nylon keeps the screws insulating. Or recessed steel screws the case can't let a finger reach |
+| **A discharge tool** | 2b, 3, 4 | A 10 kΩ resistor of 2 W or more (from the parts drawer) between two insulated test leads with insulated clips, in heat-shrink. τ = RC ≈ 0.1 s, so 5 seconds empties C1 and C2. Never a screwdriver |
+| **A 500 V insulation test** | 3 | **Borrow** an insulation tester or a PAT tester for an evening; there is no substitute. The case is the only barrier, and a meter at ~1 V can't find a creepage path. Gate 3 step 1.8 |
 
-**A dim-bulb tester** is a lamp holder wired in series with the live of a trailing socket, inside
-its own closed box: Martin builds it, or buys one. With a short anywhere, the lamp lights fully
-and takes the voltage, and nothing upstream sees more than the lamp's current.
+**If you have one:** an old incandescent bulb (60–100 W) with a lamp holder makes Gate 3's
+dim-bulb tester. It is a lamp holder wired in series with the live of a trailing socket, inside its
+own closed box. With a short anywhere, the lamp lights fully and takes the voltage, so nothing
+upstream sees more than the lamp's current. Without one, Gate 3 goes straight to §4: the RCD and
+F1 are then what stand between a fault and a bang. Any lamp (LED included) does as §4's load.
 
 ## Boards and records
 

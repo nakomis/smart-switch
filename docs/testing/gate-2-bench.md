@@ -8,8 +8,8 @@ Read the rules in [README.md](README.md) first. Run this on B1, then on the othe
 
 **Needs:**
 - the meter;
-- a 90–100 W soldering iron with a large chisel tip, and ideally a preheater (a hot plate, or the
-  hot air gun on low from underneath);
+- your most powerful iron with its largest chisel tip, and a preheat: the hot air gun on low from
+  underneath, or a hot plate. With the preheat, a 60–80 W temperature-controlled iron does it;
 - flux, isopropyl alcohol and a stiff brush;
 - a loupe or a phone camera on macro;
 - the purple house USB cable;
@@ -67,7 +67,7 @@ part-filled joint is about 1 W in the fillet at 10 A: that is how these units co
 Gate 1).
 
 1. Preheat the board if you can (to about 100 °C from underneath).
-2. Use the 90–100 W iron with plenty of flux. Hold the tip until solder **wicks through the barrel
+2. Use the iron hot and its biggest tip, with plenty of flux. Hold the tip until solder **wicks through the barrel
    and wets the top-side pad** as well.
 3. Fit K1, J1 and J2, then the clips and the holder, then R1 and RV1. Keep R1's body about 2 mm
    off the board: it runs warm.

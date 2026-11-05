@@ -34,8 +34,8 @@ Read the rules in [README.md](README.md) first.
 - [ ] At hand:
   - the socket tester and the plug-in RCD;
   - the plug-in power meter;
-  - the dim-bulb tester;
-  - a 60 W incandescent lamp on a lead;
+  - the dim-bulb tester, if you have an incandescent bulb (README);
+  - a lamp on a lead (any kind; note its wattage);
   - the meter, the insulation tester and the discharge tool (README);
   - Fleet and VictoriaMetrics on a laptop that is **not** connected to the unit.
 
@@ -78,7 +78,7 @@ no earth to fall back on).
 
 ## 3. First power-up through the dim bulb
 
-The dim-bulb tester goes between the power meter and the unit, with a 60–100 W **incandescent**
+**If you have no incandescent bulb, skip to §4.** The dim-bulb tester goes between the power meter and the unit, with a 60–100 W **incandescent**
 lamp. With a short anywhere in the unit, the lamp lights fully and takes the voltage. A healthy
 unit draws under 1–2 W, so the lamp stays dark.
 
@@ -91,14 +91,14 @@ unit draws under 1–2 W, so the lamp stays dark.
 
 ## 4. Direct, with a lamp load
 
-The dim-bulb tester comes out: wall → RCD → power meter → the unit → the 60 W lamp on the output.
+The dim-bulb tester comes out: wall → RCD → power meter → the unit → the lamp on the output.
 
 | # | Do | Expected | Stop if |
 |---|---|---|---|
 | 4.1 | Relay off. Switch on at the wall | The unit boots and connects; the lamp is off | The lamp lights with the relay off |
 | 4.2 | Read the power meter | **Idle power** (relay off): note it. Expected under 1 W, though many plug-in meters can't resolve below 1 W | Over 2 W |
 | 4.3 | `petro_voltage_volts` against the power meter's voltage | Within ± 10 % (uncalibrated; PETRO-4 calibrates). The UK range is 216–253 V | More than 20 % off |
-| 4.4 | Relay on with the button | The lamp lights. The power meter shows about 60 W; `petro_power_watts` and `petro_current_amps` (≈ 0.26 A) within ± 10 %. Note the idle power with the relay on (the coil's 0.4 W is about 0.6 W at the wall) | |
+| 4.4 | Relay on with the button | The lamp lights. The power meter shows the lamp's wattage; `petro_power_watts` within ± 10 % of it (or ± 2 W for a small LED lamp; 60 W is 0.26 A). Note the idle power with the relay on (the coil's 0.4 W is about 0.6 W at the wall) | |
 | 4.5 | Relay off and on from Fleet | The lamp follows | |
 | 4.5a | Relay on. Swap the lamp for the **socket tester** on Petro's output | Correct polarity and earth present at the output too | Anything else: stop |
 | 4.6 | Five minutes on, then a hand on the case | Not noticeably warm anywhere | Warm anywhere |
@@ -145,7 +145,7 @@ at Gate 1).
    - no flux residue that has darkened.
 3. Photograph the board (`photos/gate-3/b<k>-after.jpg`).
 
-**Gate 3 passes** when steps 1–7 match: no lamp in the dim-bulb test, idle power under 2 W,
+**Gate 3 passes** when steps 1–7 match: no lamp in the dim-bulb test (if run), idle power under 2 W,
 readings within the ranges, F2 surviving 10 plug-ins (or T1A fitted and surviving), and an hour
 without a reset.
 

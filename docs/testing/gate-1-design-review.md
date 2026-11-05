@@ -56,7 +56,7 @@ KGND, a current-free Kelvin return, and GND joins N_IN through R29 (0 Ω), the s
 
 ## Carried into the later gates
 
-- **Gate 2:** a 90–100 W iron with preheat for the mains joints, fill checked from both sides;
+- **Gate 2:** preheat and a large tip for the mains joints, fill checked from both sides;
   flux cleaned from the supply's 1.0 mm gaps; dead checks before any power.
 - **Gate 3:** a dim-bulb first power-up (Opus); the socket tester; USB and scope never
   connected; F2's inrush over 10 plug-ins; the supply under sustained Wi-Fi with no brown-outs
