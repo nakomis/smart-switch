@@ -100,6 +100,14 @@ _TABLE = {
     "L3U3": ("3.3uH", "C602030", "IND-SMD_L4.0-W4.0", "FHD4020S-3R3MT", True, 0),
     "C22U": ("22uF 25V", "C12891", "C1206", "CL31A226KAHNNNE", False, 0),
     "C33N": ("33nF", "C21117", "C0603", "CL10B333KB8NNNC", False, 0),     # X7R, basic
+    # Rev B, 5 Nov 2026: the ESP32-C6 (Economic: the S3-MINI needs X-ray, so Standard) and the safe
+    # I/O island on J3, across TI's reinforced isolators in the wide (DW) body: ISO7741 (SPI, 3
+    # forward / 1 reverse), ISO1640 (I2C); the ISOW7743 above powers the island and carries IN/OUT.
+    "ESP32C6": ("ESP32-C6-WROOM-1-N8", "C5366877", "WIRELM-SMD_ESP32-C6-WROOM-1", "ESP32-C6-WROOM-1-N8", True, 0),
+    "ISO7741": ("ISO7741DWR", "C571196", "SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL", "ISO7741DWR", True, 0),
+    "ISO1640": ("ISO1640DWR", "C5216237", "SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL", "ISO1640DWR", True, 0),
+    "IO10": ("DB125-3.5-10P-GN-S", "C5184956", "CONN-TH_10P-P3.50_DIBO_DB125-3.5-10P-GN-S",
+             "DB125-3.5-10P-GN-S", True, 0),
     "DEBUG": ("Debug pads", None, "DebugPads_1x5_P2.54", None, False, 0),
     "MH": ("M3 hole", None, "MountingHole_M3_3.2mm_Pad6", None, False, 0),
     "MHN": ("M3 hole, unplated", None, "MountingHole_M3_3.2mm_NPTH", None, False, 0),
@@ -141,6 +149,8 @@ MFR = {
     "R3K3": ("UNI-ROYAL", "0603WAF3301T5E"), "BUCK": ("Texas Instruments", "TPS563201DDCR"),
     "R54K9": ("UNI-ROYAL", "0603WAF5492T5E"), "R10K6": ("UNI-ROYAL", "0603WAF1002T5E"),
     "L3U3": ("cjiang", "FHD4020S-3R3MT"), "C22U": ("Samsung", "CL31A226KAHNNNE"),
+    "ESP32C6": ("Espressif", "ESP32-C6-WROOM-1-N8"), "ISO7741": ("Texas Instruments", "ISO7741DWR"),
+    "ISO1640": ("Texas Instruments", "ISO1640DWR"), "IO10": ("DORABO", "DB125-3.5-10P-GN-S"),
 }
 
 # fetched-name -> our-name, per key. The module symbol calls GPIOn "IOn" and spells the UART0 pins
@@ -184,9 +194,14 @@ BODY = {"ESP32": (-7.7, -12.8, 7.7, 7.7),
         "FUSEHOLD": (-12.5, -4.95, 12.5, 4.95),   # Littelfuse 656 holder, 25 x 9.9
         "C4U7HV": (-4.0, -4.0, 4.0, 4.0),         # 8 mm can
         "C220U": (-4.45, -3.4, 4.45, 3.4),        # 6.6 mm base, pads to +-4.45
-        "L680U": (-5.55, -5.0, 5.55, 5.0)}        # 10 mm square, pads to +-5.55
+        "L680U": (-5.55, -5.0, 5.55, 5.0),        # 10 mm square, pads to +-5.55
+        # the C6-WROOM-1, 18 x 25.5, from its silk outline: the PCB antenna on the -y side, past
+        # the top pad row (EasyEDA's courtyard is the pad field)
+        "ESP32C6": (-9.0, -15.75, 9.0, 9.85),
+        "IO10": (-17.5, -3.9, 17.5, 3.5)}         # as the 8-way, two pitches longer
 # The antenna strip of the module, in footprint coordinates (above the top pad row).
 ESP32_ANTENNA = (-7.7, -12.8, 7.7, -7.75)
+ESP32C6_ANTENNA = (-9.0, -15.75, 9.0, -9.25)
 
 # 3D models (fetch_models.sh puts them in footprints/lcsc.3dshapes). Each EasyEDA footprint names its
 # model and carries its offset and rotation; parts whose footprint names none get one here.

@@ -123,3 +123,68 @@ def test_any_copper_near_a_mounting_hole_fails(tmp_path):
     (tmp_path / "ok").mkdir()
     assert _probe(tmp_path / "ok", [Via("GND", 60.0 + 1.6 + MAINS_EDGE + 0.1 + 0.3, 30.0)],
                   rules=_rules(), parts=hole) == set()
+
+
+# --- a SELV island in a non-isolated board (rev B's safe I/O on J3) ---------------------------------
+GROUPS_S = {**GROUPS_B, "ISO_3V3": "SELV", "ISO_SDA": "SELV"}
+
+
+def _rules_s(**kw):
+    return Rules(GROUPS_S, rest="NEUTRAL", **kw)
+
+
+def test_the_selv_island_keeps_8_mm_from_everything_else():
+    r = _rules_s()
+    for g in ("NEUTRAL", "LIVE", "LINE", "PSU", "DIV4"):
+        assert r.spacing("SELV", g) == REINFORCED and r.spacing(g, "SELV") == REINFORCED, g
+    assert r.spacing("SELV", "SELV") == 0.0
+    assert "SELV" not in r.used()                      # not a mains group: no edge rule, no matrix row
+    assert all("SELV" not in pair for pair in r.matrix())
+
+
+def test_selv_copper_near_the_low_voltage_side_fails_below_8_mm(tmp_path):
+    near = [Via("ISO_3V3", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 5.0, 30.0)]
+    assert ("clearance", "SELV island to everything else (8 mm)") in _probe(tmp_path, near, rules=_rules_s())
+    (tmp_path / "far").mkdir()
+    far = [Via("ISO_3V3", 30.0, 30.0), Via("GND", 30.0 + 0.6 + REINFORCED + 0.1, 30.0)]
+    assert _probe(tmp_path / "far", far, rules=_rules_s()) == set()
+
+
+def test_selv_copper_near_live_fails_below_8_mm(tmp_path):
+    near = [Via("ISO_SDA", 30.0, 30.0), Via("L_F", 30.0 + 0.6 + 5.0, 30.0)]
+    assert ("clearance", "SELV island to everything else (8 mm)") in _probe(tmp_path, near, rules=_rules_s())
+
+
+def test_selv_may_come_near_the_board_edge():
+    edge = _rules_s().dru().split('rule "mains to edge"')[1].split("(rule")[0]
+    assert "SELV" not in edge
+
+
+def test_a_barrier_part_in_rest_mode_keeps_3_mm_between_its_own_sides():
+    d = _rules_s(barriers=("U9",)).dru()
+    own = d.split('rule "U9 own pads, SELV to the rest"')[1].split("(rule")[0]
+    assert "clearance (min 3mm)" in own
+    assert "A.memberOfFootprint('U9') && B.memberOfFootprint('U9')" in own
+    assert "A.hasNetclass('SELV') && !B.hasNetclass('SELV')" in own
+    assert d.index("SELV island to everything else") < d.index("U9 own pads")      # later wins
+
+
+def test_barrier_creepage_in_rest_mode_pairs_selv_pads_with_the_rest():
+    """An isolator across the island's barrier with no slot under it: each SELV pad against each
+    other pad, all under 8 mm."""
+    from board.netlist import Circuit
+    from board.placement import Placement
+    from board.rules import barrier_creepage
+    c = Circuit()
+    inst = c.add("ISO7741", "U9")
+    side2 = {"GND2": "ISO_GND", "EN2": "ISO_EN", "IND": "ISO_D", "OUTC": "ISO_C", "OUTB": "ISO_B",
+             "OUTA": "ISO_A", "VCC2": "ISO_3V3"}
+    for pin, n in {"VCC1": "+3V3", "GND1": "GND", "INA": "S_A", "INB": "S_B", "INC": "S_C", "OUTD": "S_D",
+                   "EN1": "EN1", **side2}.items():
+        c.connect(n, (inst, pin))
+    groups = {**GROUPS_B, **{n: "SELV" for n in side2.values()}}
+    p = Placement((0.0, 0.0, 40.0, 40.0), {"U9": (20.0, 20.0, 0.0)})
+    bad = barrier_creepage(c, p, Rules(groups, rest="NEUTRAL", barriers=("U9",)))
+    selv_pads = {"9", "10", "11", "12", "13", "14", "15", "16"}          # side 2 of the DW body
+    assert bad and all(mm < REINFORCED for *_, mm in bad)
+    assert all(h not in selv_pads and o in selv_pads for _, h, o, _ in bad)

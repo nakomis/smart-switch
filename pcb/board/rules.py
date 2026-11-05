@@ -27,6 +27,12 @@ holes take screws that could be reachable, so all copper, low-voltage too, keeps
 unplated hole. Low-voltage copper may come near the board edge (the case is plastic); mains-group
 copper keeps MAINS_EDGE from it as before.
 
+A SELV island in non-isolated mode (nets in the group SELV): copper that may be touched (rev B's
+safe I/O on J3), powered and signalled across reinforced isolators. It keeps REINFORCED (8 mm)
+clearance and creepage from every other net, mains and the neutral-referenced rest alike. The
+isolators are barrier parts: between their own SELV and other pads, clearance REINFORCED_CLEARANCE,
+and creepage (checked by barrier_creepage, not KiCad) 8 mm, which a slot under each provides.
+
 IEC 60664-1 basis: rated voltage 250 V (the rationalised voltage for a 230 V supply), overvoltage
 category II, pollution degree 2, material group III (any FR-4: CTI 175-400 is IIIa). Linear
 interpolation between table rows is permitted by the standard; results round up to 0.05 mm.
@@ -60,6 +66,7 @@ CREEPAGE_PD2_MG3 = ((10, 0.40), (12.5, 0.42), (16, 0.45), (20, 0.48), (25, 0.50)
 # neutral (1). A blown fuse lets everything after it be pulled to neutral (through the load or a
 # PSU's input), so a fuse's two sides see the full supply.
 GROUPS = ("LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "SWNODE")
+SELV = "SELV"           # non-isolated mode only: an island that keeps REINFORCED from everything
 
 
 def _scenario(live, psu, load, divider_top="LIVE"):
@@ -136,7 +143,7 @@ class Rules:
     def __post_init__(self):
         if self.rest is not None and self.rest not in GROUPS:
             raise ValueError(f"unknown rest group: {self.rest}")
-        bad = {n: g for n, g in self.groups.items() if g not in GROUPS}
+        bad = {n: g for n, g in self.groups.items() if g not in GROUPS and not (g == SELV and self.rest)}
         if bad:
             raise ValueError(f"unknown groups: {bad}")
         stray = set(self.high_current) - set(self.groups)
@@ -144,11 +151,25 @@ class Rules:
             raise ValueError(f"high-current nets that are not mains nets: {sorted(stray)}")
 
     def used(self):
-        return sorted(set(self.groups.values()), key=GROUPS.index)
+        """The mains groups in use (the SELV island is not one)."""
+        return sorted(set(self.groups.values()) - {SELV}, key=GROUPS.index)
+
+    def has_selv(self):
+        return SELV in self.groups.values()
+
+    def is_selv(self, net):
+        """Whether 'net' may be touched: in isolated mode every net not in a group; in
+        non-isolated mode, the SELV island's nets."""
+        return self.groups.get(net) == SELV if self.rest else net not in self.groups
 
     def spacing(self, a, b):
         """Required clearance and creepage (mm) between groups a and b: the table's for their
-        working voltage, or a reduced group's own figure."""
+        working voltage, or a reduced group's own figure. The SELV island: REINFORCED to anything
+        else."""
+        if (a == SELV) != (b == SELV):
+            return REINFORCED
+        if a == b == SELV:
+            return 0.0
         if a == b:
             v = working_voltage(a, b, self.divider_top)
             return creepage(v) if v else 0.0
@@ -173,6 +194,8 @@ class Rules:
         classes, patterns = base
         tmpl = {"clearance": 0.15, "track_width": 0.15, "via_diameter": 0.6, "via_drill": 0.3}
         classes = list(classes) + [{"name": g, **tmpl, "track_width": 1.0} for g in self.used()]
+        if self.has_selv():
+            classes.append({"name": SELV, **tmpl, "track_width": 0.2})
         classes.append({"name": HIGH_CURRENT, **tmpl, "track_width": HIGH_CURRENT_WIDTH})
         patterns = list(patterns) + [{"netclass": g, "pattern": n} for n, g in sorted(self.groups.items())]
         patterns += [{"netclass": HIGH_CURRENT, "pattern": n} for n in sorted(self.high_current)]
@@ -219,6 +242,10 @@ class Rules:
         if self.high_current:
             rule("high-current track width", [f"track_width (min {HIGH_CURRENT_WIDTH}mm)"],
                  f"A.hasNetclass('{HIGH_CURRENT}')")
+        if self.rest is not None and self.has_selv():
+            rule(f"SELV island to everything else ({REINFORCED:g} mm)",
+                 [f"clearance (min {REINFORCED:g}mm)", f"creepage (min {REINFORCED:g}mm)"],
+                 f"A.hasNetclass('{SELV}') && !B.hasNetclass('{SELV}')")
         for ref, (mm, (n1, n2)) in self.own_leads.items():
             rule(f"{ref} own leads ({mm:g} mm)", [f"clearance (min {mm:g}mm)"],
                  f"A.memberOfFootprint('{ref}') && B.memberOfFootprint('{ref}')")
@@ -226,10 +253,16 @@ class Rules:
                  f"(A.NetName == '{n1}' && B.NetName == '{n2}') || (A.NetName == '{n2}' && B.NetName == '{n1}')")
         for ref in self.barriers:
             inside = f"A.memberOfFootprint('{ref}') && B.memberOfFootprint('{ref}')"
-            rule(f"{ref} own pads, mains to SELV", [f"clearance (min {REINFORCED_CLEARANCE}mm)"],
-                 f"{inside} && ({mains('A')}) && {selv('B')}")
-            rule(f"{ref} pads to its slot", [f"edge_clearance (min {BARRIER_EDGE}mm)"],
-                 f"A.memberOfFootprint('{ref}') && ({mains('A')})")
+            if self.rest is None:
+                rule(f"{ref} own pads, mains to SELV", [f"clearance (min {REINFORCED_CLEARANCE}mm)"],
+                     f"{inside} && ({mains('A')}) && {selv('B')}")
+                rule(f"{ref} pads to its slot", [f"edge_clearance (min {BARRIER_EDGE}mm)"],
+                     f"A.memberOfFootprint('{ref}') && ({mains('A')})")
+            else:
+                rule(f"{ref} own pads, SELV to the rest", [f"clearance (min {REINFORCED_CLEARANCE:g}mm)"],
+                     f"{inside} && A.hasNetclass('{SELV}') && !B.hasNetclass('{SELV}')")
+                rule(f"{ref} pads to its slot", [f"edge_clearance (min {BARRIER_EDGE:g}mm)"],
+                     f"A.memberOfFootprint('{ref}')")
         return "\n".join(out) + "\n"
 
 
@@ -297,14 +330,16 @@ def creepage_between(a, b, slots):
 
 def barrier_creepage(circuit, placement, rules, slots=()):
     """Every mains-to-SELV pad pair within each barrier part whose creepage is under REINFORCED:
-    [(ref, mains pad, other pad, mm)]. A pad with no net counts as SELV (it could be touched)."""
+    [(ref, mains pad, other pad, mm)]. A pad with no net counts as SELV (it could be touched).
+    In non-isolated mode the pairs are the SELV island's pads against every other pad."""
     bad = []
     for ref in rules.barriers:
         inst = circuit.instances[ref]
         pads = [p for p in inst.part.footprint.pads if p.layers and any("Cu" in l for l in p.layers)]
         net = lambda p: circuit.net_of(ref, p.number)
-        hot = [p for p in pads if net(p) in rules.groups]
-        cold = [p for p in pads if net(p) not in rules.groups]
+        selv = lambda p: net(p) is None or rules.is_selv(net(p))
+        hot = [p for p in pads if not selv(p)]
+        cold = [p for p in pads if selv(p)]
         for h in hot:
             for c in cold:
                 mm = creepage_between(_pad_box(placement, ref, h), _pad_box(placement, ref, c), slots)

@@ -65,7 +65,8 @@ def test_local_footprints():
 def test_tht_flags():
     assert part("MH").tht and not part("ESP32").tht and not part("JST5").tht
     assert {k for k, p in PARTS.items() if p.tht and p.lcsc} == {
-        "IO", "IDC", "RELAY16", "PSU5W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT", "RFUSE", "C4U7HV"}
+        "IO", "IO10", "IDC", "RELAY16", "PSU5W", "FUSEHOLD", "FUSECLIP", "MOV", "MAINSTERM", "TACT", "RFUSE",
+        "C4U7HV"}
 
 
 # --- Petro's parts against the makers' drawings (checked 4 Nov 2026) --------------------------

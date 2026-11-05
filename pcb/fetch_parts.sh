@@ -66,6 +66,12 @@ PARTS=(
   C602030   # 3.3 uH 4x4 (TPS563201)
   C12891    # 22 uF 25 V 1206 (TPS563201 output)
   C2909058  # SK6812-EC20 LED
+  # Rev B, 5 Nov 2026: the ESP32-C6 (Economic: the S3-MINI needs X-ray, so Standard) and the safe
+  # I/O island on J3 (the ISOW7743 above powers it and carries IN/OUT; all reinforced, DW bodies)
+  C5366877  # MCU (ESP32-C6-WROOM-1-N8)
+  C571196   # ISO7741DWR (safe SPI: 3 forward, 1 reverse)
+  C5216237  # ISO1640DWR (safe I2C)
+  C5184956  # IO10 (DB125-3.5-10P-GN-S, 10-way 3.5 mm screw terminal)
 )
 # easyeda.com's CloudFront returns 403 for easyeda2kicad's default User-Agent, so run it
 # through a one-line wrapper that sends a neutral UA instead.
