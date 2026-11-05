@@ -10,6 +10,8 @@ Read the rules in [README.md](README.md) first.
 ## Prerequisites
 
 - [ ] Gates 2 and 2b passed on this board.
+- [ ] The mode is **off** (README rule 8), so the relay stays open at power-up. Check with `info`
+  over USB before the case is closed.
 - [ ] The firmware (PETRO-3) is flashed over USB and **provisioned**: Wi-Fi, the Fleet
   certificate and the VictoriaMetrics credential, all in `prov`. Confirm `info` shows each key
   present, then **unplug USB**.
@@ -20,7 +22,8 @@ Read the rules in [README.md](README.md) first.
   - the board is on nylon M3 screws;
   - the button cap is captive and the light pipe is seated;
   - the cords pass through the glands with their cord grips tight;
-  - the earth is joined from the input cord to the output on a Wago 221, clear of the board;
+  - the earth is joined from the input cord to the output on a Wago 221, clear of the board, with
+    the earth conductor left **longer** than L and N at each grip, so that it takes strain last;
   - the case is closed and screwed.
 - [ ] **Look over the outside:**
   - no metal is exposed: screw heads are recessed or nylon, and no part of the board shows through
@@ -33,7 +36,7 @@ Read the rules in [README.md](README.md) first.
   - the plug-in power meter;
   - the dim-bulb tester;
   - a 60 W incandescent lamp on a lead;
-  - the meter;
+  - the meter, the insulation tester and the discharge tool (README);
   - Fleet and VictoriaMetrics on a laptop that is **not** connected to the unit.
 
 ## 1. Dead checks, case closed (unplugged)
@@ -50,6 +53,23 @@ The meter on resistance, at the input plug's pins and the output's socket.
 | 1.6 | Output L and output N | ∞ (nothing on the output) | |
 | 1.7 | Input L and N to each case screw and the gland nuts | ∞ | |
 
+**1.8 Insulation at 500 V DC.** The case is the only barrier, and a meter at about 1 V can't find
+a creepage path through a gap, the button or the light pipe.
+1. Join the input plug's L and N pins together with a short lead. The MOV then sees nothing.
+2. With the insulation tester at 500 V DC, measure from L+N to:
+   - the earth pin: at least **2 MΩ**;
+   - aluminium foil pressed over the button cap: at least **7 MΩ**;
+   - the same over the light pipe, then along each seam of the case and over each gland, one at
+     a time: at least **7 MΩ** each.
+3. Remove the link.
+
+Any reading below: stop, and find the path before going on.
+
+**1.9 Distances at the openings** (PETRO-6's design, checked on the print): from the outside
+surface of the button cap and the light pipe to the nearest live part (the switch's top plate,
+the LED) is at least **6 mm** through the insulating parts (reinforced insulation, as there is
+no earth to fall back on).
+
 ## 2. The socket
 
 1. Plug the socket tester into the wall socket: it shows **correct** (no reversal, earth present).
@@ -65,9 +85,9 @@ unit draws under 1–2 W, so the lamp stays dark.
 | # | Do | Expected | Stop if |
 |---|---|---|---|
 | 3.1 | Nothing on the output. Plug the unit into the dim-bulb tester, then switch on at the wall | A brief glimmer at most (C1 and C2 charging), then dark. The LED shows the boot colours, then Wi-Fi joining, then connected | The lamp stays lit; the RCD trips; any smell, sound or smoke |
-| 3.2 | Wait 5 minutes | Fleet: connected. VictoriaMetrics: `petro_voltage_volts` reads somewhat **below** 230 V (the lamp drops a little); `petro_zx_hz` ≈ 100; `petro_relay_on` 0 | The voltage reads 0 or wildly off |
-| 3.3 | Press the button once (off → on, or as PETRO-3's modes go) | The relay clicks; the lamp stays dark (nothing on the output) | The lamp lights |
-| 3.4 | Switch off at the wall, then unplug | | |
+| 3.2 | Wait 5 minutes | Fleet: connected. VictoriaMetrics: `petro_voltage_volts` reads a few volts **below** the power meter's reading (the lamp drops a little; UK mains is often 240–245 V); `petro_zx_hz` ≈ 100; `petro_relay_on` 0 | The voltage reads 0 or wildly off |
+| 3.3 | Press the button **once** (off → on) | The relay clicks; the lamp stays dark (nothing on the output) | The lamp lights |
+| 3.4 | Press it **twice more** (on → auto → off), or set off from Fleet; check `petro_relay_on` is 0. Switch off at the wall, then unplug | | |
 
 ## 4. Direct, with a lamp load
 
@@ -76,10 +96,11 @@ The dim-bulb tester comes out: wall → RCD → power meter → the unit → the
 | # | Do | Expected | Stop if |
 |---|---|---|---|
 | 4.1 | Relay off. Switch on at the wall | The unit boots and connects; the lamp is off | The lamp lights with the relay off |
-| 4.2 | Read the power meter | **Idle power** (relay off): note it. Expected under 1 W | Over 2 W |
+| 4.2 | Read the power meter | **Idle power** (relay off): note it. Expected under 1 W, though many plug-in meters can't resolve below 1 W | Over 2 W |
 | 4.3 | `petro_voltage_volts` against the power meter's voltage | Within ± 10 % (uncalibrated; PETRO-4 calibrates). The UK range is 216–253 V | More than 20 % off |
-| 4.4 | Relay on with the button | The lamp lights. The power meter shows about 60 W; `petro_power_watts` and `petro_current_amps` (≈ 0.26 A) within ± 10 %. Note the idle power with the relay on (the coil adds ~0.4 W) | |
+| 4.4 | Relay on with the button | The lamp lights. The power meter shows about 60 W; `petro_power_watts` and `petro_current_amps` (≈ 0.26 A) within ± 10 %. Note the idle power with the relay on (the coil's 0.4 W is about 0.6 W at the wall) | |
 | 4.5 | Relay off and on from Fleet | The lamp follows | |
+| 4.5a | Relay on. Swap the lamp for the **socket tester** on Petro's output | Correct polarity and earth present at the output too | Anything else: stop |
 | 4.6 | Five minutes on, then a hand on the case | Not noticeably warm anywhere | Warm anywhere |
 
 ## 5. Inrush: F2 against plugging in
@@ -93,7 +114,8 @@ F2's melting I²t is 0.42 A²s, and the inrush into C1 and C2 through R1 is esti
 
 If F2 blows (and only then):
 - unplug and open (README rule 6);
-- confirm nothing else is damaged;
+- confirm nothing else is damaged, **R1 included** (a fusible resistor can open on repeated
+  surges: measure it, 10 Ω);
 - fit **T1A** (`docs/DESIGN.md` §5.3);
 - repeat this step;
 - record it.
@@ -103,20 +125,20 @@ If F2 blows (and only then):
 The supply's margin under sustained Wi-Fi transmission with the relay's coil on (Fable and Opus,
 at Gate 1).
 
-1. Relay on, the lamp lit, for **1 hour**. The firmware reports every 10 s.
+1. Relay on, the lamp lit, and the firmware's **Wi-Fi transmit-stress mode** on through Fleet, for
+   **1 hour**. One push every 10 s isn't sustained transmission.
 2. VictoriaMetrics, for the hour:
    - `petro_resets_total` must not rise (in particular, no `reason="brownout"`);
    - `petro_uptime_seconds` climbs without a break;
    - `petro_board_temperature_celsius`: note the rise from room temperature;
    - `petro_wifi_rssi_dbm`: note it.
-3. Switch off at the wall and unplug.
+3. Stress mode off, mode **off** (README rule 8). Switch off at the wall and unplug.
 
 ## 7. Opening up
 
-1. Wait 2 minutes, open the case, and measure C1's leads: **below 30 V** before touching anything
-   (README rule 6). Note the reading and how long after unplugging it was taken. This sets how
-   soon Gate 4 can open the unit after its load run. If it is above 30 V, take the probes off,
-   keep hands clear, wait another 2 minutes and measure again; note the time it took.
+1. Follow README rule 6: wait 2 minutes, open without touching the board, and measure D7's
+   cathode to TP6. Note the reading and the time since unplugging. Above 30 V: discharge with the
+   tool and measure again.
 2. Look and smell:
    - no discolouration;
    - nothing melted or bulged (C1, C2, C4, R1);
@@ -137,6 +159,9 @@ Date: · Firmware version: · Room temperature:
 |---|---|---|---|
 | Prerequisites | | | |
 | 1.1–1.7 dead checks | | | |
+| 1.8 insulation at 500 V: earth / button / light pipe / seams / glands | | | |
+| 1.9 distances at the openings | | | |
+| 4.5a socket tester at the output | | | |
 | 2 socket tester, RCD test | | | |
 | 3.1 dim bulb dark, boots | | | |
 | 3.2 V (dim bulb), ZX | | | |

@@ -22,7 +22,8 @@ Read the rules in [README.md](README.md) first.
   trip opens.
 - [ ] The temperature labels, the meter (and its K-type thermocouple, if it has one), a room
   thermometer.
-- [ ] Gate 3's discharge time for C1 (README rule 6).
+- [ ] The discharge tool (README rule 6), and a 500 W load for step 1.6 (another heater on low, or
+  the hot air gun briefly).
 
 ## 1. The trip test (PETRO-5), before any long run
 
@@ -35,9 +36,12 @@ Read the rules in [README.md](README.md) first.
    - the LED shows the fault colour;
    - the heater is off.
 4. Press the button: the trip clears and **the relay stays off** (CLAUDE.md, Control).
-5. Reboot the unit (switch off at the wall and on), and confirm the threshold is back to about
-   10.5 A. Relay on: the heater runs without tripping.
-6. If the relay did **not** open in step 3: stop. Only the plug's 13 A fuse would be left, which is
+5. Reboot the unit (switch off at the wall and on). Confirm in Fleet's status that the threshold in
+   force is back to about 10.5 A. Relay on: the heater runs without tripping.
+6. **The real threshold and the fast path:** add a 500 W load to the heater on a short extension
+   (≈ 10.9 A on the power meter). Relay on: **the relay opens within a second** at the real
+   ~10.5 A, through the BL0939's OC output. Clear it (step 4) and take the extra load off.
+7. If the relay did **not** open in step 3 or 6: stop. Only the plug's 13 A fuse would be left, which is
    accepted for a stuck relay but not for firmware that doesn't trip. Fix PETRO-5 first.
 
 ## 2. Labels on
@@ -69,7 +73,8 @@ Photograph them (`photos/gate-4/b<k>-labels-before.jpg`), then close the case.
    - `petro_trips_total`.
 
    **Stop** (relay off from Fleet, then off at the wall) if:
-   - the NTC passes **60 °C**;
+   - the NTC passes **50 °C** on B1's first run (the NTC under-reads the hot spots by a ratio not
+     yet known; once §5 has measured it, set this limit from the ratio for later runs);
    - there is any smell or sound;
    - the case is too hot to keep a hand on;
    - the current drifts upwards.
@@ -78,8 +83,8 @@ Photograph them (`photos/gate-4/b<k>-labels-before.jpg`), then close the case.
 5. Just before the end, put a hand on the case. Note any warm spot, and measure it with an IR
    thermometer if you have one (plastic reads well).
 6. Note `petro_energy_kwh_total` and the power meter's kWh at the start and end of the run.
-7. Relay off, switch off at the wall, unplug. **Wait for C1** (README rule 6), open, check C1 is
-   below 30 V.
+7. Relay off and mode **off** (README rule 8); switch off at the wall, unplug. Then README rule 6:
+   wait, open without touching the board, check C1 (D7's cathode to TP6), discharge if needed.
 8. **Read every label** (its highest changed window) and photograph them
    (`b<k>-labels-after.jpg`). Then, with the thermocouple if you have one, measure T1–T7 quickly.
    Note how long after unplugging: these read low, which is why the labels are the record.
@@ -89,7 +94,11 @@ Photograph them (`photos/gate-4/b<k>-labels-before.jpg`), then close the case.
 > rise at 10 A ≈ measured rise × (10 / measured A)²
 
 For example, a 20 °C rise at 8.7 A is about 26 °C at 10 A. The pass limits apply to the scaled
-figure.
+figure. **Scale only T1–T6** (the current path). R1 (T7), the case wall (T8) and the relay's coil
+don't follow the load current: use their rises as measured.
+
+**The 70 °C limit at a warm room:** a peak measured at room temperature R is judged as
+peak + (35 °C − R), so a 60 °C peak in a 20 °C room counts as 75 °C.
 
 ## 4. The metering comparison
 
@@ -103,7 +112,8 @@ From Gates 3 and 4, against the power meter:
 | **Energy over the run** | Petro kWh: | Meter kWh: | Error: |
 
 PETRO-4's calibration should bring each within ± 2 % at the heater (the power meter's own
-accuracy limits this).
+accuracy limits this). In the idle row Petro reads about 0 W against the meter's ~0.6 W, which is
+right: the shunt doesn't carry Petro's own supply current.
 
 ## 5. The NTC's calibration
 
@@ -128,12 +138,17 @@ that the NTC trips before the hottest spot reaches 70 °C.
    - no resets;
    - no trips;
    - the NTC staying below the hour-long run's figure.
-3. When it finishes, **relay on for 30 minutes** at the heater's load. Compare the NTC's rise at
-   30 minutes with the same point in step 3's run:
+3. When it finishes, let the unit **cool to within 1 °C of step 3's starting NTC reading**
+   (relay off, a few hours), so both runs start alike. Then **relay on for 30 minutes** at the
+   heater's load, and compare the NTC's rise at 30 minutes with the same point in step 3's run:
    - within 3 °C: the contacts are as good as before;
    - more: the contacts have worn or a joint has degraded. Open it up (README rule 6), inspect K1's
      joints, and don't use this board until that's understood.
-4. Unplug, wait for C1, open, look for discolouration at K1 and the terminals. Photograph.
+4. Mode off, unplug, README rule 6, open. Look for discolouration at K1 and the terminals.
+   Photograph.
+5. **The contact resistance, directly:** repeat Gate 2's step 5.2a (on USB, mains unplugged: relay
+   on, the same current from the bench supply, the mV across the same points). More than about
+   50 % up on Gate 2's figure means the contact has worn.
 
 **Gate 4 passes** when the scaled rises are under 30 °C, nothing reaches about 70 °C, the trip
 works, and the relay is unchanged after 500 cycles.
@@ -163,3 +178,5 @@ Date: · Firmware version: · Room temperature: · Load: (heater, W, A)
 | 6 500 cycles: resets, trips | | | |
 | 6.3 NTC rise at 30 min, before / after cycling | | | |
 | 6.4 inspection | | | |
+| 6.5 contact mV: Gate 2 / after cycling | | | |
+| 1.6 real trip at ~10.9 A | | | |

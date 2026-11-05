@@ -277,3 +277,8 @@ The alternatives considered:
 - The LNK306's output and the 5 V converter under the full load (Wi-Fi transmit and the relay coil
   together): check at Gate 3 before the load test.
 - The glands are V-2 only. Accept that (they're not current-carrying), or find V-0 glands.
+- **Nothing bleeds the DC bus** (C1, C2): the 3.3 kΩ pre-load is on the 12 V output, so once the
+  LNK306 stops switching after unplugging, what's left on the bus stays. The gate procedures
+  measure it before touching, and discharge it with a tool (`docs/testing/README.md` rule 6).
+  For a rev C: a bleeder across the bus (for example 2 × 1 MΩ 1206 in series, about 60 mW at
+  354 V; τ ≈ 19 s).

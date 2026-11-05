@@ -31,13 +31,24 @@ Run every gate on **one board first** (B1). The others follow once it has passed
 5. **Nothing conductive runs into a powered case**: no probe leads, no thermocouples. The board
    reports its own readings over Wi-Fi (Fleet and VictoriaMetrics), and temperatures are read
    from labels that keep their maximum, after unplugging.
-6. **Unplugging isn't enough before opening.** C1 and C2 hold up to 354 V DC. Unplug, wait
-   **2 minutes** (or the discharge time Gate 3 measured, if that was longer), then before touching anything measure across C1's leads on the underside: it
-   must be **below 30 V**. If it isn't, wait again. Never short the capacitors with a screwdriver.
+6. **Unplugging isn't enough before opening.** C1 and C2 hold up to 354 V DC, and **nothing
+   bleeds them**: the LNK306 drains them only until it stops switching, and what is left can stay
+   for hours (Gate 2b measures how much).
+   1. Unplug and wait 2 minutes.
+   2. Open the case **without touching the board**, and measure from the top side: **D7's banded
+      (cathode) end** (VBULK1) to **TP6** (GND). Use insulated probes, one hand, the other hand
+      away from the board.
+   3. Below 30 V: carry on. Above it: **discharge with the discharge tool** (below) across the same
+      two points for 5 seconds, then measure again.
+
+   Never short the capacitors with a screwdriver.
 7. **Stop on anything unexpected**: a smell, a sound, smoke, a fuse blowing, a reading outside its
    range, the RCD tripping. Unplug at the socket (not the unit), record what happened, and don't
    power it again until the cause is understood.
-8. **Fuses are replaced only like for like** (`docs/DESIGN.md` §5.1): F1 a 6.3×32 mm ceramic 15 A
+8. **Leave the mode off before every switch-off.** The mode (on, off, auto) persists in NVS and
+   is the power-on state. A unit left "on" closes its relay the moment it's next plugged in, into
+   whatever is on the output. Before unplugging, set it off and check `petro_relay_on` is 0.
+9. **Fuses are replaced only like for like** (`docs/DESIGN.md` §5.1): F1 a 6.3×32 mm ceramic 15 A
    fast-acting, at least 1.5 kA at 250 V AC; F2 a 5×20 mm ceramic T500 mA (T1A only if Gate 3's
    inrush check calls for it). Never a glass fuse.
 
@@ -53,6 +64,8 @@ Run every gate on **one board first** (B1). The others follow once it has passed
 | An incandescent lamp of 60–100 W, and a lamp holder with a lead | 3 | For the dim-bulb tester and the lamp load. An LED lamp won't limit current |
 | Spare fuses | 3, 4 | F2 × 5 (T500 mA ceramic), T1A ceramic × 2, F1 × 2 |
 | Nylon M3 screws | 3 | The mounting holes are unplated; nylon keeps the screws insulating |
+| **A discharge tool** | 2b, 3, 4 | A 10 kΩ 5 W resistor between two insulated probes (or test leads with insulated clips), in heat-shrink. τ = RC ≈ 0.1 s, so 5 seconds empties C1 and C2. Never a screwdriver |
+| **An insulation tester (500 V DC)** | 3 | The case is the only barrier, and a meter at ~1 V can't find a creepage path. A 500 V insulation tester or a PAT tester with an insulation test (buy or borrow); with aluminium foil for the outside of the case |
 
 **A dim-bulb tester** is a lamp holder wired in series with the live of a trailing socket, inside
 its own closed box: Martin builds it, or buys one. With a short anywhere, the lamp lights fully
@@ -78,7 +91,7 @@ USB only and so never with mains:
 
 | Command | Does |
 |---|---|
-| `info` | Firmware version, MAC, chip revision, reset reason, the `prov` partition's state (keys present, never values) |
+| `info` | Firmware version, MAC, chip revision, reset reason, the mode, the trip thresholds in force, the `prov` partition's state (keys present, never values) |
 | `relay on` / `relay off` | Drives the relay |
 | `relay cycle <n> <on_ms> <off_ms>` | Cycles it n times |
 | `led <r> <g> <b>` | Sets the LED (0–255 each) |
@@ -89,7 +102,12 @@ USB only and so never with mains:
 | `wifi scan` | SSIDs, channels and RSSI |
 | `j3` | Toggles OUT at 1 Hz for 5 s, reads IN, scans I²C (0x08–0x77) |
 
-**Fleet and VictoriaMetrics (Gates 3 and 4)**, pushed every 10 s, each labelled with the Thing:
+**Fleet and VictoriaMetrics (Gates 3 and 4)**, pushed every 10 s. VictoriaMetrics is reached
+through vmauth on Cal (home-infra #507): a plain-text push (`/api/v1/import/prometheus`, or
+`/write` as tinycrypt uses) with basic auth. The user is the device's name, `petro-prod-b1` to
+`-b5`, matching its Fleet Thing; its password comes from SSM `/vmauth/device-petro-prod-bN-password`
+into `prov` (`metrics_url`, `metrics_user`, `metrics_pass`, as tinycrypt's `provision-key.sh`).
+vmauth labels every series `host_name="petro-prod-bN"`.
 
 | Metric | Unit |
 |---|---|
@@ -102,6 +120,12 @@ USB only and so never with mains:
 | `petro_resets_total{reason}` | Brown-outs show as `reason="brownout"` |
 | `petro_trips_total{cause}` | Over-current or over-temperature (PETRO-5) |
 
-**Commands through Fleet:** relay on/off; relay cycle (n, on and off times) for Gate 4; a
-temporary trip threshold for Gate 4's trip test (PETRO-5), which is never persisted and is gone
-after a reboot.
+**Commands through Fleet:**
+- relay on/off, and the mode;
+- relay cycle (n, on and off times), for Gate 4;
+- a temporary trip threshold for Gate 4's trip test (PETRO-5), never persisted and gone after a
+  reboot. The thresholds in force are reported in the status, so a reboot can be checked;
+- a Wi-Fi **transmit-stress mode** for Gate 3's hour (continuous traffic, not one push every 10 s).
+
+Use `idf.py monitor --no-reset` where a reset reason matters: plain `monitor` resets the C6 when
+it opens.

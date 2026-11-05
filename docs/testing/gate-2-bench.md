@@ -35,7 +35,9 @@ loupe:
 ## 2. Dead checks, before hand-fitting (unpowered)
 
 The meter on resistance. The terminals aren't fitted yet, so use their pads. Reading GND, use a
-GND test hole (TP6, TP8 or TP11).
+GND test hole (TP6, TP8 or TP11). For 2.1–2.3, **red on the rail or C1's +, black on GND**:
+reversed, the meter forward-biases D8 and the LNK306's body diode and reads low, which looks like
+a fault but isn't.
 
 | # | Between | Expected | Why |
 |---|---|---|---|
@@ -45,7 +47,7 @@ GND test hole (TP6, TP8 or TP11).
 | 2.4 | J1's N pad and GND | **About 0 Ω** (the lead resistance) | R29 |
 | 2.5 | J1's N pad and J2's N pad | **About 0 Ω** | The shunt (1 mΩ) |
 | 2.6 | J1's L pad and J1's N pad | **About 1.95 MΩ** (20 MΩ range) | The divider (5 × 390 kΩ + 470 Ω) |
-| 2.7 | J1's L pad and the F1 clip pads | ∞ until F1 is fitted | |
+| 2.7 | J1's L pad and XF1's pads; J1's L pad and XF2's pads | XF1 ≈ 0 Ω (it is on L_IN); XF2 ∞ until F1 is fitted | |
 | 2.8 | Any mains pad and each mounting hole's surround | ∞ | The holes are unplated |
 
 Anything that reads as a short: find it before going on.
@@ -81,7 +83,8 @@ Gate 1).
      condition for accepting 1.0 mm was clean flux.
 
    Let it dry fully.
-6. Fit F1 (15 A, 6.3×32 mm ceramic) in its clips. **Leave F2 out** until Gate 3.
+6. Fit F1 (15 A, 6.3×32 mm ceramic) in its clips if you have it; Gates 2 and 2b don't need it.
+   **Leave F2 out** until Gate 3. **Both fuses must be in before any mains** (Gate 3).
 7. Photograph both sides (`b<k>-fitted-top.jpg`, `-bottom.jpg`).
 
 **Dead checks after fitting:**
@@ -91,7 +94,7 @@ Gate 1).
 | 3.1 | J1 L and J1 N | Still about 1.95 MΩ |
 | 3.2 | J1 L and J2 L | ∞ (the relay is open) |
 | 3.3 | J2 L and J2 N | ∞ |
-| 3.4 | J1 L and C1's + lead | ∞ (F2 out) |
+| 3.4 | J1 L and C1's + lead, both polarities | **≥ 1.9 MΩ** either way, nothing low (F2 out; one polarity finds a path through the divider, GND, D8 and the LNK306's body diode) |
 | 3.5 | Each terminal screw, tightened onto a scrap of wire, and the board | Firm; the terminal doesn't move on its joints |
 
 ## 4. The USB cable
@@ -113,13 +116,14 @@ The laptop on battery or mains is fine here, **because no mains reaches the boar
 
 | # | Do | Expected |
 |---|---|---|
-| 5.1 | Plug in USB. Measure +5V (TP7) and +3V3 (TP9) to GND | +5V **4.5–4.9 V** (USB through D6's Schottky); +3V3 **3.25–3.35 V**. Nothing warm (fingertip on U2, U5, U3) |
+| 5.1 | Plug in USB. Measure +5V (TP7) and +3V3 (TP9) to GND | +5V **4.3–4.95 V** (USB through F4 and D6's Schottky; the low end on a weak port); +3V3 **3.25–3.35 V**. Nothing warm (fingertip on U2, U5, U3) |
 | 5.2 | Flash the firmware (`idf.py -p <port> flash monitor`) | Flashes, boots, the console prompt appears |
+| 5.2a | **Contact resistance, the baseline for Gate 4:** `relay on`; pass **2 A** from the bench supply (constant current, a few volts; 1 A if that's its limit) from J1 L to J2 L (without F1: XF2's pad to J2 L); measure the millivolts across the same two points, then `relay off` | Note the mV and the current (≈ tens of mV: the contact, and F1 if fitted). Gate 4 repeats it after 500 cycles, the same way |
 | 5.3 | `info` | The version, the MAC, the reset reason; `prov` state |
 | 5.4 | `led 255 0 0`, then `0 255 0`, `0 0 255`, `0 0 0` | Red, green, blue, off |
 | 5.5 | `button`, press SW1 three times | Three presses and releases logged, no bounce doubles |
 | 5.6 | `relay on`; measure COIL (TP10) to GND; then `relay off` | A click. COIL ≈ 0 V when on; ≈ +5V when off |
-| 5.7 | `relay on`, and measure **J1 L to J2 L** with the meter on continuity | ≈ 0 Ω (through F1 and the closed contact). `relay off`: ∞ |
+| 5.7 | `relay on`, and measure **J1 L to J2 L** with the meter on continuity (without F1: XF2's pad to J2 L) | ≈ 0 Ω (through F1 and the closed contact). `relay off`: ∞ |
 | 5.8 | `relay cycle 20 200 200` | 20 clicks; the C6 doesn't reset (no brown-out from the coil) |
 | 5.9 | `bl` | Every frame's checksum good. **Voltage and currents near zero** (no mains); the chip's temperature near room temperature |
 | 5.10 | `edges` | ZX and OC: 0 a second (no mains) |
@@ -156,6 +160,7 @@ Date: · Firmware version: · Tester: Martin
 | 4 cable | | | |
 | 5.1 +5V / +3V3 | | | |
 | 5.2–5.3 flash, info | | | |
+| 5.2a contact mV at 2 A | | | |
 | 5.4 LED | | | |
 | 5.5 button | | | |
 | 5.6 relay, COIL | | | |
