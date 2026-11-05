@@ -83,8 +83,8 @@ Gate 1).
      condition for accepting 1.0 mm was clean flux.
 
    Let it dry fully.
-6. Fit F1 (15 A, 6.3×32 mm ceramic) in its clips if you have it; Gates 2 and 2b don't need it.
-   **Leave F2 out** until Gate 3. **Both fuses must be in before any mains** (Gate 3).
+6. Fit F1's **link** (README rule 9: solid copper ≥ 1.5 mm², clamped in both clips). Leave
+   **F2's link out** until Gate 3: Gate 2b relies on F2's position being open.
 7. Photograph both sides (`b<k>-fitted-top.jpg`, `-bottom.jpg`).
 
 **Dead checks after fitting:**

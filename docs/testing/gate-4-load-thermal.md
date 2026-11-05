@@ -68,7 +68,7 @@ run, put a small piece of Kapton tape or a dot of black permanent marker on each
 
 ## 1. The trip test (PETRO-5), before any long run
 
-1. The chain as in Gate 3: wall → RCD → power meter → the unit → the radiator, on.
+1. The chain as in Gate 3: wall (RCD-protected) → power meter → the unit → the radiator, on.
 2. Relay on. Through Fleet, set a **temporary** trip threshold below the radiator's current (for
    example 5 A). It isn't saved, and a reboot clears it.
 3. **Expected:**

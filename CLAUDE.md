@@ -31,6 +31,7 @@ reasoning is in `docs/DESIGN.md`.
 | Light sealing | The case is **opaque**, and no light may leak through cracks or joins. The light pipe runs through an opaque tunnel/boss whose **flange sits around the LED on the board**, optionally glued down with opaque glue or enamel paint. So the board keeps a **2 mm clear perimeter around the LED** (no parts, and nothing taller than the mask) for the flange to seat on; the case and board designs share the LED's position and the flange footprint |
 | Assembly | JLCPCB Economic, 1 oz copper. The mains parts (J1, J2, F1's clips, F2's holder, K1, RV1, R1) are **hand-fit**: bought from authorised distributors (`docs/DESIGN.md` §3.2) and soldered by Martin (`pcb/out/petro/hand-fit.csv`) |
 | Integration | MQTT/Fleet, plus Alexa Smart Home on day one (nakostat's Alexa Lambda pattern). No Home Assistant yet |
+| Fuses as built | F1 and F2 bridged with solid copper links (Martin, 5 Nov 2026): the plug's 13 A fuse and R1 protect instead. Never foil. A 500 V insulation test of the case was also declined: never handle the unit plugged in (`docs/testing/README.md`) |
 | Earth | Does not go through the PCB: a Wago 221 or crimp inside the case. The mounting holes are unplated, so the screws aren't live |
 
 ## Mains design rules (non-negotiable)

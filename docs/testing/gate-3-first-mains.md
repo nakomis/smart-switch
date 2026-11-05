@@ -17,7 +17,7 @@ Read the rules in [README.md](README.md) first.
   present, then **unplug USB**.
 - [ ] Fleet shows the Thing, and VictoriaMetrics shows its `petro_*` series. This works from Gate
   2b's bench supply or from USB; the dashboards need to be working before mains is involved.
-- [ ] F2 (T500 mA ceramic) is in its holder; F1 (15 A) is in its clips.
+- [ ] F1's and F2's links are in (README rule 9: solid copper ≥ 1.5 mm², clamped; F2's goes in now, after Gate 2b).
 - [ ] **The case** (PETRO-6), printed in the V-0 filament:
   - the board is on nylon M3 screws;
   - the button cap is captive and the light pipe is seated;
@@ -32,11 +32,11 @@ Read the rules in [README.md](README.md) first.
 - [ ] The input cord ends in a BS 1363 plug with a **13 A** fuse. The output ends in its socket or
   appliance lead (PETRO-6).
 - [ ] At hand:
-  - the socket tester and the plug-in RCD;
+  - the socket tester;
   - the plug-in power meter;
   - the dim-bulb tester, if you have an incandescent bulb (README);
   - a lamp on a lead (any kind; note its wattage);
-  - the meter, the insulation tester and the discharge tool (README);
+  - the meter and the discharge tool (README);
   - Fleet and VictoriaMetrics on a laptop that is **not** connected to the unit.
 
 ## 1. Dead checks, case closed (unplugged)
@@ -53,17 +53,12 @@ The meter on resistance, at the input plug's pins and the output's socket.
 | 1.6 | Output L and output N | ∞ (nothing on the output) | |
 | 1.7 | Input L and N to each case screw and the gland nuts | ∞ | |
 
-**1.8 Insulation at 500 V DC.** The case is the only barrier, and a meter at about 1 V can't find
-a creepage path through a gap, the button or the light pipe.
-1. Join the input plug's L and N pins together with a short lead. The MOV then sees nothing.
-2. With the insulation tester at 500 V DC, measure from L+N to:
-   - the earth pin: at least **2 MΩ**;
-   - aluminium foil pressed over the button cap: at least **7 MΩ**;
-   - the same over the light pipe, then along each seam of the case and over each gland, one at
-     a time: at least **7 MΩ** each.
-3. Remove the link.
-
-Any reading below: stop, and find the path before going on.
+**1.8 Insulation at 500 V DC: declined** (Martin, 5 Nov 2026; README). The known gap: nothing
+here tests the case's insulation at a real voltage. Instead, inspect every seam, the glands, the
+button and the light pipe by eye and torch for a gap or a thin wall, and keep to: **never handle
+the unit while it's plugged in.** If an insulation tester ever comes to hand, this is the test:
+L and N joined, 500 V DC to the earth pin (≥ 2 MΩ) and to foil over the button, the light pipe,
+each seam and each gland (≥ 7 MΩ).
 
 **1.9 Distances at the openings** (PETRO-6's design, checked on the print): from the outside
 surface of the button cap and the light pipe to the nearest live part (the switch's top plate,
@@ -73,8 +68,8 @@ no earth to fall back on).
 ## 2. The socket
 
 1. Plug the socket tester into the wall socket: it shows **correct** (no reversal, earth present).
-2. Plug in the plug-in RCD and press its **test** button: it trips. Reset it.
-3. The chain, in this order: wall socket → plug-in RCD → plug-in power meter → the unit.
+2. Press the consumer unit's RCD **test** button for that circuit: it trips. Reset it.
+3. The chain, in this order: wall socket → plug-in power meter → the unit.
 
 ## 3. First power-up through the dim bulb
 
@@ -91,7 +86,7 @@ unit draws under 1–2 W, so the lamp stays dark.
 
 ## 4. Direct, with a lamp load
 
-The dim-bulb tester comes out: wall → RCD → power meter → the unit → the lamp on the output.
+The dim-bulb tester comes out: wall → power meter → the unit → the lamp on the output.
 
 | # | Do | Expected | Stop if |
 |---|---|---|---|
@@ -103,22 +98,15 @@ The dim-bulb tester comes out: wall → RCD → power meter → the unit → the
 | 4.5a | Relay on. Swap the lamp for the **socket tester** on Petro's output | Correct polarity and earth present at the output too | Anything else: stop |
 | 4.6 | Five minutes on, then a hand on the case | Not noticeably warm anywhere | Warm anywhere |
 
-## 5. Inrush: F2 against plugging in
+## 5. Inrush: R1 against plugging in
 
-F2's melting I²t is 0.42 A²s, and the inrush into C1 and C2 through R1 is estimated at about
-0.05 A²s (`docs/DESIGN.md` §5.3).
+With F2 bridged (README rule 9), R1, the 10 Ω fusible resistor, takes each plug-in's inrush into
+C1 and C2 (about 0.5 J each time) and is the supply's only fuse.
 
 1. Relay off. Switch the socket on and off **10 times**, about 10 seconds on and 10 seconds off.
-2. Each time the unit must boot and connect. If F2 has blown, the unit stays dead: the LED is
-   dark and there is no Fleet connection.
-
-If F2 blows (and only then):
-- unplug and open (README rule 6);
-- confirm nothing else is damaged, **R1 included** (a fusible resistor can open on repeated
-  surges: measure it, 10 Ω);
-- fit **T1A** (`docs/DESIGN.md` §5.3);
-- repeat this step;
-- record it.
+2. Each time the unit must boot and connect. If it stays dead (the LED dark, no Fleet), R1 may
+   have opened: unplug, README rule 6, open, measure R1 (10 Ω). If it has opened, find out why
+   before fitting another: it is now the supply's only protection.
 
 ## 6. An hour under Wi-Fi load
 
@@ -146,7 +134,7 @@ at Gate 1).
 3. Photograph the board (`photos/gate-3/b<k>-after.jpg`).
 
 **Gate 3 passes** when steps 1–7 match: no lamp in the dim-bulb test (if run), idle power under 2 W,
-readings within the ranges, F2 surviving 10 plug-ins (or T1A fitted and surviving), and an hour
+readings within the ranges, the unit surviving 10 plug-ins, and an hour
 without a reset.
 
 ## Results
@@ -159,7 +147,7 @@ Date: · Firmware version: · Room temperature:
 |---|---|---|---|
 | Prerequisites | | | |
 | 1.1–1.7 dead checks | | | |
-| 1.8 insulation at 500 V: earth / button / light pipe / seams / glands | | | |
+| 1.8 (declined) inspection of seams, glands, button, light pipe | | | |
 | 1.9 distances at the openings | | | |
 | 4.5a socket tester at the output | | | |
 | 2 socket tester, RCD test | | | |
@@ -171,6 +159,6 @@ Date: · Firmware version: · Room temperature:
 | 4.4 lamp: W and A, Petro / meter; idle power relay on | | | |
 | 4.5 Fleet control | | | |
 | 4.6 case warm? | | | |
-| 5 10 plug-ins: F2 | | | |
+| 5 10 plug-ins: boots each time | | | |
 | 6 1 h: resets, NTC rise, RSSI | | | |
 | 7 C1 after 2 min; inspection | | | |

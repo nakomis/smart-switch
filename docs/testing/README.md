@@ -49,9 +49,15 @@ Run every gate on **one board first** (B1). The others follow once it has passed
 8. **Leave the mode off before every switch-off.** The mode (on, off, auto) persists in NVS and
    is the power-on state. A unit left "on" closes its relay the moment it's next plugged in, into
    whatever is on the output. Before unplugging, set it off and check `petro_relay_on` is 0.
-9. **Fuses are replaced only like for like** (`docs/DESIGN.md` §5.1): F1 a 6.3×32 mm ceramic 15 A
-   fast-acting, at least 1.5 kA at 250 V AC; F2 a 5×20 mm ceramic T500 mA (T1A only if Gate 3's
-   inrush check calls for it). Never a glass fuse.
+9. **F1 and F2 are bridged with solid links** (Martin's decision, 5 Nov 2026), not fuses. Short
+   circuits are then cleared by the plug's 13 A BS 1362 fuse, and a fault in the supply by R1, the
+   10 Ω fusible resistor. Each link is **solid copper of at least 1.5 mm²**, clamped or soldered
+   so that it can't move; never foil, which makes a poor, hot contact in a spring clip at 10 A.
+   - F1's link must make firm contact in both clips. Gate 4's mapping run watches it (T3).
+   - The plug's fuse must be a 13 A BS 1362: never a higher rating, and never bridged, because it
+     is now the only fuse in the live.
+   - If real fuses go in later, only like for like (`docs/DESIGN.md` §5.1): F1 a 6.3×32 mm ceramic
+     15 A, at least 1.5 kA at 250 V AC; F2 a 5×20 mm ceramic T500 mA. Never a glass fuse.
 
 ## What the gates need
 
@@ -66,18 +72,23 @@ ESP32 (Gate 4's thermal logger), the V-0 filament (the case, and Gate 4's hood).
 
 | Item | For | Notes |
 |---|---|---|
-| Socket tester | 3, 4, Go Live | Shows reversed polarity and a missing earth. Reversal puts the board's GND at 230 V, and nothing on the board can tell |
-| 30 mA plug-in RCD | 3, 4 | **Only if** the consumer unit's RCD isn't confirmed to cover the socket |
-| The fuses | 3, 4 | F1 and F2 (the parts list), not needed for Gates 2 and 2b. A spare F2 is worth having; T1A only if Gate 3's inrush check calls for it |
+| Socket tester | 3, 4, Go Live | Ordered (5 Nov 2026). Shows reversed polarity and a missing earth. Reversal puts the board's GND at 230 V, and nothing on the board can tell |
+| The RCD | 3, 4 | The consumer unit's (modern, confirmed by Martin, 5 Nov 2026). Press its test button before each session |
+| The fuse links | 3, 4 | Two solid copper links, ≥ 1.5 mm² (rule 9), in place of F1 and F2 |
 | Nylon M3 screws | 3 | The mounting holes are unplated; nylon keeps the screws insulating. Or recessed steel screws the case can't let a finger reach |
 | **A discharge tool** | 2b, 3, 4 | A 10 kΩ resistor of 2 W or more (from the parts drawer) between two insulated test leads with insulated clips, in heat-shrink. τ = RC ≈ 0.1 s, so 5 seconds empties C1 and C2. Never a screwdriver |
-| **A 500 V insulation test** | 3 | **Borrow** an insulation tester or a PAT tester for an evening; there is no substitute. The case is the only barrier, and a meter at ~1 V can't find a creepage path. Gate 3 step 1.8 |
+
+
+**Declined (Martin, 5 Nov 2026):** a 500 V insulation test of the case. It is a known gap: a meter
+at ~1 V can't find a creepage path through the case, so Gate 3 relies on the consumer unit's RCD,
+inspection and the 6 mm check at the openings (1.9). In practice: **never handle the unit while
+it's plugged in**.
 
 **If you have one:** an old incandescent bulb (60–100 W) with a lamp holder makes Gate 3's
 dim-bulb tester. It is a lamp holder wired in series with the live of a trailing socket, inside its
 own closed box. With a short anywhere, the lamp lights fully and takes the voltage, so nothing
 upstream sees more than the lamp's current. Without one, Gate 3 goes straight to §4: the RCD and
-F1 are then what stand between a fault and a bang. Any lamp (LED included) does as §4's load.
+the plug's 13 A fuse are then what stand between a fault and a bang. Any lamp (LED included) does as §4's load.
 
 ## Boards and records
 

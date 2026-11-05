@@ -252,6 +252,11 @@ no V-0 black nylon gland was found.
   for a UK socket's prospective fault current, hence the 6.3×32.
 - **Overload:** the plug's 13 A BS 1362 fuse protects the cord, and the firmware trip at about
   10.5 A is the backstop for the unit's rating (PETRO-5).
+- **As built (Martin's decision, 5 Nov 2026): F1 and F2 are bridged** with solid copper links
+  (≥ 1.5 mm², clamped), not fuses. Short circuits fall to the plug's 13 A BS 1362 (a breaking
+  capacity of its own; Fable at Gate 1 judged F1 to add little on top of it), and a fault in the
+  supply to R1, the fusible resistor, alone. The board is unchanged, so the fuses can go back in
+  at any time (`docs/testing/README.md` rule 9).
 
 ### 5.2 Metering chip: the BL0939, decided 2 Nov 2026
 
