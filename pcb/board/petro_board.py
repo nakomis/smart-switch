@@ -820,31 +820,35 @@ def lv_area():
 
 
 def lv_keepouts(c, p, margin=0.1):
-    """(layer, x0, y0, x1, y1) on both layers: every pad of a group with a spacing to the rest,
-    grown by that spacing; every hand-routed supply and divider track, likewise (by its bounding
-    box); the mounting holes."""
-    from board.gnd import pad_boxes
+    """(layer, x0, y0, x1, y1): every pad of a group with a spacing to the rest, grown by that
+    spacing, on the layers the pad is on (an SMD pad only on F.Cu: under it, B.Cu is 1.6 mm of
+    FR-4 away, which the rules rightly don't count as a surface spacing, and the router needs that
+    room under the supply block); every hand-routed supply and divider track likewise, on its
+    layer (by its bounding box); and on both layers the mounting holes, the band round the safe
+    I/O island and the mains pours' stitching vias."""
+    from board.cleanup import pad_shapes
     r = rules()
-    boxes = []
+    out = []
     barrier = {(ref, pad.number) for ref in BARRIERS for pad in c.instances[ref].part.footprint.pads}
     island_pads = {_pad_key(c, p, ref, n) for ref, n in barrier if GROUPS.get(c.net_of(ref, n)) == "SELV"}
-    for net, x0, y0, x1, y1 in pad_boxes(c, p):
+    for net, layers, x0, y0, x1, y1 in pad_shapes(c, p):
         if (net, round((x0 + x1) / 2, 2), round((y0 + y1) / 2, 2)) in island_pads:
             continue            # the isolators' island-side pads: lv_area keeps 8 mm from their rows
         g = GROUPS.get(net) if net else None
         s = r.spacing(g, r.rest) if g else 0.0
         if s:
-            boxes.append((x0 - s - margin, y0 - s - margin, x1 + s + margin, y1 + s + margin))
+            out += [(layer, x0 - s - margin, y0 - s - margin, x1 + s + margin, y1 + s + margin)
+                    for layer in CU if layer in layers]
     for t in supply_tracks(c, p) + divider_tracks(c, p):
         s = r.spacing(GROUPS[t.net], r.rest) + t.width / 2 + margin
-        boxes.append((min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
+        out.append((t.layer, min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
     hole = 3.2 / 2 + 3.0 + margin
-    boxes += [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
+    boxes = [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
     boxes += band_keepouts(c, p, "lv")
     for v in stitch_vias():                     # the mains pours' stitching vias
         s = r.spacing(GROUPS[v.net], r.rest) + v.size / 2 + margin
         boxes.append((v.x - s, v.y - s, v.x + s, v.y + s))
-    return [(layer, *b) for layer in CU for b in boxes]
+    return out + [(layer, *b) for layer in CU for b in boxes]
 
 
 def gnd_pts():

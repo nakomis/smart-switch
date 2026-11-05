@@ -186,6 +186,15 @@ def test_where_the_low_voltage_router_may_go_keeps_8mm_from_the_island():
                 assert not pb.in_lv(x, y, keep), (round(x, 2), round(y, 2), round(d, 2))
 
 
+def test_smd_supply_pads_keep_the_router_off_f_cu_only():
+    """Under an SMD pad, B.Cu is the far side of the board: the router may use it."""
+    keep = pb.lv_keepouts(C, P)
+    for ref, n in (("U4", "1"), ("U4", "4"), ("R2", "1"), ("R3", "2")):        # BP, D, FBH, SW
+        x, y = pb.pad_xy(C, P, ref, n)
+        on = {layer for layer, x0, y0, x1, y1 in keep if x0 <= x <= x1 and y0 <= y <= y1}
+        assert "F.Cu" in on and "B.Cu" not in on, (ref, n, on)
+
+
 def test_the_regulator_ground_is_tied_to_its_output_capacitor_by_hand():
     """U2's GND pin to C19's GND pad, before routing: the router left them in separate pieces
     of pour, walled apart on both layers."""
