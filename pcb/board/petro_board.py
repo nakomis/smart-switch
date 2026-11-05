@@ -422,7 +422,8 @@ TP_X, TP_PITCH, TP_ROWS = 27.5, 3.2, (42.0, 47.0, 52.0)    # the test holes' blo
 # pad rows are 7.1 mm apart inside; a slot along the line takes creepage round its ends, and the
 # isolators are 3.7 mm or more apart so the air gap between neighbours' opposite sides is 8 mm.
 ISO_Y = 66.0
-ISO_X = (13.0, 27.5, 40.7)
+ISO_X = (9.5, 24.0, 37.2)
+ISL_X = (2.5, 43.5)     # the island's left and right edges
 U1_EDGE = 9.25          # the module's centre above the bottom edge: its antenna starts at the edge
 TP_LABEL_DY = -1.9                      # each test hole's label, above it
 
@@ -455,15 +456,15 @@ AT = {
     "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
     # the safe I/O island, bottom left: J3 on the bottom edge, the isolators across the barrier
     # (side 2, the island's, facing down), their island-side parts between them and J3
-    "J3": (27.0, 81.0, 0),
+    "J3": (25.6, 81.0, 0),
     "U7": (ISO_X[0], ISO_Y, 180), "U8": (ISO_X[1], ISO_Y, 180), "U9": (ISO_X[2], ISO_Y, 180),
-    "FB1": (8.5, 74.0, 90), "FB2": (10.0, 74.0, 90), "C30": (12.0, 74.0, 90), "C31": (13.6, 74.0, 90),
-    "C32": (15.0, 74.0, 90), "C33": (16.6, 74.0, 90), "R27": (19.0, 74.0, 90),
-    "C35": (27.5, 74.0, 90), "C37": (40.7, 74.0, 90), "R29": (37.0, 74.0, 90), "R31": (44.0, 74.0, 90),
+    "FB1": (5.0, 74.0, 90), "FB2": (6.5, 74.0, 90), "C30": (8.5, 74.0, 90), "C31": (10.1, 74.0, 90),
+    "C32": (11.5, 74.0, 90), "C33": (13.1, 74.0, 90), "R27": (15.5, 74.0, 90),
+    "C35": (24.0, 74.0, 90), "C37": (37.2, 74.0, 90), "R29": (33.5, 74.0, 90), "R31": (40.5, 74.0, 90),
     # ... and their board-side parts above them
-    "C26": (8.5, 57.6, 90), "C27": (10.5, 57.6, 90), "C28": (12.0, 57.6, 90), "C29": (16.0, 57.6, 90),
-    "R26": (17.6, 57.6, 90), "C34": (27.5, 57.6, 90), "C36": (40.7, 57.6, 90),
-    "R28": (36.0, 57.6, 90), "R30": (37.6, 57.6, 90),
+    "C26": (5.0, 57.6, 90), "C27": (7.0, 57.6, 90), "C28": (8.5, 57.6, 90), "C29": (12.5, 57.6, 90),
+    "R26": (14.1, 57.6, 90), "C34": (24.0, 57.6, 90), "C36": (37.2, 57.6, 90),
+    "R28": (32.5, 57.6, 90), "R30": (34.1, 57.6, 90),
     # the module, bottom middle (antenna past the bottom edge), its supply and EN at its right
     "U1": (65.0, H - U1_EDGE, 180),
     "C21": (75.6, 82.6, 90), "C22": (77.2, 82.6, 90), "R19": (75.6, 79.0, 90), "C23": (77.2, 79.0, 90),
@@ -500,12 +501,13 @@ REINFORCED_GAP = 8.1    # 8 mm and a margin: each side's area from the other sid
 
 def island_area():
     """The safe I/O island (SELV): from 8 mm below the isolators' board-side pad rows down to the
-    bottom edge, x 6.5 to 46.5 (8 mm short of the module's pads). Its router, vias and ISO_GND
+    bottom edge, between ISL_X (8 mm and more short of the module's pads). Its router, vias and ISO_GND
     pour keep inside, so all of them keep 8 mm from the board side; the isolators' island-side
     pads stand a little out of it at the top (Freerouting reaches a pad from any side). The
     board side keeps 8 mm from the island likewise (lv_area)."""
     top = ISO_Y - ISO_ROW_IN + REINFORCED_GAP
-    return [(6.5, top), (46.5, top), (46.5, H - 0.5), (6.5, H - 0.5)]
+    x0, x1 = ISL_X
+    return [(x0, top), (x1, top), (x1, H - 0.5), (x0, H - 0.5)]
 
 
 def island_keepouts(c=None, p=None, margin=0.1):
@@ -516,7 +518,40 @@ def island_keepouts(c=None, p=None, margin=0.1):
     xs, ys = [p_[0] for p_ in island_area()], [p_[1] for p_ in island_area()]
     near = [(x, y) for x, y in HOLES.values()
             if min(xs) - hole < x < max(xs) + hole and min(ys) - hole < y < max(ys) + hole]
-    return [(layer, x - hole, y - hole, x + hole, y + hole) for layer in CU for x, y in near]
+    boxes = [(x - hole, y - hole, x + hole, y + hole) for x, y in near]
+    if c is not None:
+        boxes += band_keepouts(c, p, "island")
+    return [(layer, *b) for layer in CU for b in boxes]
+
+
+def band_keepouts(c, p, side, margin=0.15):
+    """Boxes (x0, y0, x1, y1) keeping one side's router out of the 8 mm band and off the other
+    side, without covering any of its own pads (Freerouting will not route to a pad inside a
+    keep-out, and lets a track leave a pad in any direction, out of its area too).
+
+    side "lv": the island and the strip beside it, and the band, but for gaps round the
+    isolators' board-side pads, which its tracks reach from above. side "island": the board side
+    above the band, the strip, and the band but for gaps round the island-side pads."""
+    from board.rules import _pad_box
+    lv_y, top = LV_ISLAND_Y, island_area()[0][1]
+    x_end = LV_ISLAND_X - 0.1
+    strip = (island_area()[1][0] + 0.1, lv_y, x_end, H + 5.0)
+    want_selv = side == "island"
+    pads = sorted((_pad_box(p, ref, pad) for ref in BARRIERS for pad in c.instances[ref].part.footprint.pads
+                   if (GROUPS.get(c.net_of(ref, pad.number)) == "SELV") == want_selv), key=lambda b: b[0])
+    if side == "lv":
+        row = (lv_y, max(b[3] for b in pads) + margin)          # the board-side pads poke below lv_y
+        boxes = [strip, (-5.0, row[1], x_end, H + 5.0)]
+    else:
+        row = (min(b[1] for b in pads) - margin, top)           # the island-side pads poke above top
+        boxes = [strip, (-5.0, lv_y - 6.0, x_end, row[0])]
+    x = -5.0
+    for b in pads:                                               # the row, but for gaps round its pads
+        if b[0] - margin > x:
+            boxes.append((x, row[0], b[0] - margin, row[1]))
+        x = max(x, b[2] + margin)
+    boxes.append((x, row[0], x_end, row[1]))
+    return boxes
 
 
 def in_island(x, y, keepouts=None):
@@ -534,7 +569,7 @@ def slots():
     """One slot under the safe I/O island's three isolators, along the barrier between their pad
     rows (7.1 mm apart) and past the outer two: every surface path from a board-side pad to an
     island pad goes round an end, which makes it more than 8 mm (rules.barrier_creepage)."""
-    return [Slot(ISO_X[0] - 9.0, ISO_Y, ISO_X[2] + 7.0, ISO_Y, ISO_SLOT_W)]
+    return [Slot(ISO_X[0] - 8.0, ISO_Y, ISO_X[2] + 7.0, ISO_Y, ISO_SLOT_W)]
 
 
 def fuse_box():
@@ -724,7 +759,7 @@ def hand_wiring(c, p):
 # pours, and 8 mm short of the safe I/O island (bottom left). Keep-outs (lv_keepouts) round every
 # pad of another group, the hand-routed supply tracks and the mounting holes keep it off what the
 # router can't see.
-LV_ISLAND_X = 46.5 + 8.0         # island_area's right edge + 8 mm
+LV_ISLAND_X = ISL_X[1] + 8.0     # island_area's right edge + 8 mm
 LV_ISLAND_Y = ISO_Y + ISO_ROW_IN - REINFORCED_GAP     # 8 mm above the isolators' island-side rows
 
 
@@ -758,6 +793,7 @@ def lv_keepouts(c, p, margin=0.1):
         boxes.append((min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
     hole = 3.2 / 2 + 3.0 + margin
     boxes += [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
+    boxes += band_keepouts(c, p, "lv")
     return [(layer, *b) for layer in CU for b in boxes]
 
 
@@ -821,7 +857,7 @@ IO_LABELS = {"1": "3V3", "2": "G", "3": "SCK", "4": "MOSI", "5": "MISO", "6": "C
              "8": "SCL", "9": "IN", "10": "OUT"}
 LIVE_WARNING = (88.0, 26.8)     # the "board is live" block, both sides: on the L_OUT pour, clear of pads
 TITLE_AT = (92.0, 47.5)         # the title, on the back above the supply
-SAFE_AT = (27.0, 75.9)          # "SAFE I/O" on both sides, between the island's parts and J3
+SAFE_AT = (25.6, 75.9)          # "SAFE I/O" on both sides, between the island's parts and J3
 
 
 def silk(c, p):

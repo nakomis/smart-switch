@@ -129,6 +129,36 @@ def test_the_low_voltage_area_keeps_off_every_mains_supply_and_divider_pad():
                     pytest.fail(f"{net} pad at {b}: ({x:.2f}, {y:.2f}) is in the area, {d:.2f} mm away")
 
 
+def test_no_keepout_covers_a_pad_its_router_must_reach():
+    """Freerouting will not route to a pad inside a keep-out: the low-voltage router's keep-outs
+    miss every low-voltage pad, the island router's every island pad. (The bulk capacitors' GND
+    leads, 1.9 mm from their own VBULK pads, join the GND pour solidly instead: pb.OWN_LEADS.)"""
+    from board.rules import _pad_box
+    own_boxes = [list(_pad_box(P, r, q)) for r in pb.OWN_LEADS
+                 for q in C.instances[r].part.footprint.pads if C.net_of(r, q.number) == "GND"]
+    for keep, mine in ((pb.lv_keepouts(C, P), lambda n: n not in pb.GROUPS),
+                       (pb.island_keepouts(C, P), lambda n: pb.GROUPS.get(n) == "SELV")):
+        for net, *b in pad_boxes(C, P):
+            if net is None or not mine(net) or net.startswith("NC_") or b in own_boxes:
+                continue
+            for _, x0, y0, x1, y1 in keep:
+                assert b[2] <= x0 or b[0] >= x1 or b[3] <= y0 or b[1] >= y1, (net, b, (x0, y0, x1, y1))
+
+
+def test_the_band_between_the_two_sides_is_kept_out_of_both_routers():
+    """Points in the 8 mm band, away from the isolators' pads, are in a keep-out for both."""
+    from board.rules import _pad_box
+    iso = [_pad_box(P, ref, pad) for ref in pb.BARRIERS for pad in C.instances[ref].part.footprint.pads]
+    for keep, ys in ((pb.lv_keepouts(C, P), (pb.ISO_Y - 2.0, pb.ISO_Y, pb.ISO_Y + 2.0, 75.0)),
+                     (pb.island_keepouts(C, P), (pb.ISO_Y - 2.0, pb.ISO_Y, pb.ISO_Y + 2.0))):
+        for k in range(120):
+            for y in ys:
+                x = 1.0 + (pb.LV_ISLAND_X - 1.2) * k / 119
+                if any(b[0] - 0.3 <= x <= b[2] + 0.3 and b[1] - 0.3 <= y <= b[3] + 0.3 for b in iso):
+                    continue
+                assert any(x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in keep), (round(x, 2), y)
+
+
 def test_the_low_voltage_area_keeps_8mm_from_the_island():
     xs = [p[0] for p in pb.island_area()]
     ys = [p[1] for p in pb.island_area()]
