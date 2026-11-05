@@ -31,16 +31,70 @@ def test_check_is_clean():
 
 # --- no isolation left -----------------------------------------------------------------------------
 
-def test_nothing_of_the_isolation_remains():
+def test_nothing_of_rev_a_isolation_remains():
     keys = {i.part.key for i in C.instances.values()}
-    assert not keys & {"ISOW", "PSU5W", "BEAD"}
-    assert not {"GND_M", "3V3_M", "VISO_M", "GISO_M", "ISO_FLT"} & set(C.nets)
-    assert "ISO_FLT" not in pb.GPIO and pb.BARRIERS == ()
+    assert not keys & {"PSU5W", "ESP32", "IDC"}
+    assert not {"GND_M", "3V3_M", "VISO_M", "GISO_M"} & set(C.nets)
 
 
-def test_rules_are_non_isolated_with_the_rest_at_neutral():
+def test_rules_are_non_isolated_with_the_rest_at_neutral_and_a_selv_island():
     r = pb.rules()
-    assert r.rest == "NEUTRAL" and "SELV" not in r.dru()
+    assert r.rest == "NEUTRAL"
+    assert {n for n, g in pb.GROUPS.items() if g == "SELV"} == set(pb.SELV_NETS)
+    assert set(r.barriers) == {"U7", "U8", "U9"}
+    assert "SELV island to everything else" in r.dru()
+
+
+# --- the safe I/O island (J3) -------------------------------------------------------------------
+
+def test_j3_is_the_safe_header():
+    assert C.instances["J3"].part.key == "IO10"
+    assert {pad: net("J3", pad) for pad in pb.IO_PINS} == pb.IO_PINS
+    assert set(pb.IO_PINS.values()) <= set(pb.SELV_NETS)
+    assert list(pb.IO_PINS.values()) == ["ISO_3V3", "ISO_GND", "ISO_SCLK", "ISO_MOSI", "ISO_MISO",
+                                         "ISO_CS", "ISO_SDA", "ISO_SCL", "ISO_IN", "ISO_OUT"]
+
+
+def test_only_the_isolators_touch_both_sides():
+    """Every part with a pad on the island is either wholly on it or one of the three isolators."""
+    selv = set(pb.SELV_NETS)
+    for ref in C.instances:
+        ns = nets_of(ref) - {n for n in nets_of(ref) if n.startswith("NC_")}
+        if ns & selv and ns - selv:
+            assert ref in pb.BARRIERS, (ref, ns)
+
+
+def test_isow7743_powers_the_island_and_carries_in_and_out():
+    assert C.instances["U7"].part.key == "ISOW"
+    assert (net("U7", "VDD"), net("U7", "VIO"), net("U7", "GND1")) == ("+5V", "+3V3", "GND")
+    assert net("U7", "VISOOUT") == "ISO_3V3" and net("U7", "GND2") == "ISO_GND"
+    assert net("U7", "VSEL") == "ISO_GND"                                     # 3.3 V out
+    assert (net("U7", "INA"), net("U7", "OUTA")) == ("SAFE_OUT", "ISO_OUT")      # forward
+    assert (net("U7", "INB"), net("U7", "OUTB")) == ("ISO_IN", "SAFE_IN")        # reverse
+    assert net("U7", "INC") == net("U7", "IND") == "ISO_GND"                  # unused inputs held
+    assert net("U7", "EN/FLT") == "ISO_FLT"
+
+
+def test_iso7741_carries_spi():
+    assert C.instances["U8"].part.key == "ISO7741"
+    assert (net("U8", "VCC1"), net("U8", "GND1"), net("U8", "VCC2"), net("U8", "GND2")) == \
+        ("+3V3", "GND", "ISO_3V3", "ISO_GND")
+    for a, b in (("INA", "OUTA"), ("INB", "OUTB"), ("INC", "OUTC")):
+        assert net("U8", a).replace("SPI_", "ISO_") == net("U8", b)
+    assert {net("U8", p) for p in ("INA", "INB", "INC")} == {"SPI_SCLK", "SPI_MOSI", "SPI_CS"}
+    assert (net("U8", "IND"), net("U8", "OUTD")) == ("ISO_MISO", "SPI_MISO")
+
+
+def test_iso1640_carries_i2c_with_pull_ups_on_both_sides():
+    assert C.instances["U9"].part.key == "ISO1640"
+    assert (net("U9", "SDA1"), net("U9", "SCL1"), net("U9", "SDA2"), net("U9", "SCL2")) == \
+        ("I2C_SDA", "I2C_SCL", "ISO_SDA", "ISO_SCL")
+    for sig, rail in (("I2C_SDA", "+3V3"), ("I2C_SCL", "+3V3"), ("ISO_SDA", "ISO_3V3"), ("ISO_SCL", "ISO_3V3")):
+        assert len([r for r in by_key("R4K7") if nets_of(r) == {sig, rail}]) == 1, sig
+
+
+def test_the_safe_input_is_pulled_down_on_the_island():
+    assert len([r for r in by_key("R100K") if nets_of(r) == {"ISO_IN", "ISO_GND"}]) == 1
 
 
 def test_mounting_holes_are_unplated():
@@ -188,30 +242,37 @@ def test_led_is_the_sk6812():
     assert (net("D1", "VDD"), net("D1", "GND"), net("D1", "DI")) == ("+3V3", "GND", "LED_DIN")
 
 
-def test_gpios_avoid_flash_usb_and_debug_and_are_unique():
+def test_the_module_is_the_c6():
+    assert C.instances["U1"].part.key == "ESP32C6"
+    assert net("U1", "3V3") == "+3V3" and net("U1", "GND") == "GND" and net("U1", "EN") == "EN"
+
+
+def test_gpios_are_unique_and_use_only_the_c6_modules_pins():
     nums = list(pb.GPIO.values())
     assert len(nums) == len(set(nums))
-    assert not set(nums) & pb.FLASH
-    assert set(nums) & pb.STRAPPING == {0, 3}                     # the button and the NTC, deliberately
+    assert set(nums) <= pb.C6_GPIOS
     for k, g in pb.GPIO.items():
-        if g in (19, 20, 43, 44):
-            assert k in ("USB_DM", "USB_DP", "UART_TX", "UART_RX"), k
         assert net("U1", pb.modpin(g)) == k, k
 
 
-def test_reuse_io_matches_the_heatlink():
-    """J3 and J4 keep the heatlink's pinouts and GPIOs (internal only on this board)."""
-    heat_io = {"1": "VBUS", "2": "GND", "3": "+3V3", "4": "IO_SDA", "5": "IO_SCL", "6": "IO_4",
-               "7": "IO_5", "8": "IO_6"}
-    heat_gpio = {"IO_SDA": 1, "IO_SCL": 2, "IO_4": 4, "IO_5": 5, "IO_6": 6,
-                 **{f"HDR_{n}": n for n in (7, 8, 9, 10, 11, 16, 17, 18, 21, 38, 39, 40)}}
-    assert {p: ("VBUS" if n == "+5V" else n) for p, n in pb.IO_PINS.items()} == heat_io
-    assert pb.HDR_PINS["16"] == "+5V" and pb.HDR_PINS["1"] == "+3V3"
-    assert {k: g for k, g in pb.GPIO.items() if k in heat_gpio} == heat_gpio
-    for pad, n in pb.IO_PINS.items():
-        assert net("J3", pad) == n
-    for pad, n in pb.HDR_PINS.items():
-        assert net("J4", pad) == n
+def test_c6_fixed_pins_and_straps():
+    """USB is GPIO12/13 and UART0 16/17 (fixed); the button is the boot strap GPIO9 (low at reset:
+    download mode); GPIO8 must read high at reset for download mode, so the LED's data line has a
+    pull-up; GPIO15 (the JTAG strap) is left alone."""
+    g = pb.GPIO
+    assert (g["USB_DM"], g["USB_DP"], g["UART_TX"], g["UART_RX"]) == (12, 13, 16, 17)
+    assert g["BUTTON"] == 9 and g["LED"] == 8 and 15 not in g.values()
+    assert len([r for r in by_key("R10K") if nets_of(r) == {"LED", "+3V3"}]) == 1
+    assert g["NTC"] in range(0, 7)                                   # ADC1
+
+
+def test_the_island_uses_the_c6_low_power_pins_for_i2c_and_the_wake_input():
+    """LP_I2C is GPIO6/7 and the LP GPIOs are 0-7: sensors can be polled, and the PIR can wake the
+    chip, with the main core asleep."""
+    g = pb.GPIO
+    assert (g["I2C_SDA"], g["I2C_SCL"]) == (6, 7)
+    assert g["SAFE_IN"] in range(0, 8)
+    assert {g[k] for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS")} == {18, 19, 20, 21}
 
 
 # --- test holes ------------------------------------------------------------------------------------

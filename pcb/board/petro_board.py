@@ -20,33 +20,39 @@ Metering: the BL0939 on GND, reading the shunt (channel A metering, channel B th
   over-current I_leak) and the voltage through 5 x 390k from L_IN; its UART, zero cross and
   over-current wired straight to the ESP32.
 
-Low-voltage side, as on the nakostat heatlink (STAT-75): the ESP32-S3-MINI-1 module, the house USB
-  connector (reachable only with the case off), the relay driver, the button on GPIO0, the LED,
-  the debug pads, J3 and J4 with the heatlink's pinouts (internal only).
+Low-voltage side, as on the nakostat heatlink (STAT-75): the ESP32-C6-WROOM-1 module (Economic
+  assembly: the S3-MINI needed X-ray), the house USB connector (reachable only with the case off),
+  the relay driver, the button on the boot strap, the LED, the debug pads.
+
+The safe I/O island (5 Nov 2026): J3, a 10-way terminal that may be touched, is SELV: powered and
+  signalled across three reinforced isolators from the neutral-referenced side. The ISOW7743
+  makes its 3.3 V (and carries IN and OUT), the ISO7741 its SPI, the ISO1640 its I2C. The island
+  keeps 8 mm from everything else, with a slot under each isolator.
 """
 from board.netlist import Circuit
 from board.rules import HIGH_CURRENT_WIDTH, Rules
 
 # --- GPIO ----------------------------------------------------------------------------------------
-# The heatlink's assignments wherever the function is the same; J3/J4 identical. Avoided: the
-# strapping pins 45/46 (and 0/3, below), the module's flash pins (26-32 on the N8; 33-37 left
-# alone too), USB (19/20) and UART0 (43/44, the debug pads).
-# GPIO0 (strap: download mode when held low at reset) is the user button, as on the heatlink:
-# holding it while plugging in enters the bootloader, which is useful rather than harmful.
-# GPIO3 (strap: JTAG source, but only when an eFuse selects it, which it does not by default)
-# is the NTC: it needs an ADC1 pin, and GPIO1-10 all go to J3/J4.
-GPIO = {"RELAY": 12, "LED": 15, "BUTTON": 0, "USB_DM": 19, "USB_DP": 20,
-        "UART_TX": 43, "UART_RX": 44,
-        "BL_TX": 13,        # BL0939 TX -> ESP RX (UART1)
-        "BL_RX": 14,        # ESP TX (UART1) -> BL0939 RX
-        "ZX": 41,           # BL0939 zero cross
-        "OC": 42,           # BL0939 I_leak (channel B fast over-current)
-        "NTC": 3,           # board temperature, ADC1_CH2
-        "IO_SDA": 1, "IO_SCL": 2, "IO_4": 4, "IO_5": 5, "IO_6": 6,
-        **{f"HDR_{n}": n for n in (7, 8, 9, 10, 11, 16, 17, 18, 21, 38, 39, 40)}}
-STRAPPING = {0, 3, 45, 46}
-FLASH = set(range(26, 38))
-_MODPIN = {43: "TXD0", 44: "RXD0"}
+# The ESP32-C6-WROOM-1 (module datasheet v1.4): 23 GPIOs on its pins, GPIO0-13, 15-23 (16/17 are
+# UART0, the debug pads). Fixed: USB D-/D+ on 12/13. Straps: GPIO9 (boot: low at reset is download
+# mode) is the button, as GPIO0 was on the S3; GPIO8 must read high at reset for download mode, so
+# it is the LED data with a pull-up (the LED ignores a steady high); GPIO15 (JTAG source) is a
+# spare. MTMS/MTDI (4/5) set only the SDIO slave's clock edges, which nothing uses.
+# The island: I2C on LP_I2C (6/7) and its input on an LP GPIO (4), so the low-power core can poll
+# sensors and the PIR can wake the chip with the main core asleep; SPI on 18-21.
+GPIO = {"BUTTON": 9, "LED": 8, "USB_DM": 12, "USB_DP": 13, "UART_TX": 16, "UART_RX": 17,
+        "NTC": 0,           # board temperature, ADC1_CH0
+        "ZX": 1,            # BL0939 zero cross
+        "OC": 2,            # BL0939 I_leak (channel B fast over-current)
+        "RELAY": 3,
+        "BL_TX": 10,        # BL0939 TX -> ESP RX (UART1)
+        "BL_RX": 11,        # ESP TX (UART1) -> BL0939 RX
+        "SAFE_IN": 4, "SAFE_OUT": 5, "I2C_SDA": 6, "I2C_SCL": 7,
+        "SPI_SCLK": 18, "SPI_MOSI": 19, "SPI_MISO": 20, "SPI_CS": 21,
+        "ISO_FLT": 22}      # the ISOW7743's EN/FLT: low if the island's converter has failed
+C6_GPIOS = set(range(0, 14)) | set(range(15, 24))
+STRAPPING = {4, 5, 8, 9, 15}
+_MODPIN = {16: "TXD0", 17: "RXD0"}
 
 
 def modpin(gpio):
@@ -58,18 +64,17 @@ def modpin(gpio):
 # turned so their wire openings face their end of the board (J1 left, J2 right), neutral on top.
 J1_PINS = {"1": "N_IN", "2": "L_IN"}           # rotated 270: pad 1 on top
 J2_PINS = {"1": "L_OUT", "2": "N_OUT"}         # rotated 90: pad 2 on top
-# J5: the house USB connector (tinycrypt's J1, as on the heatlink): 1 VBUS, 2 D-, 3 D+, 4 CC,
+# J4: the house USB connector (tinycrypt's J1, as on the heatlink): 1 VBUS, 2 D-, 3 D+, 4 CC,
 # 5 GND; pads 6/7 are the shell tabs. Inside the case: reachable only with the case off.
 USB_PINS = {"1": "VBUS_IN", "2": "USB_DM", "3": "USB_DP", "4": "CC", "5": "GND"}
 DEBUG_PINS = {"1": "EN", "2": "UART_RX", "3": "UART_TX", "4": "GND", "5": "+3V3"}
-# J3 and J4: the heatlink's pinouts, exactly (see its DESIGN.md "IO terminal (J3)" and "IDC
-# header (J4)"). 5 V is this board's +5V rail (after the diode-OR). Internal only: everything on
-# them is at mains potential.
-IO_PINS = {"1": "+5V", "2": "GND", "3": "+3V3", "4": "IO_SDA", "5": "IO_SCL", "6": "IO_4", "7": "IO_5",
-           "8": "IO_6"}
-HDR_PINS = {"1": "+3V3", "2": "GND", "3": "HDR_7", "4": "HDR_8", "5": "HDR_9", "6": "HDR_10",
-            "7": "HDR_11", "8": "GND", "9": "HDR_16", "10": "HDR_17", "11": "HDR_18", "12": "HDR_21",
-            "13": "HDR_38", "14": "HDR_39", "15": "HDR_40", "16": "+5V"}
+# J3: the safe I/O terminal (10-way, 3.5 mm), all SELV: the island's 3.3 V and ground, SPI, I2C,
+# one input (a PIR, an interrupt) and one output. J4 (the heatlink's IDC header) is gone: the C6
+# has no pins left for it.
+IO_PINS = {"1": "ISO_3V3", "2": "ISO_GND", "3": "ISO_SCLK", "4": "ISO_MOSI", "5": "ISO_MISO",
+           "6": "ISO_CS", "7": "ISO_SDA", "8": "ISO_SCL", "9": "ISO_IN", "10": "ISO_OUT"}
+# Every net of the island (J3's, and the ISOW7743's filtered supply behind its beads).
+SELV_NETS = tuple(IO_PINS.values()) + ("ISO_VIN", "ISO_GIN")
 
 # --- the mains rules (non-isolated mode: every other net sits at neutral) --------------------------
 # The supply's high-voltage nets are the PSU group: after F2, at the rectified live (the switching
@@ -80,9 +85,10 @@ PSU_NETS = ("L_PSU", "L_RF", "VBULK1", "VBULK")
 SWNODE_NETS = ("SW", "BP", "FB", "FBH")
 GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "N_IN": "NEUTRAL", "N_OUT": "NEUTRAL", "L_OUT": "LOAD",
           "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
-          **{n: "PSU" for n in PSU_NETS}, **{n: "SWNODE" for n in SWNODE_NETS}}
+          **{n: "PSU" for n in PSU_NETS}, **{n: "SWNODE" for n in SWNODE_NETS},
+          **{n: "SELV" for n in SELV_NETS}}
 HIGH_CURRENT = {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
-BARRIERS = ()
+BARRIERS = ("U7", "U8", "U9")                # the island's isolators: a slot under each
 BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on an NC_ net
 
 
@@ -180,7 +186,7 @@ def build_petro():
     c.connect("VPSU_F", (d5, "A"))
     c.connect(v5, (d5, "K"))
     two("C10U", None, "VPSU_F", gnd)
-    j5 = part("JST5", "J5")
+    j5 = part("JST5", "J4")
     for pad, n in USB_PINS.items():
         c.connect(n, (j5, pad))
     c.connect(gnd, (j5, "6"), (j5, "7"))
@@ -238,7 +244,7 @@ def build_petro():
     two("C10U", None, v5, gnd)
     two("C10U", None, v33, gnd)
     two("C100N", None, v33, gnd)
-    u1 = part("ESP32", "U1")
+    u1 = part("ESP32C6", "U1")
     c.connect(v33, (u1, "3V3"))
     c.connect(gnd, (u1, "GND"))
     two("C10U", None, v33, gnd)
@@ -249,7 +255,8 @@ def build_petro():
     for k in ("USB_DM", "USB_DP", "BL_TX", "BL_RX", "ZX", "OC", "UART_TX", "UART_RX"):
         c.connect(k, (u1, modpin(GPIO[k])))
 
-    # Button (on -> off -> auto) on GPIO0, 10k pull-up; the switch's terminals A and B.
+    # Button (on -> off -> auto) on GPIO9 (the boot strap), 10k pull-up; the switch's terminals A
+    # and B.
     sw = part("TACT", "SW1")
     c.connect("BUTTON", (u1, modpin(GPIO["BUTTON"])), (sw, "A"))
     c.connect(gnd, (sw, "B"))
@@ -274,9 +281,10 @@ def build_petro():
     c.no_connect(d1, "DO")
     two("R330", None, "LED_DIN", "LED")
     c.connect("LED", (u1, modpin(GPIO["LED"])))
+    two("R10K", None, "LED", v33)                               # GPIO8 strap: high at reset
     two("C100N", None, v33, gnd)
 
-    # NTC: 10k NTC to GND under 10k to 3V3 on GPIO3 (about 1.65 V at 25 C), 100 nF across.
+    # NTC: 10k NTC to GND under 10k to 3V3 on GPIO0 (about 1.65 V at 25 C), 100 nF across.
     c.connect("NTC", (u1, modpin(GPIO["NTC"])))
     two("NTC", "TH1", "NTC", gnd)
     two("R10K", None, "NTC", v33)
@@ -287,19 +295,72 @@ def build_petro():
     for pad, n in DEBUG_PINS.items():
         c.connect(n, (tp, pad))
 
-    # Reuse I/O: J3 and J4 as on the heatlink (internal only).
-    j3, j4 = part("IO", "J3"), part("IDC", "J4")
+    # ---- the safe I/O island: J3, across three reinforced isolators ------------------------------
+    # Side 1 of each isolator is this board (GND, at neutral); side 2 the island (ISO_GND).
+    # ISOW7743 (TI SLLSFK1C), as rev A's metering island: power flows side 1 -> side 2. VDD 5 V ->
+    # VISOOUT 3.3 V (VSEL low), up to 140 mA, the island's supply; TI's application circuit: beads
+    # VISOOUT -> VISOIN and GND2 -> GISOIN, 10u + 1u + 100n on VDD and VISOOUT, 100n on VIO and
+    # VISOIN. Channel A forward carries OUT, B back carries IN; C and D (back) are unused, their
+    # inputs held at ISO_GND. EN/FLT pulled up (converter on) and read as a fault.
+    u7 = part("ISOW", "U7")
+    c.connect(v5, (u7, "VDD"))
+    c.connect(v33, (u7, "VIO"), (u7, "EN_IO1"))
+    c.connect(gnd, (u7, "GND1"), (u7, "GNDIO"))
+    c.connect("ISO_FLT", (u7, "EN/FLT"))
+    two("R10K", None, "ISO_FLT", v33)
+    c.connect("ISO_FLT", (u1, modpin(GPIO["ISO_FLT"])))
+    for key in ("C10U", "C1U", "C100N"):
+        two(key, None, v5, gnd)
+    two("C100N", None, v33, gnd)
+    c.connect("ISO_3V3", (u7, "VISOOUT"))
+    c.connect("ISO_GND", (u7, "GND2"), (u7, "VSEL"), (u7, "INC"), (u7, "IND"))
+    two("BEAD", None, "ISO_3V3", "ISO_VIN")
+    two("BEAD", None, "ISO_GND", "ISO_GIN")
+    c.connect("ISO_VIN", (u7, "VISOIN"), (u7, "EN_IO2"))
+    c.connect("ISO_GIN", (u7, "GISOIN"))
+    for key in ("C10U", "C1U", "C100N"):
+        two(key, None, "ISO_3V3", "ISO_GND")
+    two("C100N", None, "ISO_VIN", "ISO_GIN")
+    c.connect("SAFE_OUT", (u7, "INA"), (u1, modpin(GPIO["SAFE_OUT"])))
+    c.connect("ISO_OUT", (u7, "OUTA"))
+    c.connect("ISO_IN", (u7, "INB"))
+    c.connect("SAFE_IN", (u7, "OUTB"), (u1, modpin(GPIO["SAFE_IN"])))
+    c.connect("NC_U7_OUTC", (u7, "OUTC"))
+    c.connect("NC_U7_OUTD", (u7, "OUTD"))
+    two("R100K", None, "ISO_IN", "ISO_GND")                     # nothing plugged in: IN reads low
+
+    # ISO7741 (SPI): A-C forward (SCLK, MOSI, CS), D back (MISO); both enables on.
+    u8 = part("ISO7741", "U8")
+    c.connect(v33, (u8, "VCC1"), (u8, "EN1"))
+    c.connect(gnd, (u8, "GND1"))
+    c.connect("ISO_3V3", (u8, "VCC2"), (u8, "EN2"))
+    c.connect("ISO_GND", (u8, "GND2"))
+    for ch, sig in (("A", "SCLK"), ("B", "MOSI"), ("C", "CS")):
+        c.connect(f"SPI_{sig}", (u8, f"IN{ch}"), (u1, modpin(GPIO[f"SPI_{sig}"])))
+        c.connect(f"ISO_{sig}", (u8, f"OUT{ch}"))
+    c.connect("ISO_MISO", (u8, "IND"))
+    c.connect("SPI_MISO", (u8, "OUTD"), (u1, modpin(GPIO["SPI_MISO"])))
+    two("C100N", None, v33, gnd)
+    two("C100N", None, "ISO_3V3", "ISO_GND")
+
+    # ISO1640 (I2C, bidirectional): 4k7 pull-ups on both sides (TI's application circuit).
+    u9 = part("ISO1640", "U9")
+    c.connect(v33, (u9, "VCC1"))
+    c.connect(gnd, (u9, "GND1"))
+    c.connect("ISO_3V3", (u9, "VCC2"))
+    c.connect("ISO_GND", (u9, "GND2"))
+    for sig in ("SDA", "SCL"):
+        c.connect(f"I2C_{sig}", (u9, f"{sig}1"), (u1, modpin(GPIO[f"I2C_{sig}"])))
+        c.connect(f"ISO_{sig}", (u9, f"{sig}2"))
+        two("R4K7", None, f"I2C_{sig}", v33)
+        two("R4K7", None, f"ISO_{sig}", "ISO_3V3")
+    c.no_connect(u9, "NC")
+    two("C100N", None, v33, gnd)
+    two("C100N", None, "ISO_3V3", "ISO_GND")
+
+    j3 = part("IO10", "J3")
     for pad, n in IO_PINS.items():
         c.connect(n, (j3, pad))
-    for k in ("IO_SDA", "IO_SCL", "IO_4", "IO_5", "IO_6"):
-        c.connect(k, (u1, modpin(GPIO[k])))
-    two("R4K7", None, "IO_SDA", v33)
-    two("R4K7", None, "IO_SCL", v33)
-    for pad, n in HDR_PINS.items():
-        c.connect(n, (j4, pad))
-    for k in GPIO:
-        if k.startswith("HDR_"):
-            c.connect(k, (u1, modpin(GPIO[k])))
 
     # Mounting holes near the corners, all unplated: GND is at neutral, so a plated hole would put
     # the screw at mains potential. All copper keeps 3 mm from them (rules: copper to mounting holes).
@@ -333,7 +394,7 @@ TEST_HOLES = {"TP2": "BL_RX", "TP3": "BL_TX", "TP4": "ZX", "TP5": "OC", "TP6": "
 #   under F1's glass, between the clips (no mains copper there).
 #   The supply (PI's LNK306 buck) in a block on the right, its high-voltage nets hand-routed.
 #   Low voltage below: the ESP32 module (antenna overhanging the bottom edge), J3/J4 (internal
-#   only), the button and LED (through the lid), USB (J5, facing the right-hand edge, reachable
+#   only), the button and LED (through the lid), USB (J4, facing the right-hand edge, reachable
 #   only with the case off), the relay driver, the 5 V converter, the test holes.
 import math  # noqa: E402
 
@@ -376,8 +437,8 @@ AT = {
     "L3": (53.6, 47.5, 0), "R5": (47.6, 51.0, 0), "R6": (50.6, 51.0, 0),
     "C9": (56.0, 51.2, 0), "C10": (56.0, 53.8, 0),
     "F3": (44.4, 53.2, 0), "D4": (57.6, 57.6, 0), "D5": (49.6, 56.0, 0), "C11": (44.0, 57.4, 90),
-    # USB (J5 facing the right-hand edge, its protection to its left)
-    "J5": (116.5, 51.5, 90), "U6": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
+    # USB (J4 facing the right-hand edge, its protection to its left)
+    "J4": (116.5, 51.5, 90), "U6": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
     "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
     # the module and its supply (rev A's, DY lower)
     "U1": (16.0, H - 7.75, 180), "U2": (25.5, 49.0 + DY, 0),
@@ -386,7 +447,7 @@ AT = {
     "C21": (2.0, 53.0 + DY, 90), "C22": (3.5, 53.0 + DY, 90), "R25": (2.0, 57.0 + DY, 90),
     "R26": (3.5, 57.0 + DY, 90),
     # reuse I/O (internal only)
-    "J3": (40.0, 66.0 + DY, 0), "J4": (39.0, 56.0 + DY, 0),
+    "J3": (40.0, 66.0 + DY, 0),
     # button, LED
     "SW1": (57.9, 52.8 + DY, 0), "D1": (58.0, 59.5 + DY, 0), "C24": (56.0, 65.5 + DY, 90),
     "R23": (58.5, 65.5 + DY, 90), "R20": (61.0, 65.5 + DY, 90),
@@ -660,7 +721,7 @@ _LV_KEEP_CACHE = _LazyKeep()
 
 def pad_extra(c):
     """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND pads, J3's and J4's
-    GND pins, the bulk capacitors' GND leads (their thermal spokes can land on scraps of pour
+    GND pins (J3's is the island's: none now), the bulk capacitors' GND leads (their thermal spokes can land on scraps of pour
     between the supply's keep-outs) and the GND test holes; U1's nine 1.2 mm centre GND pads get
     a -0.18 mm paste margin (Espressif: a full thermal pad lifts the module)."""
     def make(ref):
@@ -670,7 +731,7 @@ def pad_extra(c):
             if ref == "U1" and net == "GND" and abs(pad.w - 1.2) < 1e-6:
                 extra.append([S("solder_paste_margin"), -0.18])
             if net in MAINS_POLYS or (net == "GND" and (
-                    pad.kind == "smd" or ref in ("J3", "J4", "C1", "C2", "C4") or ref in TEST_HOLES)):
+                    pad.kind == "smd" or ref in ("C1", "C2", "C4") or ref in TEST_HOLES)):
                 extra.append([S("zone_connect"), 2])
             return extra
         return f
@@ -684,9 +745,8 @@ def pad_extra(c):
 TEST_LABELS = {"BL_RX": "BRX", "BL_TX": "BTX", "ZX": "ZX", "OC": "OC", "GND": "G", "+5V": "5V",
                "+3V3": "3V3", "COIL": "COIL", "LED_DIN": "LED", "BUTTON": "BTN"}
 DEBUG_LABELS = {"1": "EN", "2": "RX", "3": "TX", "4": "G", "5": "3V3"}
-IO_LABELS = {"1": "5V", "2": "G", "3": "3V3", "4": "SDA", "5": "SCL", "6": "4", "7": "5", "8": "6"}
-HDR_LABELS = {n: {"+3V3": "3V3", "+5V": "5V", "GND": "G"}.get(net, net.removeprefix("HDR_"))
-              for n, net in HDR_PINS.items()}
+IO_LABELS = {"1": "3V3", "2": "G", "3": "SCK", "4": "MOSI", "5": "MISO", "6": "CS", "7": "SDA",
+             "8": "SCL", "9": "IN", "10": "OUT"}
 LIVE_WARNING = (13.0, 45.0)     # the "entire board live" block, both sides: open ground left of the TPs
 
 
@@ -717,14 +777,11 @@ def silk(c, p):
     for n, text in DEBUG_LABELS.items():
         x, y = xy("TP1", n)
         out.append((text, round(x + 1.45, 3), y, 0.8, "F.SilkS", 90))
-    # J3 and J4 on the back (the parts cover the front)
+    # J3 on the back (the part covers the front)
     for n, text in IO_LABELS.items():
         x, y = xy("J3", n)
         out.append((text, x, round(y + 2.3, 3), 0.8, "B.SilkS"))
-    for n, text in HDR_LABELS.items():
-        x, y = xy("J4", n)
-        out.append((text, x, round(y + (1.75 if int(n) % 2 else -1.75), 3), 0.8, "B.SilkS"))
-    out.append(("USB", AT["J5"][0], 57.0, 0.8))                       # below J5
+    out.append(("USB", AT["J4"][0], 57.0, 0.8))                       # below J4
     # the title, on the back under the warning
     out += [("PETRO", wx, wy + 12.0, 2.0, "B.SilkS"), ("230 V~ 10 A", wx, wy + 14.5, 1.2, "B.SilkS"),
             ("nakomis 2026", wx, wy + 16.3, 1.0, "B.SilkS")]
@@ -790,13 +847,11 @@ def pins_h():
     for k in ("RELAY", "LED", "BUTTON", "BL_TX", "BL_RX", "ZX", "OC", "NTC",
               "USB_DM", "USB_DP", "UART_TX", "UART_RX"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
-    lines += ["", "/* IO terminal J3 (internal only, at mains potential): " + ", ".join(IO_LABELS.values())
-              + " (SDA/SCL have 4.7k pull-ups). */"]
-    for k in ("IO_SDA", "IO_SCL", "IO_4", "IO_5", "IO_6"):
-        lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
-    lines += ["", "/* IDC header J4 (internal only, at mains potential; pin: signal): "
-              + ", ".join(f"{n} {t}" for n, t in HDR_LABELS.items()) + ". */"]
-    for k in sorted((k for k in GPIO if k.startswith("HDR_")), key=lambda k: GPIO[k]):
+    lines += ["", "/* Safe I/O terminal J3 (SELV: isolated, safe to touch): " + ", ".join(IO_LABELS.values())
+              + ". 3V3 is the isolated supply (budget ~30 mA); I2C has 4.7k pull-ups on both sides; IN",
+              "   reads low with nothing connected. ISO_FLT is low if the island's converter has failed. */"]
+    for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "SAFE_IN", "SAFE_OUT",
+              "ISO_FLT"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
     return "\n".join(lines) + "\n"
 
@@ -825,10 +880,8 @@ def case_interface(c, p):
             "J2": {"what": "mains out to the load (L, N)", "edge": "right", "body": box("J2")},
             "J3": {"what": "8-way 3.5 mm I/O terminal, at mains potential", "edge": "bottom",
                    "internal_only": True, "body": box("J3")},
-            "J4": {"what": "16-way IDC header, at mains potential (internal add-ons)", "edge": "none",
-                   "internal_only": True, "body": box("J4")},
-            "J5": {"what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
-                   "edge": "right", "internal_only": True, "body": box("J5")},
+            "J4": {"what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
+                   "edge": "right", "internal_only": True, "body": box("J4")},
         },
         "tall_parts": {r: box(r) for r in ("K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2", "C4")},
         "antenna_overhang": [ux - 7.7, H, ux + 7.7, H + ANTENNA_OVERHANG],

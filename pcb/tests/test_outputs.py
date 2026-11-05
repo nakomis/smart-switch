@@ -33,7 +33,7 @@ def test_case_interface_matches_the_board():
     assert led["flange_ring"] == [round(v, 3) for v in pb.led_ring()]
     sw = ci["button"]
     assert (sw["x"], sw["y"]) == pb.AT["SW1"][:2]
-    for ref in ("J1", "J2", "J3", "J5"):
+    for ref in ("J1", "J2", "J3", "J4"):
         assert ci["connectors"][ref]["body"] == [round(v, 3) for v in bbox(P, ref)]
     assert ci["connectors"]["J1"]["edge"] == "left" and ci["connectors"]["J2"]["edge"] == "right"
     assert ci["connectors"]["J3"]["edge"] == "bottom"
@@ -46,7 +46,7 @@ def test_case_interface_says_the_whole_board_is_live():
     low-voltage connectors as internal only (reachable with the case open, mains unplugged)."""
     ci = json.loads(pb.case_interface(C, P))
     assert ci["mains_area"]["whole_board"] is True
-    for ref in ("J3", "J4", "J5"):
+    for ref in ("J4",):
         assert ci["connectors"][ref]["internal_only"] is True, ref
     assert ci["led"]["part"] == "SK6812-EC20"
     assert {"K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2"} <= set(ci["tall_parts"])
@@ -57,17 +57,17 @@ def test_pins_h_has_no_isolator_fault_pin():
 
 
 def test_usb_faces_the_right_hand_edge_with_nothing_in_the_plugs_way():
-    """J5 is a side-entry JST SH: its mouth is the side away from its signal pads. It faces the
+    """J4 is a side-entry JST SH: its mouth is the side away from its signal pads. It faces the
     right-hand edge (the cable leaves through the case's end wall, beside J2), its front within
     0.5 mm of the edge, and no part lies between the mouth and the edge."""
     ci = json.loads(pb.case_interface(C, P))
-    assert ci["connectors"]["J5"]["edge"] == "right"
-    x0, y0, x1, y1 = bbox(P, "J5")
+    assert ci["connectors"]["J4"]["edge"] == "right"
+    x0, y0, x1, y1 = bbox(P, "J4")
     assert pb.W - 0.5 <= x1 <= pb.W
-    pads = [pb.pad_xy(C, P, "J5", n) for n in "12345"]
+    pads = [pb.pad_xy(C, P, "J4", n) for n in "12345"]
     assert all(px < (x0 + x1) / 2 for px, _ in pads)              # signal pads at the back (left)
     for ref in C.instances:
-        if ref != "J5":
+        if ref != "J4":
             bx0, by0, bx1, by1 = bbox(P, ref)
             assert not (bx1 > x1 - 0.01 and by0 < y1 and by1 > y0), ref
 
