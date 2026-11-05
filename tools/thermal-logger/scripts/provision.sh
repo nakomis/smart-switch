@@ -50,7 +50,7 @@ dir="${proj}/certs/${thing}"
 mkdir -p "$dir"
 
 if [ -z "${IDF_PATH:-}" ]; then
-    for c in "$HOME/esp/esp-idf" "$HOME/esp/v5.5/esp-idf"; do [ -f "$c/export.sh" ] && IDF_PATH=$c && break; done
+    for c in "$HOME/esp/v5.5/esp-idf" "$HOME/esp/esp-idf"; do [ -f "$c/export.sh" ] && IDF_PATH=$c && break; done
 fi
 # shellcheck disable=SC1091
 . "$IDF_PATH/export.sh" > /dev/null 2>&1   # for its Python (the NVS partition generator) and esptool
