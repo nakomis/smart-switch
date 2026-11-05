@@ -870,16 +870,15 @@ _LV_KEEP_CACHE = _LazyKeep()
 
 
 def pad_extra(c):
-    """Per-pad additions: every mains-pour pad joins solidly; so do SMD GND and ISO_GND pads, the
-    bulk capacitors' GND leads (their thermal spokes can land on scraps of pour between the
-    supply's keep-outs) and the GND test holes. (The S3's -0.18 mm paste margin on its 1.2 mm
+    """Per-pad additions: every mains-pour pad joins solidly; so does every GND and ISO_GND pad
+    (thermal spokes can land on a scrap of pour the tracks have cut off, which then counts as
+    unjoined: C1's lead between the supply's keep-outs, SW1's beside the button's tracks). (The S3's -0.18 mm paste margin on its 1.2 mm
     centre pads went with it: the C6's nine 0.8 mm pads keep Espressif's footprint as drawn.)"""
     def make(ref):
         def f(pad):
             net = c.net_of(ref, pad.number)
             extra = []
-            if net in MAINS_POLYS or (net == "ISO_GND" and pad.kind == "smd") or (net == "GND" and (
-                    pad.kind == "smd" or ref in ("C1", "C2", "C4") or ref in TEST_HOLES)):
+            if net in MAINS_POLYS or net in ("GND", "ISO_GND"):
                 extra.append([S("zone_connect"), 2])
             return extra
         return f
