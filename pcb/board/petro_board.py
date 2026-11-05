@@ -37,17 +37,19 @@ from board.rules import HIGH_CURRENT_WIDTH, Rules
 # UART0, the debug pads). Fixed: USB D-/D+ on 12/13. Straps: GPIO9 (boot: low at reset is download
 # mode) is the button, as GPIO0 was on the S3; GPIO8 must read high at reset for download mode, so
 # it is the LED data with a pull-up (the LED ignores a steady high); GPIO15 (JTAG source) is a
-# spare. MTMS/MTDI (4/5) set only the SDIO slave's clock edges, which nothing uses.
-# The island: I2C on LP_I2C (6/7) and its input on an LP GPIO (4), so the low-power core can poll
-# sensors and the PIR can wake the chip with the main core asleep; SPI on 18-21.
+# spare. MTMS/MTDI (4/5) set only the SDIO slave's clock edges, which nothing uses (the relay is on
+# MTMS, its gate pulled down: off, and low, at reset).
+# The island: I2C on LP_I2C (6/7) and its input on an LP GPIO (3), so the low-power core can poll
+# sensors and the PIR can wake the chip with the main core asleep; SPI on 18-21. IN (3), OUT (23)
+# and SPI are on the module's left-hand column, the island's side; LP_I2C has no other pins.
 GPIO = {"BUTTON": 9, "LED": 8, "USB_DM": 12, "USB_DP": 13, "UART_TX": 16, "UART_RX": 17,
         "NTC": 0,           # board temperature, ADC1_CH0
         "ZX": 1,            # BL0939 zero cross
         "OC": 2,            # BL0939 I_leak (channel B fast over-current)
-        "RELAY": 3,
+        "RELAY": 4,
         "BL_TX": 10,        # BL0939 TX -> ESP RX (UART1)
         "BL_RX": 11,        # ESP TX (UART1) -> BL0939 RX
-        "SAFE_IN": 4, "SAFE_OUT": 5, "I2C_SDA": 6, "I2C_SCL": 7,
+        "SAFE_IN": 3, "SAFE_OUT": 23, "I2C_SDA": 6, "I2C_SCL": 7,
         "SPI_SCLK": 18, "SPI_MOSI": 19, "SPI_MISO": 20, "SPI_CS": 21,
         "ISO_FLT": 22}      # the ISOW7743's EN/FLT: low if the island's converter has failed
 C6_GPIOS = set(range(0, 14)) | set(range(15, 24))
@@ -431,7 +433,7 @@ AT = {
     "K1": (69.0, 46.5, 90), "RV1": (74.0, 12.0, 180), "RS1": (31.0, 6.5, 0),
     "XF3": (90.0, 45.6, 0),
     # the metering corner: the divider column from L_IN, the BL0939 and its filters
-    "R12": (18.0, 25.0, 90), "R13": (18.0, 20.3, 90), "R14": (18.0, 15.6, 90), "R15": (20.6, 11.6, 0),
+    "R12": (18.0, 25.0, 90), "R13": (18.0, 20.15, 90), "R14": (18.0, 15.3, 90), "R15": (20.6, 11.6, 0),
     "R16": (24.2, 14.0, 270),
     "U3": (31.0, 20.5, 180),
     "R8": (29.05, 12.1, 90), "R9": (30.85, 12.1, 90), "R10": (32.65, 12.1, 90), "R11": (34.45, 12.1, 90),
@@ -440,11 +442,11 @@ AT = {
     # the supply block: F2 holder, fusible resistor, rectifier, pi filter, LNK306 buck
     "R1": (91.0, 53.8, 180), "D7": (79.6, 56.0, 90),
     "C1": (81.5, 64.0, 0), "L1": (89.6, 64.0, 270), "C2": (97.5, 64.0, 0),
-    "U4": (89.0, 73.0, 180), "C3": (92.4, 72.4, 270), "R2": (94.0, 69.4, 180), "R3": (94.0, 72.4, 270),
-    "C5": (98.0, 70.8, 180), "D8": (89.0, 79.4, 180),
-    "L2": (98.5, 78.9, 0), "D9": (102.9, 68.6, 90), "C4": (107.6, 77.0, 90), "R4": (108.0, 83.0, 0),
+    "U4": (88.8, 73.0, 180), "C3": (92.4, 72.4, 270), "R2": (94.0, 69.4, 180), "R3": (94.0, 72.4, 270),
+    "C5": (98.25, 70.8, 180), "D8": (89.0, 79.4, 180),
+    "L2": (98.5, 79.15, 0), "D9": (102.9, 68.6, 90), "C4": (107.6, 77.0, 90), "R4": (108.0, 83.0, 0),
     # the 5 V converter and its output (bottom right)
-    "U5": (48.0, 47.5, 0), "C6": (48.0, 44.0, 0), "C7": (52.0, 44.0, 0), "C8": (44.5, 47.5, 90),
+    "U5": (48.0, 47.5, 0), "C6": (48.0, 44.0, 0), "C7": (52.25, 44.0, 0), "C8": (44.5, 47.5, 90),
     "L3": (53.6, 47.5, 0), "R5": (47.6, 51.0, 0), "R6": (50.6, 51.0, 0),
     "C9": (56.0, 51.2, 0), "C10": (56.0, 53.8, 0),
     "F3": (44.4, 53.2, 0), "D4": (57.6, 57.6, 0), "D5": (49.6, 56.0, 0), "C11": (44.0, 57.4, 90),
@@ -463,7 +465,7 @@ AT = {
     "R26": (17.6, 57.6, 90), "C34": (27.5, 57.6, 90), "C36": (40.7, 57.6, 90),
     "R28": (36.0, 57.6, 90), "R30": (37.6, 57.6, 90),
     # the module, bottom middle (antenna past the bottom edge), its supply and EN at its right
-    "U1": (64.0, H - U1_EDGE, 180),
+    "U1": (65.0, H - U1_EDGE, 180),
     "C21": (75.6, 82.6, 90), "C22": (77.2, 82.6, 90), "R19": (75.6, 79.0, 90), "C23": (77.2, 79.0, 90),
     # 3.3 V, the debug pads, button and LED: the open ground above the island
     "U2": (9.0, 53.0, 0), "C18": (5.6, 53.0, 90), "C19": (12.4, 53.0, 90), "C20": (14.0, 53.0, 90),
@@ -472,7 +474,7 @@ AT = {
     "D1": (20.5, 44.5, 0), "C24": (18.0, 49.0, 90), "R23": (21.0, 49.0, 90), "R24": (23.0, 49.0, 90),
     # relay driver (between the relay's coil pins and the module) and the NTC beside it
     "R21": (59.0, 63.6, 90), "R22": (60.6, 63.6, 90), "Q1": (64.0, 63.6, 0), "D3": (69.4, 63.6, 0),
-    "TH1": (74.0, 64.0, 90), "R25": (75.6, 64.0, 90), "C25": (74.8, 67.2, 0),
+    "TH1": (74.0, 64.0, 90), "R25": (75.6, 64.0, 90), "C25": (75.0, 61.9, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
     # test holes (TEST_HOLES): three rows in the open ground left of the 5 V converter, 5 mm
     # apart and on a 3.2 mm pitch so each hole's label fits above it, on both sides
@@ -493,15 +495,34 @@ def place_petro(c):
 
 ISO_SLOT_W = 1.5
 ISO_ROW_IN = 3.55       # the isolators' pad rows' inner edges, either side of ISO_Y
+REINFORCED_GAP = 8.1    # 8 mm and a margin: each side's area from the other side's pad row
 
 
 def island_area():
-    """The safe I/O island (SELV): from the isolators' island-side pad rows down to the bottom
-    edge, x 6.5 to 46.5 (8 mm short of the module's pads). Its router and its ISO_GND pour keep
-    inside; everything else keeps 8 mm from it (lv_area), bar the isolators' own board-side pads,
-    7.1 mm away across the slot."""
-    top = ISO_Y + ISO_ROW_IN
+    """The safe I/O island (SELV): from 8 mm below the isolators' board-side pad rows down to the
+    bottom edge, x 6.5 to 46.5 (8 mm short of the module's pads). Its router, vias and ISO_GND
+    pour keep inside, so all of them keep 8 mm from the board side; the isolators' island-side
+    pads stand a little out of it at the top (Freerouting reaches a pad from any side). The
+    board side keeps 8 mm from the island likewise (lv_area)."""
+    top = ISO_Y - ISO_ROW_IN + REINFORCED_GAP
     return [(6.5, top), (46.5, top), (46.5, H - 0.5), (6.5, H - 0.5)]
+
+
+def island_keepouts(c=None, p=None, margin=0.1):
+    """(layer, x0, y0, x1, y1) on both layers: the mounting holes the island's area reaches (H3,
+    bottom left), all copper 3 mm off. (No keep-out over the isolators' pads: Freerouting will not
+    route to a pad inside one; the areas keep the 8 mm instead.)"""
+    hole = 3.2 / 2 + 3.0 + margin
+    xs, ys = [p_[0] for p_ in island_area()], [p_[1] for p_ in island_area()]
+    near = [(x, y) for x, y in HOLES.values()
+            if min(xs) - hole < x < max(xs) + hole and min(ys) - hole < y < max(ys) + hole]
+    return [(layer, x - hole, y - hole, x + hole, y + hole) for layer in CU for x, y in near]
+
+
+def in_island(x, y, keepouts=None):
+    keep = island_keepouts() if keepouts is None else keepouts
+    return _in_poly(x, y, island_area()) and not any(
+        x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in keep)
 
 
 def island_zones():
@@ -704,7 +725,7 @@ def hand_wiring(c, p):
 # pad of another group, the hand-routed supply tracks and the mounting holes keep it off what the
 # router can't see.
 LV_ISLAND_X = 46.5 + 8.0         # island_area's right edge + 8 mm
-LV_ISLAND_Y = ISO_Y + ISO_ROW_IN - 8.0  # its top edge - 8 mm
+LV_ISLAND_Y = ISO_Y + ISO_ROW_IN - REINFORCED_GAP     # 8 mm above the isolators' island-side rows
 
 
 def lv_area():
@@ -723,7 +744,11 @@ def lv_keepouts(c, p, margin=0.1):
     from board.gnd import pad_boxes
     r = rules()
     boxes = []
+    barrier = {(ref, pad.number) for ref in BARRIERS for pad in c.instances[ref].part.footprint.pads}
+    island_pads = {_pad_key(c, p, ref, n) for ref, n in barrier if GROUPS.get(c.net_of(ref, n)) == "SELV"}
     for net, x0, y0, x1, y1 in pad_boxes(c, p):
+        if (net, round((x0 + x1) / 2, 2), round((y0 + y1) / 2, 2)) in island_pads:
+            continue            # the isolators' island-side pads: lv_area keeps 8 mm from their rows
         g = GROUPS.get(net) if net else None
         s = r.spacing(g, r.rest) if g else 0.0
         if s:
@@ -740,6 +765,11 @@ def gnd_pts():
     """The GND pour's extent (both layers): the low-voltage area. The DRU keeps it 2.5 mm from
     every mains, supply and divider pad and pour (1 mm from the converter's switching node)."""
     return lv_area()
+
+
+def _pad_key(c, p, ref, n):
+    x, y = pad_xy(c, p, ref, n)
+    return c.net_of(ref, n), round(x, 2), round(y, 2)
 
 
 def in_lv(x, y, keepouts=None):
@@ -789,7 +819,9 @@ TEST_LABELS = {"BL_RX": "BRX", "BL_TX": "BTX", "ZX": "ZX", "OC": "OC", "GND": "G
 DEBUG_LABELS = {"1": "EN", "2": "RX", "3": "TX", "4": "G", "5": "3V3"}
 IO_LABELS = {"1": "3V3", "2": "G", "3": "SCK", "4": "MOSI", "5": "MISO", "6": "CS", "7": "SDA",
              "8": "SCL", "9": "IN", "10": "OUT"}
-LIVE_WARNING = (13.0, 45.0)     # the "entire board live" block, both sides: open ground left of the TPs
+LIVE_WARNING = (88.0, 26.8)     # the "board is live" block, both sides: on the L_OUT pour, clear of pads
+TITLE_AT = (92.0, 47.5)         # the title, on the back above the supply
+SAFE_AT = (27.0, 75.9)          # "SAFE I/O" on both sides, between the island's parts and J3
 
 
 def silk(c, p):
@@ -802,14 +834,15 @@ def silk(c, p):
         x = p.at[ref][0]
         out += [("N", x, y_n, 1.5), ("L", x, y_l, 1.5), (label, x, round(y_n - 2.2, 3), 1.0)]
     out += [("230 V AC", 8.5, 31.3, 1.2), ("MAINS", 8.5, 33.3, 1.2),
-            ("230 V AC", 110.5, 31.0, 1.5), ("MAINS", 110.5, 33.6, 1.5),
-            ("230 V AC", 95.0, 30.0, 2.0, "B.SilkS"), ("MAINS", 95.0, 33.5, 2.0, "B.SilkS")]
-    # rev B is non-isolated: no boundary to draw, so the warning is that all of it is live
+            ("230 V AC", 110.5, 31.0, 1.5), ("MAINS", 110.5, 33.6, 1.5)]
+    # rev B is non-isolated: all of it is live but the safe I/O island, on both sides
     wx, wy = LIVE_WARNING
     for layer in ("F.SilkS", "B.SilkS"):
-        out += [("DANGER", wx, wy, 1.5, layer), ("ENTIRE BOARD", wx, wy + 2.4, 1.5, layer),
-                ("IS LIVE", wx, wy + 4.8, 1.5, layer), ("GND = NEUTRAL", wx, wy + 7.0, 1.0, layer),
-                ("UNPLUG BEFORE USB", wx, wy + 8.8, 1.0, layer)]
+        out += [("DANGER 230 V AC", wx, wy, 1.2, layer), ("BOARD IS LIVE", wx, wy + 2.0, 1.2, layer),
+                ("GND = NEUTRAL", wx, wy + 3.8, 1.0, layer), ("ONLY J3 IS SELV", wx, wy + 5.4, 1.0, layer),
+                ("UNPLUG BEFORE USB", wx, wy + 6.9, 0.8, layer)]
+    sx, sy = SAFE_AT
+    out += [("SAFE I/O (SELV)", sx, sy, 1.0), ("SAFE I/O (SELV)", sx, sy, 1.0, "B.SilkS")]
     # test holes: the block left of the 5 V converter, each labelled above, on both sides
     for ref, net in TEST_HOLES.items():
         x, y = xy(ref, "1")
@@ -824,9 +857,10 @@ def silk(c, p):
         x, y = xy("J3", n)
         out.append((text, x, round(y + 2.3, 3), 0.8, "B.SilkS"))
     out.append(("USB", AT["J4"][0], 57.0, 0.8))                       # below J4
-    # the title, on the back under the warning
-    out += [("PETRO", wx, wy + 12.0, 2.0, "B.SilkS"), ("230 V~ 10 A", wx, wy + 14.5, 1.2, "B.SilkS"),
-            ("nakomis 2026", wx, wy + 16.3, 1.0, "B.SilkS")]
+    # the title, on the back above the supply
+    tx, ty = TITLE_AT
+    out += [("PETRO", tx, ty, 2.0, "B.SilkS"), ("230 V~ 10 A", tx, ty + 2.5, 1.2, "B.SilkS"),
+            ("nakomis 2026", tx, ty + 4.3, 1.0, "B.SilkS")]
     return out + ref_labels(c, p, out)
 
 
@@ -864,26 +898,28 @@ def fab_notes():
     """(text entries, user rectangles) on Dwgs.User: the antenna overhang, and the mains rule."""
     ux, uy, _ = AT["U1"]
     text = [("MODULE ANTENNA OVERHANGS THIS EDGE: INTENTIONAL", ux + 20, H + 1.5, 0.8, "Dwgs.User"),
-            ("NON-ISOLATED: THE WHOLE BOARD IS AT MAINS POTENTIAL (GND = NEUTRAL)", W / 2, -1.5, 0.8,
-             "Dwgs.User")]
-    return text, [(ux - 7.7, H, ux + 7.7, H + 5.05, "Dwgs.User")]
+            ("NON-ISOLATED: THE BOARD IS AT MAINS POTENTIAL (GND = NEUTRAL), BAR THE SAFE I/O ISLAND",
+             W / 2, -1.5, 0.8, "Dwgs.User")]
+    return text, [(ux - ANTENNA_HALF, H, ux + ANTENNA_HALF, H + ANTENNA_OVERHANG, "Dwgs.User")]
 
 
 # --- hand-offs: the firmware header and the case interface -----------------------------------------
-ANTENNA_OVERHANG = 5.05         # mm the module's antenna sticks out past the bottom edge
+# The C6-WROOM-1's antenna strip (parts.ESP32C6_ANTENNA): 18 mm wide, 6.5 mm past the bottom edge.
+ANTENNA_HALF, ANTENNA_OVERHANG = 9.0, 6.5
 
 
 def pins_h():
     """The firmware header: GPIO numbers as wired on this board."""
     lines = ["/* Generated by pcb/build.py from board/petro_board.py: do not edit. */", "#pragma once", "",
+             "/* Petro rev B: ESP32-C6-WROOM-1-N8 (idf.py set-target esp32c6). */",
              "/* Debug pads TP1, from the top: " + ", ".join(DEBUG_LABELS.values()) + ".",
              "   EN is the chip enable (bridge it to G to reset); RX/TX are UART0. */",
-             "/* The relay is active-high (low-side FET); the button is active-low (GPIO0, also the",
-             "   boot strap). BL_TX/BL_RX are UART1 to the BL0939; ZX is its zero cross, OC its fast",
-             "   over-current. */",
-             "/* Rev B is NON-ISOLATED: GND is tied to neutral, so every pin, pad and header is at mains",
-             "   potential whenever the unit is plugged in. Bench work (USB, test holes) with the mains",
-             "   unplugged only. */",
+             "/* The relay is active-high (low-side FET); the button is active-low (GPIO9, also the",
+             "   boot strap); the LED is on GPIO8 (a strap: pulled up). BL_TX/BL_RX are UART1 to the",
+             "   BL0939; ZX is its zero cross, OC its fast over-current. */",
+             "/* Rev B is NON-ISOLATED: GND is tied to neutral, so every pin and pad is at mains",
+             "   potential whenever the unit is plugged in, bar the safe I/O island (J3). Bench work",
+             "   (USB, test holes) with the mains unplugged only. */",
              "/* Test holes (push-in loops, bench only, mains disconnected): "
              + ", ".join(f"{ref} {net}" for ref, net in TEST_HOLES.items()) + ". */", ""]
     for k in ("RELAY", "LED", "BUTTON", "BL_TX", "BL_RX", "ZX", "OC", "NTC",
@@ -902,8 +938,9 @@ def case_interface(c, p):
     """What the case (PETRO-6) needs from the board, as JSON, in board coordinates (mm, origin
     top-left, y down, top view): outline, holes, the LED and the light pipe's flange ring, the
     button, the connectors with the edge each faces, and the antenna overhang. Rev B is
-    non-isolated: the whole board is at mains potential, so the case treats all of it as live
-    and the low-voltage connectors as internal only (reached with the case open, unplugged)."""
+    non-isolated: the board is at mains potential bar the safe I/O island, so the case treats all
+    of it as live except the island, whose J3 may open to the outside; USB (J4) stays internal
+    (reached with the case open, unplugged)."""
     import json
     from board.placement import bbox
     box = lambda ref: [round(v, 3) for v in bbox(p, ref)]
@@ -920,15 +957,18 @@ def case_interface(c, p):
         "connectors": {
             "J1": {"what": "mains in (L, N), 7.62 mm screw terminal", "edge": "left", "body": box("J1")},
             "J2": {"what": "mains out to the load (L, N)", "edge": "right", "body": box("J2")},
-            "J3": {"what": "8-way 3.5 mm I/O terminal, at mains potential", "edge": "bottom",
-                   "internal_only": True, "body": box("J3")},
+            "J3": {"what": "10-way 3.5 mm safe I/O terminal (SELV, reinforced isolation): 3V3, G, "
+                           "SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT", "edge": "bottom",
+                   "internal_only": False, "safe": True, "body": box("J3")},
             "J4": {"what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
                    "edge": "right", "internal_only": True, "body": box("J4")},
         },
         "tall_parts": {r: box(r) for r in ("K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2", "C4")},
-        "antenna_overhang": [ux - 7.7, H, ux + 7.7, H + ANTENNA_OVERHANG],
+        "antenna_overhang": [ux - ANTENNA_HALF, H, ux + ANTENNA_HALF, H + ANTENNA_OVERHANG],
         "mains_area": {"whole_board": True,
+                       "except": [round(v, 3) for v in (*island_area()[0], *island_area()[2])],
                        "note": "non-isolated: every part of the board is at mains potential when "
-                               "plugged in; no opening may expose any of it"},
+                               "plugged in, except the safe I/O island (the 'except' box: J3's corner); "
+                               "no opening may expose anything outside it"},
     }
     return json.dumps(data, indent=2) + "\n"

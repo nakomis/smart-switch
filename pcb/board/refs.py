@@ -64,6 +64,18 @@ def footprint_silk(circuit, placement):
                     continue
                 else:
                     pts = [pt(find(g, k)) for k in ("start", "mid", "end") if find(g, k)]
+                    if kind == "fp_arc" and find(g, "angle"):
+                        # the old form (easyeda2kicad's): start is the centre, end on the arc
+                        (cx, cy), (ex, ey) = pts[0], pts[-1]
+                        r = math.hypot(ex - cx, ey - cy)
+                        pts = [(cx - r, cy - r), (cx + r, cy + r)]
+                    elif kind == "fp_arc" and len(pts) == 3:
+                        # the whole circle: an arc's ends and midpoint can miss most of its sweep
+                        # (a radial can's outline: three-quarters of a circle)
+                        circle = _circle(*pts)
+                        if circle:
+                            (cx, cy), r = circle
+                            pts = [(cx - r, cy - r), (cx + r, cy + r)]
                 boxes.append(_seg_box(pts, sw))
         for g in find_all(node, "fp_text"):
             layer = find(g, "layer")
@@ -74,6 +86,17 @@ def footprint_silk(circuit, placement):
                 boxes.append(text_box(str(g[2]), tx, ty, float(size)))
         out[ref] = boxes
     return out
+
+
+def _circle(a, b, c):
+    """((cx, cy), r) through three points, or None if they are in line."""
+    d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]))
+    if abs(d) < 1e-9:
+        return None
+    sq = lambda p: p[0] ** 2 + p[1] ** 2
+    cx = (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d
+    cy = (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d
+    return (cx, cy), math.hypot(a[0] - cx, a[1] - cy)
 
 
 def _seg_box(pts, width):

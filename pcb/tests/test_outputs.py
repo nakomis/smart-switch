@@ -41,19 +41,30 @@ def test_case_interface_matches_the_board():
     assert ay0 == pb.H and ay1 > pb.H and ax1 - ax0 > 10
 
 
-def test_case_interface_says_the_whole_board_is_live():
-    """Rev B is non-isolated: the case must treat every part of the board as mains, and the
-    low-voltage connectors as internal only (reachable with the case open, mains unplugged)."""
+def test_case_interface_says_the_board_is_live_but_the_island():
+    """Rev B is non-isolated: the case must treat every part of the board as mains bar the safe
+    I/O island, whose J3 may be reached from outside; USB (J4) is internal only."""
     ci = json.loads(pb.case_interface(C, P))
     assert ci["mains_area"]["whole_board"] is True
-    for ref in ("J4",):
-        assert ci["connectors"][ref]["internal_only"] is True, ref
+    assert ci["mains_area"]["except"] == [round(v, 3) for v in (*pb.island_area()[0], *pb.island_area()[2])]
+    assert ci["connectors"]["J4"]["internal_only"] is True
+    j3 = ci["connectors"]["J3"]
+    assert j3["internal_only"] is False and j3["safe"] is True and j3["edge"] == "bottom"
     assert ci["led"]["part"] == "SK6812-EC20"
     assert {"K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2"} <= set(ci["tall_parts"])
 
 
-def test_pins_h_has_no_isolator_fault_pin():
-    assert "ISO_FLT" not in pb.pins_h()
+def test_case_interface_has_the_c6_antenna():
+    ci = json.loads(pb.case_interface(C, P))
+    ux = pb.AT["U1"][0]
+    assert ci["antenna_overhang"] == [ux - 9.0, pb.H, ux + 9.0, pb.H + 6.5]
+
+
+def test_pins_h_has_the_safe_io_and_the_island_fault_pin():
+    h = pb.pins_h()
+    for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "SAFE_IN", "SAFE_OUT", "ISO_FLT"):
+        assert f"#define PETRO_PIN_{k} {pb.GPIO[k]}\n" in h, k
+    assert "SELV" in h and "ESP32-C6" in h
 
 
 def test_usb_faces_the_right_hand_edge_with_nothing_in_the_plugs_way():
