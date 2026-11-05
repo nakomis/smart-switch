@@ -27,7 +27,7 @@ fp-info-cache
 # Claude Code worktrees
 .claude/worktrees/
 
-# Node / CDK (infra, once it exists)
+# Node / CDK (infra)
 node_modules/
 cdk.out/
 *.out/
@@ -43,3 +43,6 @@ firmware/build-cov/
 
 # clangd
 .cache/
+
+# Device certificates, keys and prov.bin from firmware/scripts/provision-device.sh: never committed
+firmware/certs/
