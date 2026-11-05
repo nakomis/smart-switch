@@ -17,6 +17,7 @@ VictoriaMetrics push; PETRO-5 adds the trips. They're marked `TODO(PETRO-3 slice
 | `port/` | Portable C11, no IDF: `bl0939` (frames, packet checksum and layout, scaling for the 1 mΩ shunt and the 1.95 MΩ / 470 Ω divider, the chip's temperature), `ntc` (TH1, 10 k, B 3950, under 10 k from 3V3), `console_parse` (the console's command lines) |
 | `tools/` | Host drivers, one per module: `<name>_main.c` becomes `build/petro-<name>`, reading commands on stdin and answering in JSON |
 | `tests/` | pytest over the drivers (`conftest.py` builds them once a session), and `coverage.sh` |
+| `scripts/` | `provision-device.sh` (a unit's certificate, `prov.bin` and its flashing) and `make_prov.py`, with `tests/` (see Provisioning) |
 | `CMakeLists.txt` | The host build: every `port/*.c` into `petro_port`, every `tools/*_main.c` a driver |
 | `esp32c6/` | The IDF project: `main/` (`board.c` the hardware, `console.c` the commands, `prov.c` the `prov` reader, `petro_pins.h`), `partitions.csv`, `sdkconfig.defaults`, `version.txt` |
 
@@ -57,9 +58,54 @@ Bump `esp32c6/version.txt` with every firmware change. `sdkconfig`, `build/` and
 ## Provisioning
 
 Credentials live only in the `prov` NVS partition (0x12000, 24 KB), namespace `petro`, written by
-the provisioning script (with Fleet, slice 3): `wifi_ssid`, `wifi_pass`, `endpoint`, `thing`,
-`cert`, `key`, `metrics_url`, `metrics_user`, `metrics_pass`. The firmware only reads it, and
-`info` lists which keys are present, never their values.
+`scripts/provision-device.sh`. The firmware only reads it, and `info` lists which keys are present,
+never their values.
+
+Each unit is an IoT Thing, `petro-<env>-bN` (`infra/devices.json`: prod `b1` to `b5`, sandbox `b1`),
+made by `infra/`'s `PetroDeviceStack`, with the attributes Fleet reads (project `petro`, deviceType
+`smart-switch`, capabilities `ota`). Fleet needs nothing else: it lists the Thing, finds firmware
+under its bucket's `petro/` prefix, and adds a registry row the first time the unit speaks on
+`petro/<thing>/{responses,status}`. **USB only, mains unplugged.**
+
+```bash
+firmware/scripts/provision-device.sh petro-prod-b1 --port /dev/cu.usbmodem101   # make, build, flash
+firmware/scripts/provision-device.sh petro-sandbox-b1                          # sandbox, no flash
+firmware/scripts/provision-device.sh petro-prod-b1 --new                       # a new certificate
+```
+
+Each run, safe to repeat:
+
+1. Makes sure the unit's certificate is active and attached to its Thing and to the
+   `petro-device-<env>` policy (creating one the first time; `--new` retires the old ones first,
+   for a key that may have leaked).
+2. Reads the IoT endpoint, the house Wi-Fi (`/Nakomis/Wifi/*`, `WIFI_PROFILE`, default
+   `nakom.is-sandbox`) and the unit's vmauth password (`/vmauth/device-<thing>-password`,
+   `METRICS_PROFILE`, default `nakom.is-admin`; missing means no metrics, with a warning).
+3. Builds `firmware/certs/<thing>/prov.bin` with `scripts/make_prov.py` (IDF's NVS partition
+   generator; secrets pass through the environment, never argv, and the CSV is overwritten and
+   removed).
+4. With `--port`, flashes it at prov's offset (`esptool --chip esp32c6 --after watchdog_reset
+   write_flash 0x12000 prov.bin`); without, prints that command.
+
+`AWS_PROFILE` defaults to `nakom.is-sandbox` for sandbox Things and `nakom.is-admin` for prod.
+`firmware/certs/` is gitignored. **INSECURE, TEST ONLY**: AWS makes the private key, which sits in
+`firmware/certs/` and the unit's flash in plain text, as do the Wi-Fi and vmauth passwords.
+
+| Key | Holds | Most bytes |
+|---|---|---|
+| `wifi_ssid`, `wifi_pass` | The house Wi-Fi | 32, 63 |
+| `endpoint` | IoT Core's ATS data endpoint | 127 |
+| `thing` | The Thing's name, also the MQTT client id and the vmauth user | 128 |
+| `cert`, `key` | The device certificate and private key, PEM | 4000 each |
+| `metrics_url` | vmauth's **base** URL, `http://172.29.0.33:8427` (`METRICS_URL`, or `none`): the firmware appends the write path, as tinycrypt does (`/write`, InfluxDB line protocol) | 127 |
+| `metrics_user`, `metrics_pass` | The vmauth user (the Thing's name) and its password | 32, 64 |
+
+The three `metrics_*` keys are all there or all absent. `scripts/tests/test_make_prov.py` checks the
+keys against `prov.c` and reads a built partition back with IDF's `nvs_tool`:
+
+```bash
+python -m pytest -q firmware/scripts/tests
+```
 
 ## The console
 
