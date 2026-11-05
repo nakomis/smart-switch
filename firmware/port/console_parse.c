@@ -7,9 +7,10 @@
 
 const char *const CONSOLE_USAGE[] = {
     "info                              version, MAC, chip, reset reason, mode, trips, prov keys",
-    "relay on | relay off              drive the relay",
+    "mode on | mode off | mode auto    set the mode (persisted: the power-on state)",
+    "relay on | relay off              drive the relay (a bench override, until a press or mode change)",
     "relay cycle <n> <on_ms> <off_ms>  cycle it n times (n 1-10000, 50-60000 ms, 1 h at most; any key stops it)",
-    "led <r> <g> <b>                   set the LED (0-255 each)",
+    "led <r> <g> <b> | led auto        set the LED (0-255 each; held 60 s) | back to the status",
     "button                            log presses and releases for 10 s",
     "bl                                read the BL0939 (raw and scaled)",
     "edges                             ZX and OC edges a second, over 2 s",
@@ -128,6 +129,20 @@ bool console_parse_argv(int argc, const char *const *argv, console_cmd_t *out, c
         return fail(err, err_len, "relay: unknown subcommand '%s'", sub);
     }
 
+    if (strcmp(cmd, "mode") == 0)
+    {
+        if (argc != 2 || !ctl_mode_parse(argv[1], &out->mode))
+            return fail(err, err_len, "usage: mode on | mode off | mode auto");
+        out->kind = CONSOLE_MODE;
+        return true;
+    }
+
+    if (strcmp(cmd, "led") == 0 && argc == 2 && strcmp(argv[1], "auto") == 0)
+    {
+        out->kind = CONSOLE_LED_AUTO;
+        return true;
+    }
+
     if (strcmp(cmd, "led") == 0)
     {
         if (!want_args(cmd, argc, 4, err, err_len))
@@ -194,6 +209,10 @@ const char *console_kind_name(console_kind_t kind)
         return "wifi scan";
     case CONSOLE_J3:
         return "j3";
+    case CONSOLE_MODE:
+        return "mode";
+    case CONSOLE_LED_AUTO:
+        return "led auto";
     }
     return "unknown";
 }
