@@ -61,7 +61,9 @@ The board's block diagram and the system diagram are still to come
 | `pcb/` | The board, generated as code: a Python generator for KiCad 10, with DRC rules for mains creepage and 10 A tracks, and outputs for PCBWay and JLCPCB |
 | `firmware/` | ESP-IDF 5.5 firmware for the ESP32-C6: portable C with host tests, plus the IDF project |
 | `case/` | The enclosure: a printed case in UL94 V-0 flame-retardant filament, with glands and cord grips |
-| `docs/` | Design notes, the test procedures for the safety gates, the logo |
+| `infra/` | AWS, as CDK in TypeScript: the units' IoT Things, CI's role, and the Alexa skill's Lambda, account linking and state |
+| `alexa/` | The Alexa Smart Home skill as code: its manifest and icons (`docs/alexa-setup.md`) |
+| `docs/` | Design notes, the test procedures for the safety gates, the Alexa setup, the logo |
 | `.github/workflows/` | CI |
 
 ## Status

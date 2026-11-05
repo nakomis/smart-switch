@@ -11,6 +11,13 @@ eu-west-2.
 |---|---|
 | `PetroDeviceStack` | One IoT Thing per unit, `petro-<env>-bN`, from `devices.json`, and the `petro-device-<env>` policy |
 | `PetroGithubCiStack` | `nakomis-petro-github-ci-<env>`, the role GitHub Actions publishes firmware with (PETRO-9) |
+| `PetroAlexaAuthStack` | eu-west-2. The `petro-alexa-<env>` Cognito client Alexa links accounts through (on the shared pool), its managed login style, and the groups `petro` and `petro-<name>` that decide who sees which unit (PETRO-8) |
+| `PetroAlexaStateStack` | eu-west-2. The `petro-alexa-<env>` state table, the skill's Send Alexa Events secret, and the reporter Lambda: an IoT rule on `petro/+/status`, ChangeReports, a 2-minute sweep for units gone quiet (PETRO-8) |
+| `PetroAlexaStack` | **eu-west-1**. `petro-alexa-<env>`, the Smart Home skill's Lambda (PETRO-8) |
+
+The Alexa stacks need a two-step first deploy (the skill and vendor IDs are SSM lookups with
+placeholders): `docs/alexa-setup.md`. Lookups are cached in `cdk.context.json` (git-ignored); CI's
+synth passes `-c alexaSkillId=… -c alexaVendorId=…` placeholders, as it has no credentials.
 
 ### The CI role
 
@@ -63,6 +70,7 @@ pnpm run synth-sandbox             # or ci-synth-sandbox / ci-synth-prod, with n
 pnpm run deploy-sandbox            # AWS_PROFILE nakom.is-sandbox
 pnpm run diff-prod                 # nakom.is-admin: look before you deploy
 pnpm run deploy-prod               # nakom.is-admin
+pnpm run stage-skill sandbox <AlexaFunctionArn>   # alexa/skill-package/ → build/skill-package/sandbox
 ```
 
 Running several CDK commands at once? Give each its own `--output <dir>.out`.
