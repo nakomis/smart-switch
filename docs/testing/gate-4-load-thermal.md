@@ -62,30 +62,38 @@ run, put a small piece of Kapton tape or a dot of black permanent marker on each
     cycling, pointed at open air, never at the unit.
   - **Not the AC unit**, or any motor or compressor: they are inductive, with a large inrush, and
     this test is the resistive rating.
-- [ ] A **kettle** (≈ 3 kW, 13 A), for the real trip test only (§1.6).
+- [ ] A **kettle** (≈ 3 kW, 13 A), for the real trip test only (§1.7).
 - [ ] The thermal logger charged and pushing to VictoriaMetrics; the hood printed.
 - [ ] The discharge tool (README rule 6), a room thermometer.
 
 ## 1. The trip test (PETRO-5), before any long run
 
 1. The chain as in Gate 3: wall (RCD-protected) → power meter → the unit → the radiator, on.
-2. Relay on. Through Fleet, set a **temporary** trip threshold below the radiator's current (for
-   example 5 A). It isn't saved, and a reboot clears it.
+2. Relay on. Through Fleet, set a **temporary** trip threshold below the radiator's current
+   (`{"command":"set_trip_threshold","amps":5}`). It isn't saved, and a reboot clears it.
 3. **Expected:**
-   - the relay opens at once;
-   - `petro_trips_total{cause="overcurrent"}` rises by 1;
+   - the relay opens within about 2.5 s (the sustained trip: 2 s over the threshold);
+   - the status's `trip` is `overcurrent`, and `petro_trips_total{cause="overcurrent"}` rises by 1;
    - the LED shows the fault colour;
    - the radiator goes off.
-4. Press the button: the trip clears and **the relay stays off** (CLAUDE.md, Control).
-5. Reboot the unit (switch off at the wall and on). Confirm in Fleet's status that the threshold in
-   force is back to about 10.5 A. Relay on: the radiator runs without tripping.
-6. **The real threshold and the fast path:**
+4. Press the button: the trip clears and **the relay stays off** (CLAUDE.md, Control). (Fleet's
+   `clear_trip` does the same.)
+5. **The fast path, at a lowered threshold:** relay on again, then
+   `{"command":"set_trip_threshold","instant_amps":5}`. The relay must open **at once** (well
+   under a second), the status's `trip` `overcurrent_instant`. If it trips as `overcurrent` after
+   about 2 s instead, the OC output isn't working (its polarity or its threshold's scale, README
+   "Protection"): fix it before step 6. Clear the trip (step 4).
+6. Reboot the unit (switch off at the wall and on). Confirm in Fleet's status that the thresholds
+   in force are back to 10.5 A and 15 A (`trip_amps_temporary` and `instant_amps_temporary` false).
+   Relay on: the radiator runs without tripping.
+7. **The real threshold:**
    - Swap the radiator for the **kettle** (water in it), switched on, then relay on.
-   - At 13 A, the relay must open **within a second**, through the BL0939's OC output.
-   - If it doesn't, **switch off at the wall at once**: 13 A is the plug fuse's rating and above
-     Petro's.
+   - At 13 A, the relay must open **within about 2.5 s**, as `overcurrent` (13 A is under the 15 A
+     instant threshold, so this is the sustained trip at 10.5 A).
+   - If it hasn't opened by 3 s, **switch off at the wall at once**: 13 A is the plug fuse's rating
+     and above Petro's.
    - Clear the trip (step 4).
-7. If the relay did **not** open in step 3 or 6: stop. Only the plug's 13 A fuse would be left,
+8. If the relay did **not** open in step 3, 5 or 7: stop. Only the plug's 13 A fuse would be left,
    which is accepted for a stuck relay but not for firmware that doesn't trip. Fix PETRO-5 first.
 
 ## 2. The mapping run, in the hood
@@ -155,7 +163,10 @@ the shunt doesn't carry Petro's own supply current.
 ## 5. The NTC and PETRO-5
 
 PETRO-5's over-temperature threshold is set from §2's ratio, so that the NTC trips before the
-hottest spot reaches 70 °C: NTC threshold = room + (70 − room) ÷ ratio, at a 35 °C room.
+hottest spot reaches 70 °C: NTC threshold = room + (70 − room) ÷ ratio, at a 35 °C room. The
+firmware ships with 55 °C (a ratio of 1.75), provisional until this step: set
+`CONFIG_PETRO_OVERTEMP_C` to the result, rounded down (firmware/README.md, Protection), and check
+the status's `overtemp_c` after the update.
 
 ## 6. 500 relay cycles at load
 
@@ -189,8 +200,10 @@ Date: · Firmware version: · Room temperature: · Load: (W, A)
 
 | Check | Reading | Pass? | Notes |
 |---|---|---|---|
-| 1.3 trip at the temporary threshold; 1.4 cleared; 1.5 back after reboot | | | |
-| 1.6 real trip with the kettle (time to open) | | | |
+| 1.3 trip at the temporary threshold; 1.4 cleared | | | |
+| 1.5 instant trip at 5 A (cause `overcurrent_instant`) | | | |
+| 1.6 thresholds back after reboot | | | |
+| 1.7 real trip with the kettle (time to open) | | | |
 | 2 mapping run: length, current, room | | | |
 | T1 J1 L rise / ratio | | | |
 | T2 J2 L | | | |
