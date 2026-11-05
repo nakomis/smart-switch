@@ -7,7 +7,7 @@
  * Martin replaces (docs/alexa-setup.md). Until then AcceptGrant fails and nothing is sent.
  */
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { DeleteCommand, type DynamoDBDocumentClient, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, type DynamoDBDocumentClient, PutCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { env, type GrantItem, grantKey } from './shared';
 
 export const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
@@ -87,7 +87,7 @@ export async function acceptGrant(
     client_id: creds.clientId,
     client_secret: creds.clientSecret,
   });
-  const item: GrantItem = { pk: grantKey(sub), sub, groups, ...tokens };
+  const item: GrantItem = { pk: grantKey(sub), sub, groups, groupsAt: Date.now(), ...tokens };
   await db.send(new PutCommand({ TableName: env('TABLE_NAME'), Item: item }));
 }
 
@@ -170,5 +170,27 @@ export async function sendEvent(
       continue;
     }
     throw new GatewayError(`Event gateway: ${res.status} ${code} ${body.payload?.description ?? ''}`.trim(), res.status, code);
+  }
+}
+
+/**
+ * Every verified directive refreshes the account's stored groups (if it has a grant), so the reporter
+ * follows group changes. Best effort: a failure here never fails the directive.
+ */
+export async function refreshGrantGroups(db: DynamoDBDocumentClient, sub: string, groups: string[]): Promise<void> {
+  try {
+    await db.send(
+      new UpdateCommand({
+        TableName: env('TABLE_NAME'),
+        Key: { pk: grantKey(sub) },
+        UpdateExpression: 'SET groups = :g, groupsAt = :t',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: { ':g': groups, ':t': Date.now() },
+      }),
+    );
+  } catch (e) {
+    if ((e as Error).name !== 'ConditionalCheckFailedException') {
+      console.warn(`Could not refresh the groups of ${sub}'s grant:`, (e as Error).message);
+    }
   }
 }

@@ -17,8 +17,8 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aw
 import { grants, sendEvent } from './gateway';
 import {
   type ChangeCause,
-  canSee,
   changeReport,
+  grantMaySee,
   connectivityProperty,
   env,
   isFresh,
@@ -58,8 +58,11 @@ export function causeOf(prev: PetroStatus | undefined, next: PetroStatus): Chang
 }
 
 /**
- * Sends a ChangeReport about one unit to every account that may see it, and records what Alexa now
- * believes. `changed` is what's new; `unchanged` the rest of its properties.
+ * Sends a ChangeReport about one unit to every account that may see it now, and records what Alexa
+ * now believes. `changed` is what's new; `unchanged` the rest of its properties.
+ *
+ * One account's failure doesn't stop the others, and what Alexa was told is still recorded: the
+ * failed account catches up at its next ReportState (the Alexa app asks whenever it's opened).
  */
 async function report(
   thing: string,
@@ -69,24 +72,23 @@ async function report(
   next: ReportedItem,
 ): Promise<void> {
   const deployEnv = env('DEPLOY_ENV');
-  let notConfigured = false;
+  const now = Date.now();
+  const failed: string[] = [];
   for (const grant of await grants(db)) {
-    if (!canSee(grant.groups ?? [], thing, deployEnv)) continue;
+    if (!grantMaySee(grant, thing, deployEnv, now)) continue;
     try {
       const result = await sendEvent(db, grant, (token) => changeReport(thing, token, cause, changed, unchanged));
-      if (result === 'not-configured') notConfigured = true;
+      if (result === 'not-configured') {
+        console.warn('The skill credentials secret is not set: no ChangeReports (docs/alexa-setup.md)');
+        return;
+      }
       if (result === 'grant-removed') console.log(`Removed the grant for ${grant.sub}: the account is gone`);
     } catch (e) {
-      // One account's failure mustn't stop the others; the next change or heartbeat tries again.
+      failed.push(grant.sub);
       console.error(`ChangeReport for ${thing} to ${grant.sub} failed:`, (e as Error).message);
-      return;
     }
-    if (notConfigured) break;
   }
-  if (notConfigured) {
-    console.warn('The skill credentials secret is not set: no ChangeReports (docs/alexa-setup.md)');
-    return;
-  }
+  if (failed.length > 0) console.error(`ChangeReport for ${thing}: ${failed.length} account(s) missed it: ${failed.join(', ')}`);
   await db.send(new PutCommand({ TableName: table(), Item: next }));
 }
 

@@ -59,8 +59,19 @@ gateway tokens, from AcceptGrant). It holds nothing that can't be rebuilt.
 **Who sees what.** A linked account's Cognito user must be in the group `petro` (every unit) or
 `petro-<name>` (that unit only, e.g. `petro-b5`). A user in neither discovers nothing, and a
 directive for a unit outside its groups is `NO_SUCH_ENDPOINT`. Groups are read from the access
-token on every directive; the reporter uses the groups stored at AcceptGrant, so after changing a
-user's groups, disable and re-enable the skill for that account.
+token on every directive, and each directive also refreshes the groups stored with the account's
+grant, which the reporter uses for ChangeReports. A grant whose groups haven't been refreshed for a
+week gets no ChangeReports until its next directive (the Alexa app sends a ReportState whenever
+it's opened), so a user taken out of the groups stops hearing about the units within a week at
+most, and at once for directives.
+
+The table is encrypted with an AWS-owned key. The grants' LWA tokens can only send events to this
+skill; a customer-managed KMS key would add key-level audit and revocation (about $1 a month) if it's
+ever wanted.
+
+A failed IoT rule action (the reporter erroring or throttled) is logged to
+`/aws/iot/petro-alexa-status-errors-{env}`. One account's failed ChangeReport doesn't stop the
+others; it's logged ("missed it"), and that account catches up at its next ReportState.
 
 ## Parameters and secrets
 
@@ -272,6 +283,7 @@ or LWA refuses its refresh token.
 
 - **Logs**: `/aws/lambda/petro-alexa-ENV` in **eu-west-1**; `/aws/lambda/petro-alexa-reporter-ENV`
   in eu-west-2.
+- **`EXPIRED_AUTHORIZATION_CREDENTIAL`** in the logs is normal: Alexa refreshes the token and retries.
 - **Discovery finds nothing**: the token failed verification (`Token verification failed`), or
   the user isn't in `petro` / `petro-<name>`, or the Thing lacks `project=petro`.
 - **"Petro b1 isn't responding"**: no status for 3 minutes (is it online in Fleet?), or no

@@ -41,6 +41,17 @@ export const alexaRedirectUris = (vendorId: string) => [
 
 const lambdaDir = path.join(__dirname, '..', 'lambda', 'alexa');
 
+/**
+ * Table actions limited to items whose key starts with one of `prefixes` (status#, reported#,
+ * grant#): dynamodb:LeadingKeys. Scan has no key, so it can't be limited this way.
+ */
+export const tableStatement = (tableArn: string, actions: string[], prefixes: string[]) =>
+  new iam.PolicyStatement({
+    actions,
+    resources: [tableArn],
+    conditions: { 'ForAllValues:StringLike': { 'dynamodb:LeadingKeys': prefixes.map((p) => `${p}#*`) } },
+  });
+
 const logGroup = (scope: Construct, id: string, name: string) =>
   new logs.LogGroup(scope, id, {
     logGroupName: `/aws/lambda/${name}`,
@@ -168,6 +179,9 @@ export class AlexaStateStack extends cdk.Stack {
       billing: dynamodb.Billing.onDemand(),
       // Nothing here can't be rebuilt: statuses arrive every minute, grants come back on re-linking.
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // Encrypted at rest with an AWS-owned key. The grants hold LWA tokens that can only send events
+      // to this skill; a customer-managed KMS key (TableEncryptionV2.customerManagedKey) would add
+      // key-level audit and revocation for about $1 a month, if that's ever wanted.
     });
 
     // A random secret under a placeholder client ID: the reporter and AcceptGrant treat it as unset
@@ -200,8 +214,29 @@ export class AlexaStateStack extends cdk.Stack {
       bundling: { externalModules: [] },
       logGroup: logGroup(this, 'ReporterLogs', name),
     });
-    this.table.grant(this.reporter, 'dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:DeleteItem', 'dynamodb:Scan');
+    const tableArn = this.table.tableArn;
+    this.reporter.addToRolePolicy(tableStatement(tableArn, ['dynamodb:GetItem'], ['status', 'reported']));
+    this.reporter.addToRolePolicy(tableStatement(tableArn, ['dynamodb:PutItem'], ['status', 'reported', 'grant']));
+    this.reporter.addToRolePolicy(tableStatement(tableArn, ['dynamodb:DeleteItem'], ['grant']));
+    this.reporter.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:Scan'], resources: [tableArn] }));
     this.skillSecret.grantRead(this.reporter);
+
+    // A failed rule action (the reporter throttled or erroring) lands here rather than vanishing.
+    const ruleErrors = new logs.LogGroup(this, 'StatusRuleErrors', {
+      logGroupName: `/aws/iot/petro-alexa-status-errors-${deployEnv}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    const ruleErrorRole = new iam.Role(this, 'StatusRuleErrorRole', {
+      assumedBy: new iam.ServicePrincipal('iot.amazonaws.com'),
+      description: `Petro: lets the Alexa status rule log its failed actions (${deployEnv})`,
+    });
+    ruleErrorRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:CreateLogStream', 'logs:PutLogEvents', 'logs:DescribeLogStreams'],
+        resources: [ruleErrors.logGroupArn],
+      }),
+    );
 
     // Every unit's status, with the Thing and IoT's receive time. This env's Things only.
     const rule = new iot.CfnTopicRule(this, 'StatusRule', {
@@ -211,6 +246,7 @@ export class AlexaStateStack extends cdk.Stack {
         awsIotSqlVersion: '2016-03-23',
         ruleDisabled: false,
         actions: [{ lambda: { functionArn: this.reporter.functionArn } }],
+        errorAction: { cloudwatchLogs: { logGroupName: ruleErrors.logGroupName, roleArn: ruleErrorRole.roleArn } },
       },
     });
     this.reporter.addPermission('IotStatusRule', {
@@ -285,12 +321,10 @@ export class AlexaStack extends cdk.Stack {
       logGroup: logGroup(this, 'AlexaHandlerLogs', name),
     });
 
-    this.fn.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['dynamodb:GetItem', 'dynamodb:PutItem'],
-        resources: [homeArn('dynamodb', `table/${tableName(deployEnv)}`)],
-      }),
-    );
+    const tableArn = homeArn('dynamodb', `table/${tableName(deployEnv)}`);
+    this.fn.addToRolePolicy(tableStatement(tableArn, ['dynamodb:GetItem'], ['status', 'reported']));
+    this.fn.addToRolePolicy(tableStatement(tableArn, ['dynamodb:PutItem'], ['reported', 'grant']));
+    this.fn.addToRolePolicy(tableStatement(tableArn, ['dynamodb:UpdateItem'], ['grant']));
     // ListThings can't be narrowed to a resource; the handler keeps only this env's Petro Things.
     this.fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['iot:ListThings'], resources: ['*'] }));
     this.fn.addToRolePolicy(

@@ -19,7 +19,8 @@ import { IoTClient, ListThingsCommand } from '@aws-sdk/client-iot';
 import { IoTDataPlaneClient, PublishCommand } from '@aws-sdk/client-iot-data-plane';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
-import { acceptGrant } from './gateway';
+import { JwtExpiredError } from 'aws-jwt-verify/error';
+import { acceptGrant, refreshGrantGroups } from './gateway';
 import {
   canSee,
   endpointFor,
@@ -104,13 +105,15 @@ export function setVerifier(v: Verifier | undefined): void {
  * Verifies the Cognito access token Alexa got through account linking (signature, expiry, the
  * shared pool, token_use access, the Alexa app client) and returns its sub and groups.
  */
+export const verifierConfig = () => ({
+  userPoolId: env('USER_POOL_ID'),
+  tokenUse: 'access' as const,
+  clientId: env('ALEXA_CLIENT_ID'),
+});
+
 async function userFrom(token: string | undefined): Promise<User> {
   if (!token) throw new AlexaError('INVALID_AUTHORIZATION_CREDENTIAL', 'No bearer token');
-  verifier ??= CognitoJwtVerifier.create({
-    userPoolId: env('USER_POOL_ID'),
-    tokenUse: 'access',
-    clientId: env('ALEXA_CLIENT_ID'),
-  }) as unknown as Verifier;
+  verifier ??= CognitoJwtVerifier.create(verifierConfig()) as unknown as Verifier;
   try {
     const payload = await verifier.verify(token);
     const groups = payload['cognito:groups'];
@@ -119,6 +122,8 @@ async function userFrom(token: string | undefined): Promise<User> {
       groups: Array.isArray(groups) ? groups.filter((g): g is string => typeof g === 'string') : [],
     };
   } catch (e) {
+    // Alexa refreshes an expired token and retries; anything else is a bad token.
+    if (e instanceof JwtExpiredError) throw new AlexaError('EXPIRED_AUTHORIZATION_CREDENTIAL', 'The bearer token has expired');
     console.warn('Token verification failed:', (e as Error).message);
     throw new AlexaError('INVALID_AUTHORIZATION_CREDENTIAL', 'Invalid bearer token');
   }
@@ -162,6 +167,10 @@ function refusal(item: StatusItem | undefined, thing: string): AlexaError | unde
       'Alexa',
       { currentDeviceMode: 'OTHER' },
     );
+  }
+  if (s.mode !== 'auto' && s.mode !== 'on' && s.mode !== 'off') {
+    // Not a mode the firmware sends (ctl_mode_name's "?" or a missing field): a fault, not the button.
+    throw new Error(`${thing} reported an unknown mode ${JSON.stringify(s.mode)}`);
   }
   if (s.mode !== 'auto') {
     return new AlexaError(
@@ -226,6 +235,7 @@ async function discover(d: AlexaEvent['directive']): Promise<AlexaResponse> {
     // Alexa's guidance: on a bad token during discovery, return no endpoints rather than an error.
   }
   if (user) {
+    await refreshGrantGroups(db, user.sub, user.groups);
     const deployEnv = env('DEPLOY_ENV');
     const seen = user.groups;
     endpoints = (await things()).filter((t) => canSee(seen, t, deployEnv)).map(endpointFor);
@@ -262,7 +272,15 @@ async function reportState(d: AlexaEvent['directive'], thing: string): Promise<A
   return respond(d, 'StateReport', propertiesOf(item));
 }
 
-async function setPower(d: AlexaEvent['directive'], thing: string, on: boolean): Promise<AlexaResponse> {
+/** Time kept back from the Lambda's remaining time for the restore and the reply. */
+export const REPLY_MARGIN_MS = 1000;
+
+/** Just what setPower needs of the Lambda context. */
+export interface Clock {
+  getRemainingTimeInMillis(): number;
+}
+
+async function setPower(d: AlexaEvent['directive'], thing: string, on: boolean, clock?: Clock): Promise<AlexaResponse> {
   const want = on ? 'ON' : 'OFF';
   const before = await readStatus(thing);
   const refused = refusal(before, thing);
@@ -270,44 +288,45 @@ async function setPower(d: AlexaEvent['directive'], thing: string, on: boolean):
   if (before!.status.relay === on) return respond(d, 'Response', propertiesOf(before));
 
   // Alexa learns of this change from our Response: tell the reporter so it doesn't report it again.
-  // If the unit doesn't confirm, what Alexa was last told goes back.
+  // On any failure from here on, what Alexa was last told goes back.
   const table = env('TABLE_NAME');
   const prior = await db.send(new GetCommand({ TableName: table, Key: { pk: reportedKey(thing) } }));
   const reportedBefore = prior?.Item as ReportedItem | undefined;
   await db.send(new PutCommand({ TableName: table, Item: { pk: reportedKey(thing), powerState: want, connectivity: 'OK' } }));
 
-  const sentAt = Date.now();
-  // Fleet's own relay command, unchanged (firmware/README.md, Petro's commands).
-  await iotData.send(
-    new PublishCommand({ topic: `petro/${thing}/commands`, qos: 1, payload: Buffer.from(JSON.stringify({ command: 'relay', on })) }),
-  );
+  try {
+    const sentAt = Date.now();
+    // The wait is elapsed time, and never runs into the Lambda's own timeout.
+    const budget = Math.min(CONFIRM_MS, (clock?.getRemainingTimeInMillis() ?? Infinity) - REPLY_MARGIN_MS);
+    // Fleet's own relay command, unchanged (firmware/README.md, Petro's commands).
+    await iotData.send(
+      new PublishCommand({ topic: `petro/${thing}/commands`, qos: 1, payload: Buffer.from(JSON.stringify({ command: 'relay', on })) }),
+    );
 
-  // The firmware publishes a status at once when the relay changes.
-  for (let waited = 0; waited < CONFIRM_MS; waited += POLL_MS) {
-    await sleep(POLL_MS);
-    const now = await readStatus(thing);
-    if (!now || now.receivedAt <= before!.receivedAt) continue;
-    if (now.status.relay === on) {
-      return respond(d, 'Response', propertiesOf(now));
+    // The firmware publishes a status at once when the relay changes.
+    while (Date.now() - sentAt < budget) {
+      await sleep(POLL_MS);
+      const now = await readStatus(thing);
+      if (!now || now.receivedAt <= before!.receivedAt) continue;
+      if (now.status.relay === on) return respond(d, 'Response', propertiesOf(now));
+      const why = refusal(now, thing);
+      if (why) throw why;
     }
-    const why = refusal(now, thing);
-    if (why) {
-      await restore(table, thing, reportedBefore);
-      throw why;
+    console.warn(`${thing} did not confirm relay ${want} within ${budget} ms of ${new Date(sentAt).toISOString()}`);
+    throw new AlexaError('ENDPOINT_UNREACHABLE', `${thing} did not confirm the switch`);
+  } catch (e) {
+    try {
+      await db.send(new PutCommand({ TableName: table, Item: reportedBefore ?? { pk: reportedKey(thing) } }));
+    } catch (r) {
+      console.error(`Could not restore reported#${thing}:`, (r as Error).message);
     }
+    throw e;
   }
-  await restore(table, thing, reportedBefore);
-  console.warn(`${thing} did not confirm relay ${want} within ${CONFIRM_MS} ms of ${new Date(sentAt).toISOString()}`);
-  throw new AlexaError('ENDPOINT_UNREACHABLE', `${thing} did not confirm the switch`);
-}
-
-async function restore(table: string, thing: string, item: ReportedItem | undefined): Promise<void> {
-  await db.send(new PutCommand({ TableName: table, Item: item ?? { pk: reportedKey(thing) } }));
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
-export const handler = async (event: AlexaEvent): Promise<AlexaResponse> => {
+export const handler = async (event: AlexaEvent, context?: Clock): Promise<AlexaResponse> => {
   const d = event?.directive;
   try {
     if (!d?.header?.namespace) throw new AlexaError('INVALID_DIRECTIVE', 'Malformed directive');
@@ -322,13 +341,14 @@ export const handler = async (event: AlexaEvent): Promise<AlexaResponse> => {
     if (!known) throw new AlexaError('INVALID_DIRECTIVE', `Unsupported directive ${namespace}.${name}`);
 
     const user = await userFrom(d.endpoint?.scope?.token);
+    await refreshGrantGroups(db, user.sub, user.groups);
     const thing = d.endpoint?.endpointId ?? '';
     if (!canSee(user.groups, thing, env('DEPLOY_ENV'))) {
       throw new AlexaError('NO_SUCH_ENDPOINT', `Unknown endpoint ${thing}`);
     }
 
     if (name === 'ReportState') return await reportState(d, thing);
-    return await setPower(d, thing, name === 'TurnOn');
+    return await setPower(d, thing, name === 'TurnOn', context);
   } catch (e) {
     if (e instanceof AlexaError) return errorResponse(d, e);
     console.error('Unhandled error:', e);

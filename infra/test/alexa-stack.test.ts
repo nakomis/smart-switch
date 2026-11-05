@@ -48,6 +48,13 @@ const statementsOf = (t: Template): Statement[] =>
     (p) => (p as { Properties: { PolicyDocument: { Statement: Statement[] } } }).Properties.PolicyDocument.Statement,
   );
 const actionsOf = (t: Template) => statementsOf(t).flatMap((s) => ([] as string[]).concat(s.Action));
+/** The key prefixes the one statement granting `action` is limited to. */
+const leadingKeys = (t: Template, action: string) => {
+  const found = statementsOf(t).filter((s) => ([] as string[]).concat(s.Action).includes(action));
+  expect(found).toHaveLength(1);
+  const c = (found[0] as { Condition?: Record<string, Record<string, string[]>> }).Condition;
+  return c?.['ForAllValues:StringLike']?.['dynamodb:LeadingKeys'];
+};
 
 describe('AlexaAuthStack', () => {
   test('an auth-code client on the shared pool, Cognito users only, redirecting to Alexa', () => {
@@ -126,14 +133,17 @@ describe('AlexaStateStack', () => {
     });
   });
 
-  test('the reporter reads and writes the table and reads the secret, nothing more', () => {
+  test('the reporter reads and writes the table (by key prefix) and reads the secret, nothing more', () => {
     const t = Template.fromStack(stateStack());
     t.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'petro-alexa-reporter-sandbox',
       Runtime: 'nodejs22.x',
       Environment: { Variables: Match.objectLike({ DEPLOY_ENV: 'sandbox', HOME_REGION: 'eu-west-2' }) },
     });
-    expect(new Set(actionsOf(t))).toEqual(
+    const reporterActions = statementsOf(t)
+      .flatMap((st) => ([] as string[]).concat(st.Action))
+      .filter((a) => !a.startsWith('logs:'));
+    expect(new Set(reporterActions)).toEqual(
       new Set([
         'dynamodb:GetItem',
         'dynamodb:PutItem',
@@ -143,6 +153,24 @@ describe('AlexaStateStack', () => {
         'secretsmanager:DescribeSecret',
       ]),
     );
+    expect(leadingKeys(t, 'dynamodb:GetItem')).toEqual(['status#*', 'reported#*']);
+    expect(leadingKeys(t, 'dynamodb:PutItem')).toEqual(['status#*', 'reported#*', 'grant#*']);
+    expect(leadingKeys(t, 'dynamodb:DeleteItem')).toEqual(['grant#*']);
+  });
+
+  test("the rule's failed actions go to CloudWatch Logs", () => {
+    const t = Template.fromStack(stateStack());
+    t.hasResourceProperties('AWS::IoT::TopicRule', {
+      TopicRulePayload: Match.objectLike({
+        ErrorAction: { CloudwatchLogs: Match.objectLike({ LogGroupName: Match.anyValue(), RoleArn: Match.anyValue() }) },
+      }),
+    });
+    t.hasResourceProperties('AWS::Logs::LogGroup', { LogGroupName: '/aws/iot/petro-alexa-status-errors-sandbox' });
+    t.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: Match.objectLike({
+        Statement: [Match.objectLike({ Principal: { Service: 'iot.amazonaws.com' } })],
+      }),
+    });
   });
 });
 
@@ -171,6 +199,10 @@ describe('AlexaStack', () => {
     const byAction = (a: string) => statementsOf(t).filter((s) => ([] as string[]).concat(s.Action).includes(a));
     expect(byAction('iot:Publish')[0].Resource).toBe(`arn:aws:iot:eu-west-2:${ACCOUNT}:topic/petro/petro-prod-*/commands`);
     expect(byAction('dynamodb:PutItem')[0].Resource).toBe(`arn:aws:dynamodb:eu-west-2:${ACCOUNT}:table/petro-alexa-prod`);
+    expect(leadingKeys(t, 'dynamodb:GetItem')).toEqual(['status#*', 'reported#*']);
+    expect(leadingKeys(t, 'dynamodb:PutItem')).toEqual(['reported#*', 'grant#*']);
+    expect(leadingKeys(t, 'dynamodb:UpdateItem')).toEqual(['grant#*']);
+    expect(actionsOf(t)).not.toContain('dynamodb:DeleteItem');
     expect(byAction('secretsmanager:GetSecretValue')[0].Resource).toBe(
       `arn:aws:secretsmanager:eu-west-2:${ACCOUNT}:secret:petro/prod/alexa/skill-messaging-??????`,
     );

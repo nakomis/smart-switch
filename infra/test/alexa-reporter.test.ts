@@ -23,6 +23,7 @@ const grant = (sub: string, groups: string[], expiresAt = Date.now() + HOUR): Gr
   accessToken: `access-${sub}`,
   refreshToken: `refresh-${sub}`,
   expiresAt,
+  groupsAt: Date.now(),
 });
 
 let fetchSpy: jest.SpyInstance;
@@ -152,12 +153,32 @@ describe('a status from the IoT rule', () => {
     expect(puts().filter((p) => String(p.pk).startsWith('reported#'))).toEqual([]);
   });
 
-  test('a gateway failure is logged, and Alexa is not marked told (the next status retries)', async () => {
-    setGrants(grant('martin', ['petro']));
-    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ payload: { code: 'INTERNAL_SERVICE_EXCEPTION' } }), { status: 500 }));
+  test("one account's gateway failure doesn't stop the others, and what Alexa was told is recorded", async () => {
+    setGrants(grant('a', ['petro']), grant('b', ['petro']), grant('c', ['petro']));
+    fetchSpy.mockImplementation(async (_url: string, init: { headers: { Authorization: string } }) =>
+      init.headers.Authorization === 'Bearer access-b'
+        ? new Response(JSON.stringify({ payload: { code: 'INTERNAL_SERVICE_EXCEPTION' } }), { status: 500 })
+        : new Response(null, { status: 202 }),
+    );
     await handler(statusEvent({ relay: true }));
-    expect(console.error).toHaveBeenCalled();
-    expect(puts().filter((p) => String(p.pk).startsWith('reported#'))).toEqual([]);
+    expect(sent().map((e) => e.auth)).toEqual(['Bearer access-a', 'Bearer access-b', 'Bearer access-c']);
+    expect(console.error).toHaveBeenCalledWith(expect.stringMatching(/1 account\(s\) missed it: b/));
+    expect(puts().at(-1)).toEqual({ pk: `reported#${THING}`, powerState: 'ON', connectivity: 'OK' });
+  });
+
+  test('a thrown error (not a gateway answer) is treated the same', async () => {
+    setGrants(grant('a', ['petro']), grant('b', ['petro']));
+    fetchSpy.mockRejectedValueOnce(new Error('socket hang up')).mockResolvedValue(new Response(null, { status: 202 }));
+    await handler(statusEvent({ relay: true }));
+    expect(sent()).toHaveLength(2);
+  });
+
+  test("a grant whose groups haven't been refreshed for over a week gets nothing", async () => {
+    const old = { ...grant('old', ['petro']), groupsAt: Date.now() - 8 * 24 * 3600 * 1000 };
+    const never = { ...grant('never', ['petro']), groupsAt: undefined };
+    setGrants(old, never, grant('fresh', ['petro']));
+    await handler(statusEvent({ relay: true }));
+    expect(sent().map((e) => e.auth)).toEqual(['Bearer access-fresh']);
   });
 });
 

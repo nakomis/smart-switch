@@ -61,6 +61,8 @@ export interface GrantItem {
   pk: string;
   sub: string;
   groups: string[];
+  /** When `groups` was last read from the account's token (ms): at AcceptGrant and every directive. */
+  groupsAt?: number;
   accessToken: string;
   refreshToken: string;
   /** ms since the epoch. */
@@ -88,6 +90,19 @@ export function canSee(groups: readonly string[], thing: string, deployEnv: stri
   const m = THING_PATTERN.exec(thing);
   if (!m || m[1] !== deployEnv) return false;
   return groups.includes(ALL_UNITS_GROUP) || groups.includes(unitGroup(m[2]));
+}
+
+/**
+ * A grant's groups are trusted for this long after they were last read from a token. The Alexa app
+ * sends a ReportState whenever it's opened (and every directive refreshes them), so a user who's
+ * been taken out of the groups stops getting ChangeReports within this time at most.
+ */
+export const GRANT_GROUPS_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+
+/** Whether the reporter may tell this grant's account about this unit. */
+export function grantMaySee(grant: GrantItem, thing: string, deployEnv: string, now = Date.now()): boolean {
+  if (typeof grant.groupsAt !== 'number' || now - grant.groupsAt > GRANT_GROUPS_MAX_AGE_MS) return false;
+  return canSee(grant.groups ?? [], thing, deployEnv);
 }
 
 // ── Alexa ────────────────────────────────────────────────────────────────────

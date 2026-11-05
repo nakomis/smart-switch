@@ -10,10 +10,11 @@ process.env.CONFIRM_MS = '20';
 import { IoTClient, ListThingsCommand } from '@aws-sdk/client-iot';
 import { IoTDataPlaneClient, PublishCommand } from '@aws-sdk/client-iot-data-plane';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { mockClient } from 'aws-sdk-client-mock';
+import { JwtExpiredError } from 'aws-jwt-verify/error';
 import { resetGatewayCache } from '../lambda/alexa/gateway';
-import { type AlexaEvent, handler, setVerifier } from '../lambda/alexa/handler';
+import { type AlexaEvent, handler, REPLY_MARGIN_MS, setVerifier, verifierConfig } from '../lambda/alexa/handler';
 import type { PetroStatus, StatusItem } from '../lambda/alexa/shared';
 
 const ddb = mockClient(DynamoDBDocumentClient);
@@ -37,6 +38,7 @@ beforeEach(() => {
   ddb.on(GetCommand).resolves({});
   setVerifier({
     async verify(token: string) {
+      if (token === 'expired') throw new JwtExpiredError('Token expired', 0);
       if (!(token in USERS)) throw new Error('bad token');
       return { sub: `sub-${token}`, 'cognito:groups': USERS[token] };
     },
@@ -167,6 +169,32 @@ describe('ReportState', () => {
     expect(errorOf(await handler(directive('Alexa', 'ReportState', 'martin', 'petro-prod-b1'))).type).toBe('NO_SUCH_ENDPOINT');
   });
 
+  test('an expired token is EXPIRED_AUTHORIZATION_CREDENTIAL, so Alexa refreshes it', async () => {
+    const e = errorOf(await handler(directive('Alexa', 'ReportState', 'expired')));
+    expect(e).toMatchObject({ namespace: 'Alexa', name: 'ErrorResponse', type: 'EXPIRED_AUTHORIZATION_CREDENTIAL' });
+  });
+
+  test("refreshes the account's stored groups on every directive (if it has a grant)", async () => {
+    statusGet().resolves({ Item: status({ relay: true }) });
+    await handler(directive('Alexa', 'ReportState'));
+    const [update] = ddb.commandCalls(UpdateCommand);
+    expect(update.args[0].input).toMatchObject({
+      Key: { pk: 'grant#sub-martin' },
+      ConditionExpression: 'attribute_exists(pk)',
+      ExpressionAttributeValues: { ':g': ['petro'] },
+    });
+  });
+
+  test('a failed groups refresh never fails the directive', async () => {
+    statusGet().resolves({ Item: status({ relay: true }) });
+    const missing = Object.assign(new Error('no grant'), { name: 'ConditionalCheckFailedException' });
+    ddb.on(UpdateCommand).rejects(missing);
+    expect((await handler(directive('Alexa', 'ReportState'))).event.header.name).toBe('StateReport');
+    ddb.on(UpdateCommand).rejects(new Error('throttled'));
+    expect((await handler(directive('Alexa', 'ReportState'))).event.header.name).toBe('StateReport');
+    expect(console.warn).toHaveBeenCalledWith(expect.stringMatching(/Could not refresh/), 'throttled');
+  });
+
   test('a bad token is INVALID_AUTHORIZATION_CREDENTIAL', async () => {
     expect(errorOf(await handler(directive('Alexa', 'ReportState', 'forged'))).type).toBe('INVALID_AUTHORIZATION_CREDENTIAL');
     const noScope = directive('Alexa', 'ReportState');
@@ -275,6 +303,70 @@ describe('TurnOn / TurnOff', () => {
     expect(iotData.commandCalls(PublishCommand)).toHaveLength(0);
   });
 
+  test('a throw after the optimistic write (the publish fails) restores what Alexa was told', async () => {
+    statusGet().resolves({ Item: status({ relay: false }, 5000) });
+    const prior = { pk: `reported#${THING}`, powerState: 'OFF', connectivity: 'OK' };
+    ddb.on(GetCommand, { Key: { pk: `reported#${THING}` } }).resolves({ Item: prior });
+    iotData.on(PublishCommand).rejects(new Error('iot down'));
+    expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOn'))).type).toBe('INTERNAL_ERROR');
+    const items = ddb.commandCalls(PutCommand).map((c) => c.args[0].input.Item);
+    expect(items).toEqual([{ pk: `reported#${THING}`, powerState: 'ON', connectivity: 'OK' }, prior]);
+  });
+
+  test('with no prior report, the restore clears the optimistic one', async () => {
+    statusGet().resolves({ Item: status({ relay: false }, 5000) });
+    iotData.on(PublishCommand).rejects(new Error('iot down'));
+    await handler(directive('Alexa.PowerController', 'TurnOn'));
+    expect(ddb.commandCalls(PutCommand).at(-1)!.args[0].input.Item).toEqual({ pk: `reported#${THING}` });
+  });
+
+  test('a failed restore is logged, and the original error still returned', async () => {
+    statusGet().resolves({ Item: status({ relay: false }, 5000) });
+    iotData.on(PublishCommand).rejects(new Error('iot down'));
+    ddb.on(PutCommand).resolvesOnce({}).rejects(new Error('ddb down'));
+    expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOn'))).type).toBe('INTERNAL_ERROR');
+    expect(console.error).toHaveBeenCalledWith(expect.stringMatching(/Could not restore/), 'ddb down');
+  });
+
+  test('the wait is elapsed time: slow reads poll fewer times', async () => {
+    const before = status({ relay: false }, 5000);
+    let reads = 0;
+    statusGet().callsFake(async () => {
+      reads++;
+      if (reads > 1) await new Promise((r) => setTimeout(r, 30)); // CONFIRM_MS is 20 here
+      return { Item: before };
+    });
+    expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOn'))).type).toBe('ENDPOINT_UNREACHABLE');
+    expect(reads).toBe(2); // the read before, then one poll that alone outlasts the wait
+  });
+
+  test("the wait never runs into the Lambda's timeout", async () => {
+    statusGet().resolves({ Item: status({ relay: false }, 5000) });
+    const context = { getRemainingTimeInMillis: () => REPLY_MARGIN_MS };
+    const e = errorOf(await handler(directive('Alexa.PowerController', 'TurnOn'), context));
+    expect(e.type).toBe('ENDPOINT_UNREACHABLE');
+    expect(ddb.commandCalls(GetCommand).filter((c) => c.args[0].input.Key!.pk === `status#${THING}`)).toHaveLength(1);
+  });
+
+  test.each(['?', undefined])('an unknown mode (%s) is INTERNAL_ERROR, not "held at its button"', async (mode) => {
+    statusGet().resolves({ Item: status({ mode: mode as string }) });
+    expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOn'))).type).toBe('INTERNAL_ERROR');
+    expect(iotData.commandCalls(PublishCommand)).toHaveLength(0);
+  });
+
+  test.each([
+    ['a user whose groups exclude the unit', 'certifier', THING],
+    ['a pool user in no Petro group', 'stranger', THING],
+    ['a forged endpoint id', 'martin', 'petro-sandbox-b1/../../x'],
+    ["another env's unit", 'martin', 'petro-prod-b1'],
+  ])('TurnOn for %s is NO_SUCH_ENDPOINT, and nothing is sent', async (_why, token, endpointId) => {
+    statusGet().resolves({ Item: status({ relay: false }) });
+    expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOn', token, endpointId))).type).toBe('NO_SUCH_ENDPOINT');
+    expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOff', token, endpointId))).type).toBe('NO_SUCH_ENDPOINT');
+    expect(iotData.commandCalls(PublishCommand)).toHaveLength(0);
+    expect(ddb.commandCalls(PutCommand)).toHaveLength(0);
+  });
+
   test('a failure talking to AWS is INTERNAL_ERROR', async () => {
     statusGet().rejects(new Error('boom'));
     expect(errorOf(await handler(directive('Alexa.PowerController', 'TurnOn'))).type).toBe('INTERNAL_ERROR');
@@ -329,5 +421,11 @@ describe('the envelope', () => {
 
   test('an unsupported directive is INVALID_DIRECTIVE', async () => {
     expect(errorOf(await handler(directive('Alexa.BrightnessController', 'SetBrightness'))).type).toBe('INVALID_DIRECTIVE');
+  });
+});
+
+describe('the token verifier', () => {
+  test("accepts only access tokens from the shared pool's Alexa client", () => {
+    expect(verifierConfig()).toEqual({ userPoolId: 'eu-west-2_test', tokenUse: 'access', clientId: 'client' });
   });
 });
