@@ -104,13 +104,6 @@
         "via_drill": 0.3
       },
       {
-        "name": "SELV",
-        "clearance": 0.15,
-        "track_width": 0.2,
-        "via_diameter": 0.6,
-        "via_drill": 0.3
-      },
-      {
         "name": "Mains16A",
         "clearance": 0.15,
         "track_width": 4.5,
@@ -158,54 +151,6 @@
       {
         "netclass": "SWNODE",
         "pattern": "FBH"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_3V3"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_CS"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_GIN"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_GND"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_IN"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_MISO"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_MOSI"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_OUT"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_SCL"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_SCLK"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_SDA"
-      },
-      {
-        "netclass": "SELV",
-        "pattern": "ISO_VIN"
       },
       {
         "netclass": "LIVE",

@@ -90,10 +90,10 @@
       ]
     },
     "J3": {
-      "what": "10-way 3.5 mm safe I/O terminal (SELV, reinforced isolation): 3V3, G, SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT",
+      "what": "10-way 3.5 mm I/O terminal, NOT isolated (at mains potential): 3V3, G, SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT; for parts mounted inside the case",
       "edge": "bottom",
-      "internal_only": false,
-      "safe": true,
+      "internal_only": true,
+      "safe": false,
       "body": [
         8.35,
         77.1,
@@ -183,12 +183,6 @@
   ],
   "mains_area": {
     "whole_board": true,
-    "except": [
-      2.5,
-      70.55,
-      43.5,
-      84.5
-    ],
-    "note": "non-isolated: every part of the board is at mains potential when plugged in, except the safe I/O island (the 'except' box: J3's corner); no opening may expose anything outside it"
+    "note": "non-isolated: every part of the board, J3 and whatever is wired to it included, is at mains potential when plugged in; no opening may expose any of it, and nothing conductive may leave the case"
   }
 }

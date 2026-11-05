@@ -41,15 +41,14 @@ def test_case_interface_matches_the_board():
     assert ay0 == pb.H and ay1 > pb.H and ax1 - ax0 > 10
 
 
-def test_case_interface_says_the_board_is_live_but_the_island():
-    """Rev B is non-isolated: the case must treat every part of the board as mains bar the safe
-    I/O island, whose J3 may be reached from outside; USB (J4) is internal only."""
+def test_case_interface_says_the_whole_board_is_live_j3_included():
+    """Rev B is non-isolated: the case must treat every part of the board as mains, J3 and what is
+    wired to it included; J3 and USB (J4) are internal only."""
     ci = json.loads(pb.case_interface(C, P))
-    assert ci["mains_area"]["whole_board"] is True
-    assert ci["mains_area"]["except"] == [round(v, 3) for v in (*pb.island_extent()[0], *pb.island_extent()[2])]
+    assert ci["mains_area"]["whole_board"] is True and "except" not in ci["mains_area"]
     assert ci["connectors"]["J4"]["internal_only"] is True
     j3 = ci["connectors"]["J3"]
-    assert j3["internal_only"] is False and j3["safe"] is True and j3["edge"] == "bottom"
+    assert j3["internal_only"] is True and j3["safe"] is False and j3["edge"] == "bottom"
     assert ci["led"]["part"] == "SK6812-EC20"
     assert {"K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2"} <= set(ci["tall_parts"])
 
@@ -60,11 +59,11 @@ def test_case_interface_has_the_c6_antenna():
     assert ci["antenna_overhang"] == [ux - 9.0, pb.H, ux + 9.0, pb.H + 6.5]
 
 
-def test_pins_h_has_the_safe_io_and_the_island_fault_pin():
+def test_pins_h_has_j3s_io_and_says_it_is_not_isolated():
     h = pb.pins_h()
-    for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "SAFE_IN", "SAFE_OUT", "ISO_FLT"):
+    for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "IO_IN", "IO_OUT"):
         assert f"#define PETRO_PIN_{k} {pb.GPIO[k]}\n" in h, k
-    assert "SELV" in h and "ESP32-C6" in h
+    assert "NOT isolated" in h and "SELV" not in h and "ESP32-C6" in h
 
 
 def test_usb_faces_the_right_hand_edge_with_nothing_in_the_plugs_way():

@@ -24,10 +24,10 @@ Low-voltage side, as on the nakostat heatlink (STAT-75): the ESP32-C6-WROOM-1 mo
   assembly: the S3-MINI needed X-ray), the house USB connector (reachable only with the case off),
   the relay driver, the button on the boot strap, the LED, the debug pads.
 
-The safe I/O island (5 Nov 2026): J3, a 10-way terminal that may be touched, is SELV: powered and
-  signalled across three reinforced isolators from the neutral-referenced side. The ISOW7743
-  makes its 3.3 V (and carries IN and OUT), the ISO7741 its SPI, the ISO1640 its I2C. The island
-  keeps 8 mm from everything else, with a slot under each isolator.
+The I/O terminal J3 (5 Nov 2026): a 10-way terminal for parts added inside the case (SPI, I2C, one
+  input, one output, 3.3 V and ground), wired straight to the ESP32. It is at mains potential like
+  everything else: nothing on it may leave the case. (An isolated version, J3 behind three
+  reinforced isolators, is tag rev-b-isolated-io: about 75 GBP more for five boards.)
 """
 from board.netlist import Circuit
 from board.rules import HIGH_CURRENT_WIDTH, Rules
@@ -39,9 +39,10 @@ from board.rules import HIGH_CURRENT_WIDTH, Rules
 # it is the LED data with a pull-up (the LED ignores a steady high); GPIO15 (JTAG source) is a
 # spare. MTMS/MTDI (4/5) set only the SDIO slave's clock edges, which nothing uses (the relay is on
 # MTMS, its gate pulled down: off, and low, at reset).
-# The island: I2C on LP_I2C (6/7) and its input on an LP GPIO (3), so the low-power core can poll
+# J3's I/O: I2C on LP_I2C (6/7) and its input on an LP GPIO (3), so the low-power core can poll
 # sensors and the PIR can wake the chip with the main core asleep; SPI on 18-21. IN (3), OUT (23)
-# and SPI are on the module's left-hand column, the island's side; LP_I2C has no other pins.
+# and SPI are on the module's left-hand column, J3's side; LP_I2C has no other pins. GPIO22 and
+# GPIO15 are spare.
 GPIO = {"BUTTON": 9, "LED": 8, "USB_DM": 12, "USB_DP": 13, "UART_TX": 16, "UART_RX": 17,
         "NTC": 0,           # board temperature, ADC1_CH0
         "ZX": 1,            # BL0939 zero cross
@@ -49,9 +50,8 @@ GPIO = {"BUTTON": 9, "LED": 8, "USB_DM": 12, "USB_DP": 13, "UART_TX": 16, "UART_
         "RELAY": 4,
         "BL_TX": 10,        # BL0939 TX -> ESP RX (UART1)
         "BL_RX": 11,        # ESP TX (UART1) -> BL0939 RX
-        "SAFE_IN": 3, "SAFE_OUT": 23, "I2C_SDA": 6, "I2C_SCL": 7,
-        "SPI_SCLK": 18, "SPI_MOSI": 19, "SPI_MISO": 20, "SPI_CS": 21,
-        "ISO_FLT": 22}      # the ISOW7743's EN/FLT: low if the island's converter has failed
+        "IO_IN": 3, "IO_OUT": 23, "I2C_SDA": 6, "I2C_SCL": 7,
+        "SPI_SCLK": 18, "SPI_MOSI": 19, "SPI_MISO": 20, "SPI_CS": 21}
 C6_GPIOS = set(range(0, 14)) | set(range(15, 24))
 STRAPPING = {4, 5, 8, 9, 15}
 _MODPIN = {16: "TXD0", 17: "RXD0"}
@@ -70,13 +70,11 @@ J2_PINS = {"1": "L_OUT", "2": "N_OUT"}         # rotated 90: pad 2 on top
 # 5 GND; pads 6/7 are the shell tabs. Inside the case: reachable only with the case off.
 USB_PINS = {"1": "VBUS_IN", "2": "USB_DM", "3": "USB_DP", "4": "CC", "5": "GND"}
 DEBUG_PINS = {"1": "EN", "2": "UART_RX", "3": "UART_TX", "4": "GND", "5": "+3V3"}
-# J3: the safe I/O terminal (10-way, 3.5 mm), all SELV: the island's 3.3 V and ground, SPI, I2C,
-# one input (a PIR, an interrupt) and one output. J4 (the heatlink's IDC header) is gone: the C6
-# has no pins left for it.
-IO_PINS = {"1": "ISO_3V3", "2": "ISO_GND", "3": "ISO_SCLK", "4": "ISO_MOSI", "5": "ISO_MISO",
-           "6": "ISO_CS", "7": "ISO_SDA", "8": "ISO_SCL", "9": "ISO_IN", "10": "ISO_OUT"}
-# Every net of the island (J3's, and the ISOW7743's filtered supply behind its beads).
-SELV_NETS = tuple(IO_PINS.values()) + ("ISO_VIN", "ISO_GIN")
+# J3: the I/O terminal (10-way, 3.5 mm) for parts inside the case, straight from the ESP32: 3.3 V
+# and ground, SPI, I2C, one input (a PIR, an interrupt) and one output. At mains potential, like
+# the rest of the board. J4 (the heatlink's IDC header) is gone: the C6 has no pins left for it.
+IO_PINS = {"1": "+3V3", "2": "GND", "3": "SPI_SCLK", "4": "SPI_MOSI", "5": "SPI_MISO",
+           "6": "SPI_CS", "7": "I2C_SDA", "8": "I2C_SCL", "9": "IO_IN", "10": "IO_OUT"}
 
 # --- the mains rules (non-isolated mode: every other net sits at neutral) --------------------------
 # The supply's high-voltage nets are the PSU group: after F2, at the rectified live (the switching
@@ -87,10 +85,8 @@ PSU_NETS = ("L_PSU", "L_RF", "VBULK1", "VBULK")
 SWNODE_NETS = ("SW", "BP", "FB", "FBH")
 GROUPS = {"L_IN": "LINE", "L_F": "LIVE", "N_IN": "NEUTRAL", "N_OUT": "NEUTRAL", "L_OUT": "LOAD",
           "DIV1": "DIV1", "DIV2": "DIV2", "DIV3": "DIV3", "DIV4": "DIV4",
-          **{n: "PSU" for n in PSU_NETS}, **{n: "SWNODE" for n in SWNODE_NETS},
-          **{n: "SELV" for n in SELV_NETS}}
+          **{n: "PSU" for n in PSU_NETS}, **{n: "SWNODE" for n in SWNODE_NETS}}
 HIGH_CURRENT = {"L_IN", "L_F", "L_OUT", "N_IN", "N_OUT"}
-BARRIERS = ("U7", "U8", "U9")                # the island's isolators: a slot under each
 # Hand-fit (5 Nov 2026): the mains parts, bought from authorised distributors (DESIGN.md §3.2) and
 # soldered by Martin; left off the fab's BOMs and CPL, listed in hand-fit.csv. The mains terminals,
 # F1's clips, F2's holder, the relay, the MOV and the fusible resistor.
@@ -99,7 +95,7 @@ BL_NC = ("VT", "CF", "SCLK", "VPP")          # the BL0939's unused pins, each on
 
 
 def rules():
-    return Rules(GROUPS, high_current=HIGH_CURRENT, barriers=BARRIERS, rest="NEUTRAL", divider_top="LINE",
+    return Rules(GROUPS, high_current=HIGH_CURRENT, rest="NEUTRAL", divider_top="LINE",
                  reduced={"SWNODE": 1.0}, own_leads=OWN_LEADS)
 
 
@@ -301,74 +297,14 @@ def build_petro():
     for pad, n in DEBUG_PINS.items():
         c.connect(n, (tp, pad))
 
-    # ---- the safe I/O island: J3, across three reinforced isolators ------------------------------
-    # Side 1 of each isolator is this board (GND, at neutral); side 2 the island (ISO_GND).
-    # ISOW7743 (TI SLLSFK1C), as rev A's metering island: power flows side 1 -> side 2. VDD 5 V ->
-    # VISOOUT 3.3 V (VSEL low), up to 140 mA, the island's supply; TI's application circuit: beads
-    # VISOOUT -> VISOIN and GND2 -> GISOIN, 10u + 1u + 100n on VDD and VISOOUT, 100n on VIO and
-    # VISOIN. Channel A forward carries OUT, B back carries IN; C and D (back) are unused, their
-    # inputs held at ISO_GND. EN/FLT pulled up (converter on) and read as a fault.
-    u7 = part("ISOW", "U7")
-    c.connect(v5, (u7, "VDD"))
-    c.connect(v33, (u7, "VIO"), (u7, "EN_IO1"))
-    c.connect(gnd, (u7, "GND1"), (u7, "GNDIO"))
-    c.connect("ISO_FLT", (u7, "EN/FLT"))
-    two("R10K", None, "ISO_FLT", v33)
-    c.connect("ISO_FLT", (u1, modpin(GPIO["ISO_FLT"])))
-    for key in ("C10U", "C1U", "C100N"):
-        two(key, None, v5, gnd)
-    two("C100N", None, v33, gnd)
-    c.connect("ISO_3V3", (u7, "VISOOUT"))
-    c.connect("ISO_GND", (u7, "GND2"), (u7, "VSEL"), (u7, "INC"), (u7, "IND"))
-    two("BEAD", None, "ISO_3V3", "ISO_VIN")
-    two("BEAD", None, "ISO_GND", "ISO_GIN")
-    c.connect("ISO_VIN", (u7, "VISOIN"), (u7, "EN_IO2"))
-    c.connect("ISO_GIN", (u7, "GISOIN"))
-    for key in ("C10U", "C1U", "C100N"):
-        two(key, None, "ISO_3V3", "ISO_GND")
-    two("C100N", None, "ISO_VIN", "ISO_GIN")
-    c.connect("SAFE_OUT", (u7, "INA"), (u1, modpin(GPIO["SAFE_OUT"])))
-    c.connect("ISO_OUT", (u7, "OUTA"))
-    c.connect("ISO_IN", (u7, "INB"))
-    c.connect("SAFE_IN", (u7, "OUTB"), (u1, modpin(GPIO["SAFE_IN"])))
-    c.connect("NC_U7_OUTC", (u7, "OUTC"))
-    c.connect("NC_U7_OUTD", (u7, "OUTD"))
-    two("R100K", None, "ISO_IN", "ISO_GND")                     # nothing plugged in: IN reads low
-
-    # ISO7741 (SPI): A-C forward (SCLK, MOSI, CS), D back (MISO); both enables on.
-    u8 = part("ISO7741", "U8")
-    c.connect(v33, (u8, "VCC1"), (u8, "EN1"))
-    c.connect(gnd, (u8, "GND1"))
-    c.connect("ISO_3V3", (u8, "VCC2"), (u8, "EN2"))
-    c.connect("ISO_GND", (u8, "GND2"))
-    for ch, sig in (("A", "SCLK"), ("B", "MOSI"), ("C", "CS")):
-        c.connect(f"SPI_{sig}", (u8, f"IN{ch}"), (u1, modpin(GPIO[f"SPI_{sig}"])))
-        c.connect(f"ISO_{sig}", (u8, f"OUT{ch}"))
-    c.connect("ISO_MISO", (u8, "IND"))
-    c.connect("SPI_MISO", (u8, "OUTD"), (u1, modpin(GPIO["SPI_MISO"])))
-    two("C100N", None, v33, gnd)
-    two("C100N", None, "ISO_3V3", "ISO_GND")
-
-    # ISO1640 (I2C, bidirectional): 4k7 pull-ups on both sides (TI's application circuit).
-    u9 = part("ISO1640", "U9")
-    c.connect(v33, (u9, "VCC1"))
-    c.connect(gnd, (u9, "GND1"))
-    c.connect("ISO_3V3", (u9, "VCC2"))
-    c.connect("ISO_GND", (u9, "GND2"))
-    for sig in ("SDA", "SCL"):
-        c.connect(f"I2C_{sig}", (u9, f"{sig}1"), (u1, modpin(GPIO[f"I2C_{sig}"])))
-        c.connect(f"ISO_{sig}", (u9, f"{sig}2"))
-        two("R4K7", None, f"I2C_{sig}", v33)
-        two("R4K7", None, f"ISO_{sig}", "ISO_3V3")
-    # Its NC pins have no internal connection (TI: may be tied to ground). Each goes to its own
-    # side's ground, so no unconnected copper sits on the barrier.
-    for pad in ("2", "4", "8"):
-        c.connect(gnd, (u9, "NC", pad))
-    for pad in ("10", "13", "15"):
-        c.connect("ISO_GND", (u9, "NC", pad))
-    two("C100N", None, v33, gnd)
-    two("C100N", None, "ISO_3V3", "ISO_GND")
-
+    # ---- J3, the I/O terminal: straight to the ESP32, for parts inside the case ------------------
+    # 3.3 V from the AP2112K (600 mA, the module's share aside), I2C with 4k7 pull-ups, IN pulled
+    # down so it reads low with nothing connected.
+    for sig in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "IO_IN", "IO_OUT"):
+        c.connect(sig, (u1, modpin(GPIO[sig])))
+    for sig in ("I2C_SDA", "I2C_SCL"):
+        two("R4K7", None, sig, v33)
+    two("R100K", None, "IO_IN", gnd)
     j3 = part("IO10", "J3")
     for pad, n in IO_PINS.items():
         c.connect(n, (j3, pad))
@@ -422,12 +358,7 @@ F1_Y = 32.0
 LED_RING = 2.0                          # mm of clear board round the LED (the light pipe's flange)
 DY = 15.0                               # the low-voltage side's move down from rev A
 TP_X, TP_PITCH, TP_ROWS = 27.5, 3.2, (42.0, 47.0, 52.0)    # the test holes' block
-# The safe I/O island's barrier: the isolators' centre line, their x, and the module's edge. Their
-# pad rows are 7.1 mm apart inside; a slot along the line takes creepage round its ends, and the
-# isolators are 3.7 mm or more apart so the air gap between neighbours' opposite sides is 8 mm.
-ISO_Y = 66.0
-ISO_X = (9.5, 24.0, 37.2)
-ISL_X = (2.5, 43.5)     # the island's left and right edges
+J3_X0 = 25.85 - 4.5 * 3.5  # J3's pin 1 (10 pins on 3.5 mm, centred on the part)
 U1_EDGE = 9.25          # the module's centre above the bottom edge: its antenna starts at the edge
 TP_LABEL_DY = -1.9                      # each test hole's label, above it
 
@@ -458,21 +389,14 @@ AT = {
     # USB (J4 facing the right-hand edge, its protection to its left)
     "J4": (116.5, 51.5, 90), "U6": (111.0, 50.0, 0), "F4": (108.0, 52.5, 90), "D2": (105.5, 52.5, 90),
     "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
-    # the safe I/O island, bottom left: J3 on the bottom edge, the isolators across the barrier
-    # (side 2, the island's, facing down), their island-side parts between them and J3
+    # J3, the I/O terminal, bottom left on the bottom edge; the I2C pull-ups and IN's pull-down
+    # above their pins
     "J3": (25.85, 81.0, 0),
-    "U7": (ISO_X[0], ISO_Y, 180), "U8": (ISO_X[1], ISO_Y, 180), "U9": (ISO_X[2], ISO_Y, 180),
-    "FB1": (5.0, 74.8, 90), "FB2": (6.5, 74.8, 90), "C30": (8.5, 74.0, 90), "C31": (10.1, 74.0, 90),
-    "C32": (11.5, 74.0, 90), "C33": (13.1, 74.0, 90), "R27": (15.5, 74.0, 90),
-    "C35": (24.0, 74.0, 90), "C37": (37.2, 74.0, 90), "R29": (33.5, 74.0, 90), "R31": (40.5, 74.0, 90),
-    # ... and their board-side parts above them
-    "C26": (5.0, 57.6, 90), "C27": (7.0, 57.6, 90), "C28": (8.5, 57.6, 90), "C29": (12.5, 57.6, 90),
-    "R26": (14.1, 57.6, 90), "C34": (24.0, 57.6, 90), "C36": (37.2, 57.6, 90),
-    "R28": (32.5, 57.6, 90), "R30": (34.1, 57.6, 90),
+    "R26": (J3_X0 + 6 * 3.5, 74.0, 90), "R27": (J3_X0 + 7 * 3.5, 74.0, 90), "R28": (J3_X0 + 8 * 3.5, 74.0, 90),
     # the module, bottom middle (antenna past the bottom edge), its supply and EN at its right
     "U1": (66.0, H-U1_EDGE, 180),
     "C21": (76.6, 82.6, 90), "C22": (78.2, 82.6, 90), "R19": (76.6, 79.0, 90), "C23": (78.2, 79.0, 90),
-    # 3.3 V, the debug pads, button and LED: the open ground above the island
+    # 3.3 V, the debug pads, button and LED: the open ground above J3
     "U2": (49.0, 53.0, 0), "C18": (45.6, 53.0, 90), "C19": (52.4, 53.0, 90), "C20": (54.0, 53.0, 90),
     "TP1": (42.4, 46.5, 0),
     "SW1": (49.5, 45.6, 0), "R20": (54.8, 49.6, 90),
@@ -498,92 +422,9 @@ def place_petro(c):
     return p
 
 
-ISO_SLOT_W = 1.5
-ISO_ROW_IN = 3.55       # the isolators' pad rows' inner edges, either side of ISO_Y
-REINFORCED_GAP = 8.1    # 8 mm and a margin: each side's copper from the other side's pad row
-AREA_PAD_MARGIN = 0.4   # each router's area past its own isolator pads' outer ends
-
-
-def island_extent():
-    """The safe I/O island (SELV), as far as its copper may reach: from 8 mm below the isolators'
-    board-side pad rows down to the bottom edge, between ISL_X (8 mm and more short of the
-    module's pads); only the isolators' own island-side pads stand out of it at the top. The
-    board side keeps 8 mm from it (LV_ISLAND_X, LV_ISLAND_Y)."""
-    top = ISO_Y - ISO_ROW_IN + REINFORCED_GAP
-    x0, x1 = ISL_X
-    return [(x0, top), (x1, top), (x1, H - 0.5), (x0, H - 0.5)]
-
-
-def island_area():
-    """The island's router area and ISO_GND pour: island_extent() reaching up just past the
-    isolators' island-side pads, so the router (which takes its area for the board outline)
-    sees those pads on the board. The band keep-outs hold its tracks and vias to the extent, and
-    KiCad's fill holds the pour 8 mm off the board side by the rules."""
-    x0, x1 = ISL_X
-    top = ISO_Y + ISO_ROW_IN - AREA_PAD_MARGIN
-    return [(x0, top), (x1, top), (x1, H - 0.5), (x0, H - 0.5)]
-
-
-def island_keepouts(c=None, p=None, margin=0.1):
-    """(layer, x0, y0, x1, y1) on both layers: the mounting holes the island's area reaches (H3,
-    bottom left), all copper 3 mm off. (No keep-out over the isolators' pads: Freerouting will not
-    route to a pad inside one; the areas keep the 8 mm instead.)"""
-    hole = 3.2 / 2 + 3.0 + margin
-    xs, ys = [p_[0] for p_ in island_area()], [p_[1] for p_ in island_area()]
-    near = [(x, y) for x, y in HOLES.values()
-            if min(xs) - hole < x < max(xs) + hole and min(ys) - hole < y < max(ys) + hole]
-    boxes = [(x - hole, y - hole, x + hole, y + hole) for x, y in near]
-    if c is not None:
-        boxes += band_keepouts(c, p, "island")
-    return [(layer, *b) for layer in CU for b in boxes]
-
-
-def band_keepouts(c, p, side, margin=0.32):
-    """Boxes (x0, y0, x1, y1) keeping one side's router out of the 8 mm band and off the other
-    side, without covering any of its own pads (Freerouting will not route to a pad inside a
-    keep-out, and lets a track leave a pad in any direction, out of its area too).
-
-    side "lv": the island and the strip beside it, and the band, but for gaps round the
-    isolators' board-side pads, which its tracks reach from above. side "island": the board side
-    above the band, the strip, and the band but for gaps round the island-side pads."""
-    from board.rules import _pad_box
-    lv_y, top = LV_ISLAND_Y, island_extent()[0][1]
-    x_end = LV_ISLAND_X - 0.1
-    strip = (island_extent()[1][0] + 0.1, lv_y, x_end, H + 5.0)
-    want_selv = side == "island"
-    pads = sorted((_pad_box(p, ref, pad) for ref in BARRIERS for pad in c.instances[ref].part.footprint.pads
-                   if (GROUPS.get(c.net_of(ref, pad.number)) == "SELV") == want_selv), key=lambda b: b[0])
-    if side == "lv":
-        row = (lv_y, max(b[3] for b in pads) + margin)          # the board-side pads poke below lv_y
-        boxes = [strip, (-5.0, row[1], x_end, H + 5.0)]
-    else:
-        row = (min(b[1] for b in pads) - margin, top)           # the island-side pads poke above top
-        boxes = [strip, (-5.0, lv_y - 6.0, x_end, row[0])]
-    x = -5.0
-    for b in pads:                                               # the row, but for gaps round its pads
-        if b[0] - margin > x:
-            boxes.append((x, row[0], b[0] - margin, row[1]))
-        x = max(x, b[2] + margin)
-    boxes.append((x, row[0], x_end, row[1]))
-    return boxes
-
-
-def in_island(x, y, keepouts=None):
-    keep = island_keepouts() if keepouts is None else keepouts
-    return _in_poly(x, y, island_area()) and not any(
-        x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in keep)
-
-
-def island_zones():
-    """ISO_GND on both layers over the island, below the mains pours in priority."""
-    return [Zone("ISO_GND", CU, island_area(), priority=0, clearance=0.2, min_width=0.25)]
-
-
 def slots():
-    """One slot under the safe I/O island's three isolators, along the barrier between their pad
-    rows (7.1 mm apart) and past the outer two: every surface path from a board-side pad to an
-    island pad goes round an end, which makes it more than 8 mm (rules.barrier_creepage)."""
-    return [Slot(ISO_X[0] - 8.0, ISO_Y, ISO_X[2] + 7.0, ISO_Y, ISO_SLOT_W)]
+    """No slots: rev B has no barrier on the board (it is all at neutral but the mains)."""
+    return []
 
 
 def fuse_box():
@@ -757,50 +598,20 @@ def kelvin_route(c, p):
     t += _route("GND", "B.Cu", KELVIN_W, gv, (gx, 11.2))
     t += _route("SENSE", "F.Cu", KELVIN_W, (sx, sy), sv)
     t += _route("SENSE", "B.Cu", KELVIN_W, sv, (sv[0], 11.2))
-    return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA)]
+    # ... and on into R10's sense pad (the lower one, between IBP above it and C15's ground below,
+    # where the router found no room for a via): a via in the gap between R10 and R11, then F.Cu.
+    (rx, ry), (nx, _) = pad_xy(c, p, "R10", "1"), pad_xy(c, p, "R11", "1")
+    end = (round((rx + nx) / 2, 3), ry)
+    t += _route("SENSE", "B.Cu", KELVIN_W, (sv[0], 11.2), (end[0], 11.2), end)
+    t += _route("SENSE", "F.Cu", KELVIN_W, end, (rx, ry))
+    return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA), Via("SENSE", *end, *KELVIN_VIA)]
 
 
-ISO_DECOUPLING = ("C26", "C27", "C28", "C29", "C34", "C36")     # the isolators' board-side caps
-ISO_DROP_GAP = 0.45        # mm from a ground pin's end to its via's copper (Freerouting's hole
-                           # clearance: 0.26 mm from the 0.3 mm hole to the pin)
-
-
-def isolator_drops(c, p):
-    """(tracks, vias): a via past the outer end of each isolator ground pin, on its own side
-    (board side up, island side down), joined to the pin by a short track. The signal tracks to
-    the neighbouring pins otherwise fence the pin's bit of pour off, with no via under it."""
-    from board.rules import _pad_box
-    size, drill = KELVIN_VIA
-    tracks, vias = [], []
-    for ref in BARRIERS:
-        for pad in c.instances[ref].part.footprint.pads:
-            net = c.net_of(ref, pad.number)
-            if net not in ("GND", "ISO_GND"):
-                continue
-            x, y = pad_xy(c, p, ref, pad.number)
-            x0, y0, x1, y1 = _pad_box(p, ref, pad)
-            vy = y1 + ISO_DROP_GAP + size / 2 if net == "ISO_GND" else y0 - ISO_DROP_GAP - size / 2
-            vy = round(vy, 3)
-            tracks.append(Track(net, "F.Cu", x, y, x, vy, 0.25))
-            vias.append(Via(net, x, vy, size, drill))
-    # The board side's vias, joined end to end on B.Cu: a spine the router must cross on F.Cu, so
-    # no signal track can wall the isolators' ground off (it did, twice, through the pour).
-    nodes = sorted(((v.x, v.y) for v in vias if v.net == "GND"))
-    spine_y = sum(y for _, y in nodes) / len(nodes)
-    # Their decoupling capacitors' GND pads (the end away from the isolators): a via past that end,
-    # dropping on B.Cu to a node on the spine (C36's ground was left in a scrap of pour).
-    for ref in ISO_DECOUPLING:
-        pad = next(q for q in c.instances[ref].part.footprint.pads if c.net_of(ref, q.number) == "GND")
-        x, y = pad_xy(c, p, ref, pad.number)
-        x0, y0, x1, y1 = _pad_box(p, ref, pad)
-        vy = round(y0 - ISO_DROP_GAP - size / 2, 3)
-        tracks.append(Track("GND", "F.Cu", x, y, x, vy, 0.25))
-        vias.append(Via("GND", x, vy, size, drill))
-        tracks.append(Track("GND", "B.Cu", x, vy, x, round(spine_y, 3), 0.4))
-        nodes.append((x, round(spine_y, 3)))
-    nodes.sort()
-    tracks += [Track("GND", "B.Cu", *a, *b, 0.4) for a, b in zip(nodes, nodes[1:])]
-    return tracks, vias
+def usb_ties(c, p):
+    """(tracks, []): the SRV05-4's flow-through pairs, D- pin 1 to 6 and D+ pin 3 to 4, straight
+    across on F.Cu; the router left D-'s two halves apart."""
+    xy = lambda n: pad_xy(c, p, "U6", n)
+    return (_route("USB_DM", "F.Cu", 0.25, xy("1"), xy("6")) + _route("USB_DP", "F.Cu", 0.25, xy("3"), xy("4"))), []
 
 
 def ldo_ground(c, p):
@@ -814,29 +625,23 @@ def ldo_ground(c, p):
 
 def hand_wiring(c, p):
     """(tracks, vias) routed by hand: the divider chain, the supply's high-voltage nets, the
-    Kelvin pair, the isolators' ground drops, the regulator's ground."""
+    Kelvin pair, the regulator's ground, the USB protection's flow-through ties."""
     kt, kv = kelvin_route(c, p)
-    it, iv = isolator_drops(c, p)
     lt, _ = ldo_ground(c, p)
-    return divider_tracks(c, p) + supply_tracks(c, p) + kt + it + lt, kv + iv
+    ut, _ = usb_ties(c, p)
+    return divider_tracks(c, p) + supply_tracks(c, p) + kt + lt + ut, kv
 
 
 # --- the low-voltage router's area -----------------------------------------------------------------
 # One Freerouting pass for every low-voltage net (the rest group, at neutral), in this area: the
 # low-voltage side, the corridor under F1 and the metering corner, each edge 2.5 mm from the mains
-# pours, and 8 mm short of the safe I/O island (bottom left). Keep-outs (lv_keepouts) round every
+# pours. Keep-outs (lv_keepouts) round every
 # pad of another group, the hand-routed supply tracks and the mounting holes keep it off what the
 # router can't see.
-LV_ISLAND_X = ISL_X[1] + 8.0     # island_area's right edge + 8 mm
-LV_ISLAND_Y = ISO_Y + ISO_ROW_IN - REINFORCED_GAP     # 8 mm above the isolators' island-side rows
-LV_AREA_Y = ISO_Y - ISO_ROW_IN + AREA_PAD_MARGIN       # the area's edge: past the board-side pads
-
-
 def lv_area():
     return [(12.5, 9.0), (24.0, 9.0), (24.0, 10.6), (37.5, 10.6), (37.5, 38.0), (54.5, 38.0),
             (54.5, 44.0), (73.5, 44.0), (73.5, 52.0), (84.0, 52.0),
-            (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (LV_ISLAND_X, H - 0.5),
-            (LV_ISLAND_X, LV_AREA_Y), (0.5, LV_AREA_Y), (0.5, 38.0),
+            (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (0.5, H - 0.5), (0.5, 38.0),
             (29.5, 38.0), (29.5, 26.0), (22.5, 26.0), (22.5, 22.9), (16.5, 22.9), (16.5, 18.5),
             (12.5, 18.5)]
 
@@ -846,16 +651,12 @@ def lv_keepouts(c, p, margin=0.1):
     spacing, on the layers the pad is on (an SMD pad only on F.Cu: under it, B.Cu is 1.6 mm of
     FR-4 away, which the rules rightly don't count as a surface spacing, and the router needs that
     room under the supply block); every hand-routed supply and divider track likewise, on its
-    layer (by its bounding box); and on both layers the mounting holes, the band round the safe
-    I/O island and the mains pours' stitching vias."""
+    layer (by its bounding box); and on both layers the mounting holes and the mains pours'
+    stitching vias."""
     from board.cleanup import pad_shapes
     r = rules()
     out = []
-    barrier = {(ref, pad.number) for ref in BARRIERS for pad in c.instances[ref].part.footprint.pads}
-    island_pads = {_pad_key(c, p, ref, n) for ref, n in barrier if GROUPS.get(c.net_of(ref, n)) == "SELV"}
     for net, layers, x0, y0, x1, y1 in pad_shapes(c, p):
-        if (net, round((x0 + x1) / 2, 2), round((y0 + y1) / 2, 2)) in island_pads:
-            continue            # the isolators' island-side pads: lv_area keeps 8 mm from their rows
         g = GROUPS.get(net) if net else None
         s = r.spacing(g, r.rest) if g else 0.0
         if s:
@@ -866,7 +667,6 @@ def lv_keepouts(c, p, margin=0.1):
         out.append((t.layer, min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
     hole = 3.2 / 2 + 3.0 + margin
     boxes = [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
-    boxes += band_keepouts(c, p, "lv")
     for v in stitch_vias():                     # the mains pours' stitching vias
         s = r.spacing(GROUPS[v.net], r.rest) + v.size / 2 + margin
         boxes.append((v.x - s, v.y - s, v.x + s, v.y + s))
@@ -906,7 +706,7 @@ _LV_KEEP_CACHE = _LazyKeep()
 
 
 def pad_extra(c):
-    """Per-pad additions: every mains-pour pad joins solidly; so does every GND and ISO_GND pad
+    """Per-pad additions: every mains-pour pad joins solidly; so does every GND pad
     (thermal spokes can land on a scrap of pour the tracks have cut off, which then counts as
     unjoined: C1's lead between the supply's keep-outs, SW1's beside the button's tracks). (The S3's -0.18 mm paste margin on its 1.2 mm
     centre pads went with it: the C6's nine 0.8 mm pads keep Espressif's footprint as drawn.)"""
@@ -914,7 +714,7 @@ def pad_extra(c):
         def f(pad):
             net = c.net_of(ref, pad.number)
             extra = []
-            if net in MAINS_POLYS or net in ("GND", "ISO_GND"):
+            if net in MAINS_POLYS or net == "GND":
                 extra.append([S("zone_connect"), 2])
             return extra
         return f
@@ -932,7 +732,7 @@ IO_LABELS = {"1": "3V3", "2": "G", "3": "SCK", "4": "MOSI", "5": "MISO", "6": "C
              "8": "SCL", "9": "IN", "10": "OUT"}
 LIVE_WARNING = (88.0, 26.8)     # the "board is live" block, both sides: on the L_OUT pour, clear of pads
 TITLE_AT = (92.0, 47.5)         # the title, on the back above the supply
-SAFE_AT = (25.6, 75.9)          # "SAFE I/O" on both sides, between the island's parts and J3
+LIVE_IO_AT = (20.6, 75.9)       # "LIVE I/O" on both sides, above J3's left-hand pins
 
 
 def silk(c, p):
@@ -946,14 +746,14 @@ def silk(c, p):
         out += [("N", x, y_n, 1.5), ("L", x, y_l, 1.5), (label, x, round(y_n - 2.2, 3), 1.0)]
     out += [("230 V AC", 8.5, 31.3, 1.2), ("MAINS", 8.5, 33.3, 1.2),
             ("230 V AC", 110.5, 31.0, 1.5), ("MAINS", 110.5, 33.6, 1.5)]
-    # rev B is non-isolated: all of it is live but the safe I/O island, on both sides
+    # rev B is non-isolated: all of it is live, J3 included, on both sides
     wx, wy = LIVE_WARNING
     for layer in ("F.SilkS", "B.SilkS"):
         out += [("DANGER 230 V AC", wx, wy, 1.2, layer), ("BOARD IS LIVE", wx, wy + 2.0, 1.2, layer),
-                ("GND = NEUTRAL", wx, wy + 3.8, 1.0, layer), ("ONLY J3 IS SELV", wx, wy + 5.4, 1.0, layer),
+                ("GND = NEUTRAL", wx, wy + 3.8, 1.0, layer), ("J3 I/O IS LIVE TOO", wx, wy + 5.4, 1.0, layer),
                 ("UNPLUG BEFORE USB", wx, wy + 6.9, 0.8, layer)]
-    sx, sy = SAFE_AT
-    out += [("SAFE I/O (SELV)", sx, sy, 1.0), ("SAFE I/O (SELV)", sx, sy, 1.0, "B.SilkS")]
+    sx, sy = LIVE_IO_AT
+    out += [("LIVE I/O: INSIDE CASE ONLY", sx, sy, 0.8), ("LIVE I/O: INSIDE CASE ONLY", sx, sy, 0.8, "B.SilkS")]
     # test holes: the block left of the 5 V converter, each labelled above, on both sides
     for ref, net in TEST_HOLES.items():
         x, y = xy(ref, "1")
@@ -1009,7 +809,7 @@ def fab_notes():
     """(text entries, user rectangles) on Dwgs.User: the antenna overhang, and the mains rule."""
     ux, uy, _ = AT["U1"]
     text = [("MODULE ANTENNA OVERHANGS THIS EDGE: INTENTIONAL", ux + 20, H + 1.5, 0.8, "Dwgs.User"),
-            ("NON-ISOLATED: THE BOARD IS AT MAINS POTENTIAL (GND = NEUTRAL), BAR THE SAFE I/O ISLAND",
+            ("NON-ISOLATED: THE WHOLE BOARD IS AT MAINS POTENTIAL (GND = NEUTRAL), J3 INCLUDED",
              W / 2, -1.5, 0.8, "Dwgs.User")]
     return text, [(ux - ANTENNA_HALF, H, ux + ANTENNA_HALF, H + ANTENNA_OVERHANG, "Dwgs.User")]
 
@@ -1029,18 +829,18 @@ def pins_h():
              "   boot strap); the LED is on GPIO8 (a strap: pulled up). BL_TX/BL_RX are UART1 to the",
              "   BL0939; ZX is its zero cross, OC its fast over-current. */",
              "/* Rev B is NON-ISOLATED: GND is tied to neutral, so every pin and pad is at mains",
-             "   potential whenever the unit is plugged in, bar the safe I/O island (J3). Bench work",
+             "   potential whenever the unit is plugged in, J3 included. Bench work",
              "   (USB, test holes) with the mains unplugged only. */",
              "/* Test holes (push-in loops, bench only, mains disconnected): "
              + ", ".join(f"{ref} {net}" for ref, net in TEST_HOLES.items()) + ". */", ""]
     for k in ("RELAY", "LED", "BUTTON", "BL_TX", "BL_RX", "ZX", "OC", "NTC",
               "USB_DM", "USB_DP", "UART_TX", "UART_RX"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
-    lines += ["", "/* Safe I/O terminal J3 (SELV: isolated, safe to touch): " + ", ".join(IO_LABELS.values())
-              + ". 3V3 is the isolated supply (budget ~30 mA); I2C has 4.7k pull-ups on both sides; IN",
-              "   reads low with nothing connected. ISO_FLT is low if the island's converter has failed. */"]
-    for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "SAFE_IN", "SAFE_OUT",
-              "ISO_FLT"):
+    lines += ["", "/* I/O terminal J3 (NOT isolated: at mains potential, for parts inside the case only): "
+              + ", ".join(IO_LABELS.values()) + ".",
+              "   3V3 is the board's own rail (AP2112K, 600 mA; keep J3's load to ~150 mA); I2C has 4.7k",
+              "   pull-ups; IN reads low with nothing connected. */"]
+    for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "IO_IN", "IO_OUT"):
         lines.append(f"#define PETRO_PIN_{k} {GPIO[k]}")
     return "\n".join(lines) + "\n"
 
@@ -1049,9 +849,9 @@ def case_interface(c, p):
     """What the case (PETRO-6) needs from the board, as JSON, in board coordinates (mm, origin
     top-left, y down, top view): outline, holes, the LED and the light pipe's flange ring, the
     button, the connectors with the edge each faces, and the antenna overhang. Rev B is
-    non-isolated: the board is at mains potential bar the safe I/O island, so the case treats all
-    of it as live except the island, whose J3 may open to the outside; USB (J4) stays internal
-    (reached with the case open, unplugged)."""
+    non-isolated: the whole board is at mains potential, J3 included, so the case treats all of it
+    as live; J3 and USB (J4) stay internal (J3 for parts mounted inside the case; USB reached with
+    the case open, unplugged)."""
     import json
     from board.placement import bbox
     box = lambda ref: [round(v, 3) for v in bbox(p, ref)]
@@ -1068,18 +868,17 @@ def case_interface(c, p):
         "connectors": {
             "J1": {"what": "mains in (L, N), 7.62 mm screw terminal", "edge": "left", "body": box("J1")},
             "J2": {"what": "mains out to the load (L, N)", "edge": "right", "body": box("J2")},
-            "J3": {"what": "10-way 3.5 mm safe I/O terminal (SELV, reinforced isolation): 3V3, G, "
-                           "SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT", "edge": "bottom",
-                   "internal_only": False, "safe": True, "body": box("J3")},
+            "J3": {"what": "10-way 3.5 mm I/O terminal, NOT isolated (at mains potential): 3V3, G, "
+                           "SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT; for parts mounted inside the case",
+                   "edge": "bottom", "internal_only": True, "safe": False, "body": box("J3")},
             "J4": {"what": "USB, JST SH 5-pin side entry: bench only, case off, mains unplugged",
                    "edge": "right", "internal_only": True, "body": box("J4")},
         },
         "tall_parts": {r: box(r) for r in ("K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2", "C4")},
         "antenna_overhang": [ux - ANTENNA_HALF, H, ux + ANTENNA_HALF, H + ANTENNA_OVERHANG],
         "mains_area": {"whole_board": True,
-                       "except": [round(v, 3) for v in (*island_extent()[0], *island_extent()[2])],
-                       "note": "non-isolated: every part of the board is at mains potential when "
-                               "plugged in, except the safe I/O island (the 'except' box: J3's corner); "
-                               "no opening may expose anything outside it"},
+                       "note": "non-isolated: every part of the board, J3 and whatever is wired to it "
+                               "included, is at mains potential when plugged in; no opening may expose "
+                               "any of it, and nothing conductive may leave the case"},
     }
     return json.dumps(data, indent=2) + "\n"

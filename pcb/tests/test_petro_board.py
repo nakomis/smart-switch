@@ -37,64 +37,38 @@ def test_nothing_of_rev_a_isolation_remains():
     assert not {"GND_M", "3V3_M", "VISO_M", "GISO_M"} & set(C.nets)
 
 
-def test_rules_are_non_isolated_with_the_rest_at_neutral_and_a_selv_island():
+def test_rules_are_non_isolated_with_the_rest_at_neutral_and_no_barrier():
     r = pb.rules()
     assert r.rest == "NEUTRAL"
-    assert {n for n, g in pb.GROUPS.items() if g == "SELV"} == set(pb.SELV_NETS)
-    assert set(r.barriers) == {"U7", "U8", "U9"}
-    assert "SELV island to everything else" in r.dru()
+    assert "SELV" not in pb.GROUPS.values() and not r.barriers
+    assert "SELV" not in r.dru()
 
 
-# --- the safe I/O island (J3) -------------------------------------------------------------------
+def test_no_isolators_are_left():
+    """J3 is wired straight to the ESP32 (5 Nov 2026): the isolated version is tag rev-b-isolated-io."""
+    keys = {i.part.key for i in C.instances.values()}
+    assert not keys & {"ISOW", "ISO7741", "ISO1640", "BEAD"}
+    assert not [n for n in C.nets if n.startswith("ISO_")]
 
-def test_j3_is_the_safe_header():
+
+# --- J3, the I/O terminal (inside the case, at mains potential) ------------------------------------
+
+def test_j3_carries_the_board_rails_spi_i2c_in_and_out():
     assert C.instances["J3"].part.key == "IO10"
     assert {pad: net("J3", pad) for pad in pb.IO_PINS} == pb.IO_PINS
-    assert set(pb.IO_PINS.values()) <= set(pb.SELV_NETS)
-    assert list(pb.IO_PINS.values()) == ["ISO_3V3", "ISO_GND", "ISO_SCLK", "ISO_MOSI", "ISO_MISO",
-                                         "ISO_CS", "ISO_SDA", "ISO_SCL", "ISO_IN", "ISO_OUT"]
+    assert list(pb.IO_PINS.values()) == ["+3V3", "GND", "SPI_SCLK", "SPI_MOSI", "SPI_MISO",
+                                         "SPI_CS", "I2C_SDA", "I2C_SCL", "IO_IN", "IO_OUT"]
 
 
-def test_only_the_isolators_touch_both_sides():
-    """Every part with a pad on the island is either wholly on it or one of the three isolators."""
-    selv = set(pb.SELV_NETS)
-    for ref in C.instances:
-        ns = nets_of(ref) - {n for n in nets_of(ref) if n.startswith("NC_")}
-        if ns & selv and ns - selv:
-            assert ref in pb.BARRIERS, (ref, ns)
+def test_j3s_signals_go_straight_to_their_gpios():
+    for sig in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS", "I2C_SDA", "I2C_SCL", "IO_IN", "IO_OUT"):
+        assert ("U1", C.instances["U1"].part.pins[pb.modpin(pb.GPIO[sig])][0]) in C.nets[sig], sig
 
 
-def test_isow7743_powers_the_island_and_carries_in_and_out():
-    assert C.instances["U7"].part.key == "ISOW"
-    assert (net("U7", "VDD"), net("U7", "VIO"), net("U7", "GND1")) == ("+5V", "+3V3", "GND")
-    assert net("U7", "VISOOUT") == "ISO_3V3" and net("U7", "GND2") == "ISO_GND"
-    assert net("U7", "VSEL") == "ISO_GND"                                     # 3.3 V out
-    assert (net("U7", "INA"), net("U7", "OUTA")) == ("SAFE_OUT", "ISO_OUT")      # forward
-    assert (net("U7", "INB"), net("U7", "OUTB")) == ("ISO_IN", "SAFE_IN")        # reverse
-    assert net("U7", "INC") == net("U7", "IND") == "ISO_GND"                  # unused inputs held
-    assert net("U7", "EN/FLT") == "ISO_FLT"
-
-
-def test_iso7741_carries_spi():
-    assert C.instances["U8"].part.key == "ISO7741"
-    assert (net("U8", "VCC1"), net("U8", "GND1"), net("U8", "VCC2"), net("U8", "GND2")) == \
-        ("+3V3", "GND", "ISO_3V3", "ISO_GND")
-    for a, b in (("INA", "OUTA"), ("INB", "OUTB"), ("INC", "OUTC")):
-        assert net("U8", a).replace("SPI_", "ISO_") == net("U8", b)
-    assert {net("U8", p) for p in ("INA", "INB", "INC")} == {"SPI_SCLK", "SPI_MOSI", "SPI_CS"}
-    assert (net("U8", "IND"), net("U8", "OUTD")) == ("ISO_MISO", "SPI_MISO")
-
-
-def test_iso1640_carries_i2c_with_pull_ups_on_both_sides():
-    assert C.instances["U9"].part.key == "ISO1640"
-    assert (net("U9", "SDA1"), net("U9", "SCL1"), net("U9", "SDA2"), net("U9", "SCL2")) == \
-        ("I2C_SDA", "I2C_SCL", "ISO_SDA", "ISO_SCL")
-    for sig, rail in (("I2C_SDA", "+3V3"), ("I2C_SCL", "+3V3"), ("ISO_SDA", "ISO_3V3"), ("ISO_SCL", "ISO_3V3")):
-        assert len([r for r in by_key("R4K7") if nets_of(r) == {sig, rail}]) == 1, sig
-
-
-def test_the_safe_input_is_pulled_down_on_the_island():
-    assert len([r for r in by_key("R100K") if nets_of(r) == {"ISO_IN", "ISO_GND"}]) == 1
+def test_i2c_is_pulled_up_and_in_pulled_down():
+    for sig in ("I2C_SDA", "I2C_SCL"):
+        assert len([r for r in by_key("R4K7") if nets_of(r) == {sig, "+3V3"}]) == 1, sig
+    assert len([r for r in by_key("R100K") if nets_of(r) == {"IO_IN", "GND"}]) == 1
 
 
 def test_the_mains_parts_are_hand_fit():
@@ -272,12 +246,12 @@ def test_c6_fixed_pins_and_straps():
     assert g["NTC"] in range(0, 7)                                   # ADC1
 
 
-def test_the_island_uses_the_c6_low_power_pins_for_i2c_and_the_wake_input():
+def test_j3_uses_the_c6_low_power_pins_for_i2c_and_the_wake_input():
     """LP_I2C is GPIO6/7 and the LP GPIOs are 0-7: sensors can be polled, and the PIR can wake the
     chip, with the main core asleep."""
     g = pb.GPIO
     assert (g["I2C_SDA"], g["I2C_SCL"]) == (6, 7)
-    assert g["SAFE_IN"] in range(0, 8)
+    assert g["IO_IN"] in range(0, 8)
     assert {g[k] for k in ("SPI_SCLK", "SPI_MOSI", "SPI_MISO", "SPI_CS")} == {18, 19, 20, 21}
 
 

@@ -43,23 +43,16 @@ def test_mains_warning_on_both_sides():
         assert any("230 V" in s[0] for s in _texts(layer)), layer
 
 
-def test_the_board_is_marked_live_but_j3_on_both_sides():
+def test_the_board_and_j3_are_marked_live_on_both_sides():
     for layer in ("F.SilkS", "B.SilkS"):
         words = " ".join(s[0] for s in _texts(layer))
-        for w in ("BOARD IS LIVE", "GND = NEUTRAL", "ONLY J3 IS SELV", "UNPLUG BEFORE USB"):
+        for w in ("BOARD IS LIVE", "GND = NEUTRAL", "J3 I/O IS LIVE TOO", "UNPLUG BEFORE USB",
+                  "LIVE I/O: INSIDE CASE ONLY"):
             assert w in words, (layer, w)
 
 
-def test_the_island_is_marked_safe_on_both_sides_and_only_there():
-    area = pb.island_area()
-    for layer in ("F.SilkS", "B.SilkS"):
-        safe = [s for s in _texts(layer) if s[0].startswith("SAFE I/O")]
-        assert len(safe) == 1 and pb._in_poly(safe[0][1], safe[0][2], area), layer
-    for s in SILK:
-        if s[0].startswith("SAFE") or (s[0] in pb.IO_LABELS.values() and len(s) > 4 and s[4] == "B.SilkS"
-                                       and abs(s[2] - (pb.AT["J3"][1] + 2.3)) < 0.01):
-            assert pb._in_poly(s[1], s[2], area), s
-    assert not hasattr(pb, "boundary")
+def test_nothing_claims_to_be_safe():
+    assert not [s for s in SILK if "SAFE" in s[0] or "SELV" in s[0]]
 
 
 def test_every_test_hole_is_labelled_above_on_both_sides():

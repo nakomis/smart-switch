@@ -8,7 +8,7 @@
    boot strap); the LED is on GPIO8 (a strap: pulled up). BL_TX/BL_RX are UART1 to the
    BL0939; ZX is its zero cross, OC its fast over-current. */
 /* Rev B is NON-ISOLATED: GND is tied to neutral, so every pin and pad is at mains
-   potential whenever the unit is plugged in, bar the safe I/O island (J3). Bench work
+   potential whenever the unit is plugged in, J3 included. Bench work
    (USB, test holes) with the mains unplugged only. */
 /* Test holes (push-in loops, bench only, mains disconnected): TP2 BL_RX, TP3 BL_TX, TP4 ZX, TP5 OC, TP6 GND, TP7 +5V, TP8 GND, TP9 +3V3, TP10 COIL, TP11 GND, TP12 LED_DIN, TP13 BUTTON. */
 
@@ -25,14 +25,14 @@
 #define PETRO_PIN_UART_TX 16
 #define PETRO_PIN_UART_RX 17
 
-/* Safe I/O terminal J3 (SELV: isolated, safe to touch): 3V3, G, SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT. 3V3 is the isolated supply (budget ~30 mA); I2C has 4.7k pull-ups on both sides; IN
-   reads low with nothing connected. ISO_FLT is low if the island's converter has failed. */
+/* I/O terminal J3 (NOT isolated: at mains potential, for parts inside the case only): 3V3, G, SCK, MOSI, MISO, CS, SDA, SCL, IN, OUT.
+   3V3 is the board's own rail (AP2112K, 600 mA; keep J3's load to ~150 mA); I2C has 4.7k
+   pull-ups; IN reads low with nothing connected. */
 #define PETRO_PIN_SPI_SCLK 18
 #define PETRO_PIN_SPI_MOSI 19
 #define PETRO_PIN_SPI_MISO 20
 #define PETRO_PIN_SPI_CS 21
 #define PETRO_PIN_I2C_SDA 6
 #define PETRO_PIN_I2C_SCL 7
-#define PETRO_PIN_SAFE_IN 3
-#define PETRO_PIN_SAFE_OUT 23
-#define PETRO_PIN_ISO_FLT 22
+#define PETRO_PIN_IO_IN 3
+#define PETRO_PIN_IO_OUT 23

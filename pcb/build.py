@@ -3,16 +3,13 @@
 
     ./.venv/bin/python build.py [--route] [--passes N] [--out DIR] [--step]
 
-Rev B is non-isolated: every low-voltage net sits at neutral, bar the safe I/O island (J3, SELV,
-behind three reinforced isolators). Routing is two Freerouting runs: the low-voltage nets in the
-low-voltage area, then the island's nets in the island, each with keep-outs round everything at
+Rev B is non-isolated: every low-voltage net sits at neutral, J3's I/O included. Routing is one
+Freerouting run: the low-voltage nets in the low-voltage area, with keep-outs round everything at
 another potential, so the router (which knows only plain clearances) never comes near it. The mains
 copper is pours (petro_board.mains_zones); the divider chain, the LNK306 supply's high-voltage
 nets and the shunt's Kelvin pair are routed by hand. Ground is a pour over the low-voltage area:
-a drop via beside every SMD GND pad before routing, stitching vias after; the island likewise
-with ISO_GND. DRC runs with the generated rules (board/rules.py) and refills the zones; the
-isolators' own pad-to-pad creepage, which KiCad doesn't check within a footprint, is checked
-after it (rules.barrier_creepage).
+stitching vias after routing (drop vias before it with --drops), then a via in any piece of pour
+the tracks cut off. DRC runs with the generated rules (board/rules.py) and refills the zones.
 
 Once the board passes, the fab outputs go beside it: gerbers and drill (zipped), the JLCPCB and
 PCBWay BOMs, the CPL (pick and place), renders, pins.h for the firmware and case-interface.json
@@ -35,7 +32,6 @@ from board.fab import export_step, fab, write_bom, write_bom_pcbway, write_cpl, 
 from board.kicad_pcb import PRO, write_board
 from board.netlist import check
 from board.route import route
-from board.rules import barrier_creepage
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "out" / "petro"
@@ -65,19 +61,10 @@ def lv_nets(c):
     return {n for n in c.nets if n not in pb.GROUPS and not n.startswith("NC_")}
 
 
-def island_nets(c):
-    return set(pb.SELV_NETS) & set(c.nets)
-
-
 def inside_lv(keep, r=gnd.VIA[0] / 2):
     """A test for gnd.drops/stitch: a via of radius r at (x, y) lies wholly in the low-voltage
     area, clear of its keep-outs."""
     return lambda x, y: all(pb.in_lv(x + dx, y + dy, keep) for dx, dy in
-                            ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r)))
-
-
-def inside_island(keep, r=gnd.VIA[0] / 2):
-    return lambda x, y: all(pb.in_island(x + dx, y + dy, keep) for dx, dy in
                             ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r)))
 
 
@@ -93,12 +80,6 @@ def lv_route(c, p, tmp, passes, hand_tracks, hand_vias, keep):
     along the board edge, and those runs (GND only, which the pour joins anyway) are dropped. DRC
     then shows if anything is left unjoined, or too near another potential."""
     return route_pass(c, p, tmp / "lv", passes, lv_nets(c), "GND", pb.lv_area(), keep, hand_tracks, hand_vias)
-
-
-def island_route(c, p, tmp, passes, hand_tracks, hand_vias, keep):
-    """Route the island's nets in the island (ISO_GND routed as well as poured, as GND is)."""
-    return route_pass(c, p, tmp / "island", passes, island_nets(c), "ISO_GND", pb.island_area(), keep,
-                      hand_tracks, hand_vias)
 
 
 def route_pass(c, p, work, passes, nets, ground, area, keep, hand_tracks, hand_vias):
@@ -137,8 +118,8 @@ def main():
     # ground drop beside every SMD GND pad (but U1's and the shunt's), placed before routing so
     # the router leaves room.
     hand_t, hand_v = pb.hand_wiring(c, p)
-    keep, ikeep = pb.lv_keepouts(c, p), pb.island_keepouts(c, p)
-    for net, inside, skip in (() if not a.drops else (("GND", inside_lv(keep), ("U1", "RS1")), ("ISO_GND", inside_island(ikeep), ()))):
+    keep = pb.lv_keepouts(c, p)
+    for net, inside, skip in (() if not a.drops else (("GND", inside_lv(keep), ("U1", "RS1")),)):
         # clear of other nets by the router's own power clearance (dsn: 0.2 + ROUTER_MARGIN), or each drop
         # is a standing violation Freerouting routes round and the pads beside it go unreached
         dt, dv, missed = gnd.drops(c, p, hand_t, hand_v, net, inside, skip=skip, clear=DROP_CLEAR)
@@ -148,14 +129,12 @@ def main():
     tracks, vias = list(hand_t), list(hand_v)
     if a.route:
         rt, rv = lv_route(c, p, tmp, a.passes, hand_t, hand_v, keep)
-        it, iv = island_route(c, p, tmp, a.passes, hand_t, hand_v, ikeep)
-        pt, pv = prune(c, p, hand_t + rt + it, hand_v + rv + iv, keep=hand_v, pour_nets=("GND", "ISO_GND"))
+        pt, pv = prune(c, p, hand_t + rt, hand_v + rv, keep=hand_v, pour_nets=("GND",))
         tracks = hand_t + [t for t in pt if t not in hand_t]      # hand wiring always stays
         vias = hand_v + [v for v in pv if v not in hand_v]
-        for net, inside in (("GND", inside_lv(keep)), ("ISO_GND", inside_island(ikeep))):
-            s = gnd.stitch(c, p, tracks, vias, net, inside)
-            print(f"{net} stitching: {len(s)} vias")
-            vias += s
+        s = gnd.stitch(c, p, tracks, vias, "GND", inside_lv(keep))
+        print(f"GND stitching: {len(s)} vias")
+        vias += s
 
     dru, classes, patterns = netclasses()
     board = out / f"{STEM}.kicad_pcb"
@@ -163,7 +142,7 @@ def main():
 
     def write(vias):
         write_board(c, p, board, tracks, vias + pb.stitch_vias(), layers=LAYERS, mask=MASK, silkscreen=SILK,
-                    slots=pb.slots(), zones=pb.mains_zones() + pb.island_zones(), dru=dru,
+                    slots=pb.slots(), zones=pb.mains_zones(), dru=dru,
                     netclasses=classes, netclass_patterns=patterns, plane_pts=pb.gnd_pts(),
                     pad_extra=pb.pad_extra(c), silk=pb.silk(c, p) + notes, user_rects=rects,
                     lines=(), hide_refs=set(c.instances), silk_avoid=pb.silk_avoid(c, p))
@@ -175,10 +154,9 @@ def main():
     for _ in range(3):
         fills = filled(board)
         new = []
-        for net in ("GND", "ISO_GND"):
-            tht = [((x0 + x1) / 2, (y0 + y1) / 2) for n, ls, x0, y0, x1, y1 in pad_shapes(c, p)
-                   if n == net and len(ls) == 2]
-            new += gnd.orphan_vias({l: fills[(net, l)] for l in ("F.Cu", "B.Cu")}, vias + new, tht, net)
+        tht = [((x0 + x1) / 2, (y0 + y1) / 2) for n, ls, x0, y0, x1, y1 in pad_shapes(c, p)
+               if n == "GND" and len(ls) == 2]
+        new += gnd.orphan_vias({l: fills[("GND", l)] for l in ("F.Cu", "B.Cu")}, vias, tht, "GND")
         if not new:
             break
         print(f"orphan pour pieces: {len(new)} vias")
@@ -194,15 +172,13 @@ def main():
     if errors or d["unconnected_items"]:
         raise SystemExit("DRC failed")
     # What DRC doesn't check: the mains pours must still be whole on each layer (routing next to
-    # them can neck them away) and each layer's must reach every through-hole pad; and the
-    # isolators' own pad-to-pad creepage, which KiCad doesn't check within a footprint.
+    # them can neck them away) and each layer's must reach every through-hole pad.
     pours = pour_problems(c, p, board, pb.HIGH_CURRENT)
-    creep = barrier_creepage(c, p, pb.rules(), pb.slots())
-    for s in pours + [f"creepage {ref} {a}-{b}: {mm} mm" for ref, a, b, mm in creep]:
+    for s in pours:
         print(f"  {s}")
-    if pours or creep:
+    if pours:
         raise SystemExit("mains checks failed")
-    print("mains pours whole on both layers; the isolators' creepage >= 8 mm")
+    print("mains pours whole on both layers")
     silk = [v for v in d["violations"] if v["type"].startswith(("silk", "text"))]
     print(f"silk warnings: {len(silk)}")
 

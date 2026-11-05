@@ -224,10 +224,6 @@
 (rule "high-current track width"
   (constraint track_width (min 4.5mm))
   (condition "A.hasNetclass('Mains16A')"))
-(rule "SELV island to everything else (8 mm)"
-  (constraint clearance (min 8mm))
-  (constraint creepage (min 8mm))
-  (condition "A.hasNetclass('SELV') && !B.hasNetclass('SELV')"))
 (rule "C1 own leads (1 mm)"
   (constraint clearance (min 1mm))
   (condition "A.memberOfFootprint('C1') && B.memberOfFootprint('C1')"))
@@ -240,21 +236,3 @@
 (rule "C2 own leads, creepage (1 mm)"
   (constraint creepage (min 1mm))
   (condition "(A.NetName == 'VBULK' && B.NetName == 'GND') || (A.NetName == 'GND' && B.NetName == 'VBULK')"))
-(rule "U7 own pads, SELV to the rest"
-  (constraint clearance (min 3mm))
-  (condition "A.memberOfFootprint('U7') && B.memberOfFootprint('U7') && A.hasNetclass('SELV') && !B.hasNetclass('SELV')"))
-(rule "U7 pads to its slot"
-  (constraint edge_clearance (min 1mm))
-  (condition "A.memberOfFootprint('U7')"))
-(rule "U8 own pads, SELV to the rest"
-  (constraint clearance (min 3mm))
-  (condition "A.memberOfFootprint('U8') && B.memberOfFootprint('U8') && A.hasNetclass('SELV') && !B.hasNetclass('SELV')"))
-(rule "U8 pads to its slot"
-  (constraint edge_clearance (min 1mm))
-  (condition "A.memberOfFootprint('U8')"))
-(rule "U9 own pads, SELV to the rest"
-  (constraint clearance (min 3mm))
-  (condition "A.memberOfFootprint('U9') && B.memberOfFootprint('U9') && A.hasNetclass('SELV') && !B.hasNetclass('SELV')"))
-(rule "U9 pads to its slot"
-  (constraint edge_clearance (min 1mm))
-  (condition "A.memberOfFootprint('U9')"))
