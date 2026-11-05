@@ -142,7 +142,7 @@ def main():
 
     def write(vias):
         write_board(c, p, board, tracks, vias + pb.stitch_vias(), layers=LAYERS, mask=MASK, silkscreen=SILK,
-                    slots=pb.slots(), zones=pb.mains_zones(), dru=dru,
+                    slots=pb.slots(), zones=pb.mains_zones(), dru=dru, corner_radius=pb.CORNER_R,
                     netclasses=classes, netclass_patterns=patterns, plane_pts=pb.gnd_pts(),
                     pad_extra=pb.pad_extra(c), silk=pb.silk(c, p) + notes, user_rects=rects,
                     lines=(), hide_refs=set(c.instances), silk_avoid=pb.silk_avoid(c, p))

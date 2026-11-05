@@ -329,7 +329,7 @@ TEST_HOLES = {"TP2": "BL_RX", "TP3": "BL_TX", "TP4": "ZX", "TP5": "OC", "TP6": "
 
 
 # --- placement (rev B) ---------------------------------------------------------------------------
-# Board 120 x 85 mm (15 mm taller than rev A, for the mains supply), in Martin's own printed case
+# Board 120 x 80 mm with 4 mm rounded corners (10 mm taller than rev A, for the mains supply), in Martin's own printed case
 # (PETRO-6). Mains along the top, low voltage along the bottom; cables enter at opposite ends.
 #   The neutral strip along the top edge, split by the shunt RS1 above the metering corner: N_IN
 #   to the west (J1), N_OUT to the east (the MOV, J2). The strip deepens to y = 10 round the shunt,
@@ -349,7 +349,8 @@ from board.kicad_pcb import S, Slot, Track, Via, Zone, solid_pads  # noqa: E402,
 from board.placement import Placement, rotate  # noqa: E402
 from board.rules import ipc2221_width  # noqa: E402
 
-W, H = 120.0, 85.0
+W, H = 120.0, 80.0
+CORNER_R = 4.0                          # mm: rounded corners, centred on the mounting holes
 COPPER_OZ = 1
 MAINS_Y, SELV_Y = 38.5, 41.0            # the live chain's lower edge; the low-voltage side's top
 HOLES = {"H1": (4.0, 4.0), "H2": (116.0, 4.0), "H3": (4.0, H - 4.0), "H4": (116.0, H - 4.0)}
@@ -379,8 +380,10 @@ AT = {
     "R1": (91.0, 53.8, 180), "D7": (79.6, 56.0, 90),
     "C1": (81.5, 64.0, 0), "L1": (89.6, 64.0, 270), "C2": (97.5, 64.0, 0),
     "U4": (88.8, 73.0, 180), "C3": (92.4, 72.4, 270), "R2": (94.0, 69.4, 180), "R3": (94.0, 72.4, 270),
-    "C5": (98.25, 70.8, 180), "D8": (89.0, 79.4, 180),
-    "L2": (98.5, 79.15, 0), "D9": (102.9, 68.6, 90), "C4": (107.6, 77.0, 90), "R4": (107.6, 70.8, 0),
+    "C5": (98.25, 70.8, 180), "D8": (81.7, 70.5, 180),
+    # the output inductor under the relay driver, left of the bulk capacitors; the output capacitor
+    # beside D9, above the corner hole
+    "L2": (71.1, 72.2, 180), "D9": (102.9, 68.6, 90), "C4": (108.2, 64.7, 90), "R4": (107.6, 70.8, 0),
     # the 5 V converter and its output (bottom right)
     "U5": (8.0, 43.5, 0), "C6": (8.0, 40.0, 0), "C7": (12.25, 40.0, 0), "C8": (4.5, 43.5, 90),
     "L3": (13.6, 43.5, 0), "R5": (7.6, 47.0, 0), "R6": (10.6, 47.0, 0),
@@ -391,19 +394,22 @@ AT = {
     "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
     # J3, the I/O terminal, bottom left on the bottom edge; the I2C pull-ups and IN's pull-down
     # above their pins
-    "J3": (25.85, 81.0, 0),
-    "R26": (J3_X0 + 6 * 3.5, 74.0, 90), "R27": (J3_X0 + 7 * 3.5, 74.0, 90), "R28": (J3_X0 + 8 * 3.5, 74.0, 90),
-    # the module, bottom middle (antenna past the bottom edge), its supply and EN at its right
-    "U1": (66.0, H-U1_EDGE, 180),
-    "C21": (76.6, 82.6, 90), "C22": (78.2, 82.6, 90), "R19": (76.6, 79.0, 90), "C23": (78.2, 79.0, 90),
+    "J3": (25.85, H - 4.0, 0),
+    "R26": (J3_X0 + 6 * 3.5, H - 11.0, 90), "R27": (J3_X0 + 7 * 3.5, H - 11.0, 90),
+    "R28": (J3_X0 + 8 * 3.5, H - 11.0, 90),
+    # the module, bottom left of middle beside J3 (antenna past the bottom edge, clear of the relay
+    # above), its supply and EN at its right
+    "U1": (53.0, H - U1_EDGE, 180),
+    "C21": (63.3, H - 2.4, 90), "C22": (64.9, H - 2.4, 90), "R19": (63.3, H - 6.0, 90), "C23": (64.9, H - 6.0, 90),
     # 3.3 V, the debug pads, button and LED: the open ground above J3
     "U2": (49.0, 53.0, 0), "C18": (45.6, 53.0, 90), "C19": (52.4, 53.0, 90), "C20": (54.0, 53.0, 90),
     "TP1": (42.4, 46.5, 0),
     "SW1": (49.5, 45.6, 0), "R20": (54.8, 49.6, 90),
     "D1": (58.5, 44.5, 0), "C24": (58.0, 49.0, 90), "R23": (61.0, 49.0, 90), "R24": (56.6, 49.0, 90),
     # relay driver (between the relay's coil pins and the module) and the NTC beside it
-    "R21": (59.0, 63.6, 90), "R22": (60.6, 63.6, 90), "Q1": (64.0, 63.6, 0), "D3": (69.4, 63.6, 0),
-    "TH1": (78.4, 75.5, 90), "R25": (80.0, 75.5, 90), "C25": (79.2, 72.6, 0),
+    "R21": (63.9, 64.35, 90), "R22": (66.3, 64.35, 90), "Q1": (69.1, 63.7, 0), "D3": (73.7, 63.4, 0),
+    # the NTC beside the relay's left-hand side, above the module
+    "TH1": (58.5, 55.5, 90), "R25": (60.1, 55.5, 90), "C25": (59.3, 58.4, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
     # test holes (TEST_HOLES): three rows in the open ground left of the 5 V converter, 5 mm
     # apart and on a 3.2 mm pitch so each hole's label fits above it, on both sides
@@ -578,12 +584,13 @@ def supply_tracks(c, p):
     t += _route("FBH", "F.Cu", 0.3, r2h, (c5h[0], r2h[1]), c5h, d9k)
     s = sorted(xy("U4", n) for n in ("5", "6", "7", "8"))
     c3s, r3s, c5s, l2s, d8k = xy("C3", "2"), xy("R3", "2"), xy("C5", "2"), xy("L2", "1"), xy("D8", "1")
+    # The bus along U4's SOURCE pins: right to C3, R3 and C5, left under D8 to the inductor.
     bus = s[0][1]
-    t += _route("SW", "F.Cu", SW_W, *s, (c3s[0], bus), (r3s[0], bus), (l2s[0], bus), (l2s[0], 77.0))
+    t += _route("SW", "F.Cu", SW_W, (l2s[0], bus), (d8k[0], bus), *s, (c3s[0], bus), (r3s[0], bus), (c5s[0], bus), c5s)
     t += _route("SW", "F.Cu", SW_W, (c3s[0], bus), c3s)
     t += _route("SW", "F.Cu", SW_W, (r3s[0], bus), r3s)
-    t += _route("SW", "F.Cu", SW_W, (l2s[0], bus), (c5s[0], bus), c5s)
-    t += _route("SW", "F.Cu", SW_W, s[-1], (d8k[0], 78.6), d8k)
+    t += _route("SW", "F.Cu", SW_W, (l2s[0], bus), l2s)
+    t += _route("SW", "F.Cu", SW_W, (d8k[0], bus), d8k)
     return t
 
 
@@ -732,7 +739,7 @@ IO_LABELS = {"1": "3V3", "2": "G", "3": "SCK", "4": "MOSI", "5": "MISO", "6": "C
              "8": "SCL", "9": "IN", "10": "OUT"}
 LIVE_WARNING = (88.0, 26.8)     # the "board is live" block, both sides: on the L_OUT pour, clear of pads
 TITLE_AT = (92.0, 47.5)         # the title, on the back above the supply
-LIVE_IO_AT = (20.6, 75.9)       # "LIVE I/O" on both sides, above J3's left-hand pins
+LIVE_IO_AT = (20.6, H - 9.1)       # "LIVE I/O" on both sides, above J3's left-hand pins
 
 
 def silk(c, p):
@@ -857,7 +864,7 @@ def case_interface(c, p):
     box = lambda ref: [round(v, 3) for v in bbox(p, ref)]
     ux = AT["U1"][0]
     data = {
-        "board": {"width": W, "height": H, "thickness": 1.6, "origin": "top-left, y down"},
+        "board": {"width": W, "height": H, "corner_radius": CORNER_R, "thickness": 1.6, "origin": "top-left, y down"},
         "holes": [{"ref": r, "x": x, "y": y, "diameter": 3.2, "plated": False,
                    "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"}
                   for r, (x, y) in HOLES.items()],

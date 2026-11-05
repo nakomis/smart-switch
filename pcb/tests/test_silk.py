@@ -92,7 +92,8 @@ def drc(tmp_path_factory):
     write_board(C, P, board, layers=2, slots=pb.slots(), dru=r.dru(), netclasses=classes,
                 netclass_patterns=patterns, zones=pb.mains_zones(), vias=pb.stitch_vias(),
                 pad_extra=pb.mains_pad_extra(C), plane_pts=pb.gnd_pts(), silk=SILK + notes,
-                user_rects=rects, hide_refs=set(C.instances), silk_avoid=pb.silk_avoid(C, P))
+                user_rects=rects, hide_refs=set(C.instances), silk_avoid=pb.silk_avoid(C, P),
+                corner_radius=pb.CORNER_R)
     subprocess.run([KICAD_CLI, "pcb", "drc", "--format", "json", "--severity-all", "-o",
                     str(out / "drc.json"), str(board)], check=True, capture_output=True)
     return json.loads((out / "drc.json").read_text())

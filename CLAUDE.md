@@ -21,7 +21,7 @@ reasoning is in `docs/DESIGN.md`.
 | Topic | Decision |
 |---|---|
 | Rating | 10 A continuous, 230 V AC, resistive. Derate inductive and capacitive loads. Design margin in: a 16 A relay, and copper and terminals sized for 16 A |
-| Form factor | In-line cord unit (cable in, cable out) in Martin's own printed case (PETRO-6), printed in a UL94 V-0 flame-retardant filament, with glands and cord grips. Never plain PLA or PETG for the mains enclosure. The board (120 × 85 mm) sets the case's size. **Nothing conductive may leave the case** |
+| Form factor | In-line cord unit (cable in, cable out) in Martin's own printed case (PETRO-6), printed in a UL94 V-0 flame-retardant filament, with glands and cord grips. Never plain PLA or PETG for the mains enclosure. The board (120 × 80 mm with 4 mm rounded corners) sets the case's size. **Nothing conductive may leave the case** |
 | Power | Non-isolated, from the mains: F2 (T500 mA), a fusible resistor and Power Integrations' **LNK306** high-side buck (12 V), then a TI **TPS563201** (5 V) and the AP2112K (3.3 V). GND is neutral, joined at the shunt's sense pad (the one star point) |
 | Metering | A **BL0939** (the BL0942 is out of stock) on GND, reading a 1 mΩ Kelvin shunt **in the neutral** and a 5 × 390 kΩ divider from L_IN; UART, zero cross and over-current wired straight to the ESP32 |
 | MCU | **ESP32-C6-WROOM-1-N8** (JLCPCB Economic assembly; the S3-MINI's LGA needed X-ray, so Standard), antenna overhanging the edge furthest from the mains |

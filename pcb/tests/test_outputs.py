@@ -25,7 +25,8 @@ def test_pins_h_says_which_test_hole_carries_what():
 
 def test_case_interface_matches_the_board():
     ci = json.loads(pb.case_interface(C, P))
-    assert ci["board"] == {"width": pb.W, "height": pb.H, "thickness": 1.6, "origin": "top-left, y down"}
+    assert ci["board"] == {"width": pb.W, "height": pb.H, "corner_radius": pb.CORNER_R, "thickness": 1.6,
+                           "origin": "top-left, y down"}
     assert {h["ref"]: (h["x"], h["y"]) for h in ci["holes"]} == pb.HOLES
     assert not any(h["plated"] for h in ci["holes"])          # rev B: no copper reaches a screw
     led = ci["led"]

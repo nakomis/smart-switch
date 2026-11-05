@@ -1,5 +1,6 @@
 """Write a KiCad 10 .kicad_pcb (and its .kicad_pro) from a Circuit and a Placement."""
 import copy
+import math
 import os
 import json
 import uuid
@@ -133,6 +134,23 @@ def _slot(s, uid):
     return [line(ax - nx, ay - ny, bx - nx, by - ny), line(ax + nx, ay + ny, bx + nx, by + ny),
             arc(ax - nx, ay - ny, ax - dx, ay - dy, ax + nx, ay + ny),
             arc(bx - nx, by - ny, bx + dx, by + dy, bx + nx, by + ny)]
+
+
+def outline_items(outline, r, uid):
+    """The board outline on Edge.Cuts: a rectangle, or with r > 0 four lines and four corner arcs."""
+    x0, y0, x1, y1 = outline
+    stroke = [S("stroke"), [S("width"), 0.1], [S("type"), S("default")]]
+    if r <= 0:
+        return [[S("gr_rect"), [S("start"), x0, y0], [S("end"), x1, y1], stroke, [S("fill"), S("none")],
+                 [S("layer"), "Edge.Cuts"], uid()]]
+    k = r * (1 - math.sqrt(0.5))           # the arc's midpoint, in from the corner
+    line = lambda a, b, c, d: [S("gr_line"), [S("start"), a, b], [S("end"), c, d], stroke, [S("layer"), "Edge.Cuts"], uid()]
+    arc = lambda a, b, m, n, c, d: [S("gr_arc"), [S("start"), a, b], [S("mid"), m, n], [S("end"), c, d],
+                                    stroke, [S("layer"), "Edge.Cuts"], uid()]
+    return [line(x0 + r, y0, x1 - r, y0), line(x1, y0 + r, x1, y1 - r),
+            line(x1 - r, y1, x0 + r, y1), line(x0, y1 - r, x0, y0 + r),
+            arc(x1 - r, y0, x1 - k, y0 + k, x1, y0 + r), arc(x1, y1 - r, x1 - k, y1 - k, x1 - r, y1),
+            arc(x0 + r, y1, x0 + k, y1 - k, x0, y1 - r), arc(x0, y0 + r, x0 + k, y0 + k, x0 + r, y0)]
 
 
 def _poly_zone(z, net_id, uid):
@@ -391,7 +409,7 @@ PRO = {
 def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(), hide_refs=(), art=(),
                 mask=None, silkscreen=None, keepouts=(), pad_extra=None, user_rects=(), silk_avoid=(),
                 model_dir=None, slots=(), zones=(), dru=None, netclasses=None, netclass_patterns=None,
-                plane_pts=None, lines=()):
+                plane_pts=None, lines=(), corner_radius=0.0):
     """Write 'path' (.kicad_pcb) and a .kicad_pro beside it.
 
     layers=4: F.Cu, In1.Cu (GND zone), In2.Cu (+1V5 zone, only if that net exists), B.Cu.
@@ -416,7 +434,8 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
     .kicad_pro's net classes and their net-name patterns (defaults: PRO's).
     plane_pts: the GND (and +1V5) pours' polygon instead of the whole outline (inset), e.g. to
     keep ground pour out of a mains area.
-    lines: (x0, y0, x1, y1, layer) dashed graphic lines (the mains boundary on the silkscreens)."""
+    lines: (x0, y0, x1, y1, layer) dashed graphic lines (the mains boundary on the silkscreens).
+    corner_radius: round the outline's corners (mm; 0 for square)."""
     if layers not in (2, 4):
         raise ValueError("layers must be 2 or 4")
     path = Path(path)
@@ -437,10 +456,7 @@ def write_board(circuit, placement, path, tracks=(), vias=(), layers=4, silk=(),
             [S("layers")] + [[n, name, S(kind), *alias] for n, name, kind, *alias in cu + _USER_LAYERS],
             [S("setup")] + _stackup(cu, mask, silkscreen) + [[S("pad_to_mask_clearance"), 0]],
             [S("net"), 0, ""]] + [[S("net"), ids[n], n] for n in names]
-    x0, y0, x1, y1 = placement.outline
-    tree.append([S("gr_rect"), [S("start"), x0, y0], [S("end"), x1, y1],
-                 [S("stroke"), [S("width"), 0.1], [S("type"), S("default")]], [S("fill"), S("none")],
-                 [S("layer"), "Edge.Cuts"], uid()])
+    tree += outline_items(placement.outline, corner_radius, uid)
     for ref, inst in circuit.instances.items():
         x, y, rot = placement.at[ref]
         nets = {pad: (ids[n], n) for n in names for (r, pad) in circuit.nets[n] if r == ref}

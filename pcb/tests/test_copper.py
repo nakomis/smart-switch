@@ -35,7 +35,7 @@ def filled(tmp_path_factory):
     board = out / "petro.kicad_pcb"
     write_board(C, P, board, tracks, vias + pb.stitch_vias(), layers=2, slots=pb.slots(), dru=r.dru(),
                 netclasses=classes, netclass_patterns=patterns, zones=pb.mains_zones(),
-                pad_extra=pb.pad_extra(C), plane_pts=pb.gnd_pts())
+                pad_extra=pb.pad_extra(C), plane_pts=pb.gnd_pts(), corner_radius=pb.CORNER_R)
     subprocess.run([KICAD_CLI, "pcb", "drc", "--format", "json", "--severity-all", "--refill-zones",
                     "--save-board", "-o", str(out / "drc.json"), str(board)], check=True, capture_output=True)
     polys = defaultdict(list)

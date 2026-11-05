@@ -64,7 +64,7 @@ about £150. So Martin chose a non-isolated board:
 - **An RCD-protected socket**, always. A fuse reacts only to hundreds of milliamps or more; an RCD
   is what protects someone touching a live part.
 - **What it bought:** no ISOW7743 or IRM-05-5, no barrier or slot, and room for the supply on a
-  120 × 85 mm board. With the changes in §3.6, five boards come to roughly £95–100 (ex VAT and
+  120 × 80 mm board (4 mm rounded corners). With the changes in §3.6, five boards come to roughly £95–100 (ex VAT and
   shipping; an estimate until the basket gives a quote).
 
 ### 3.2 Metering: a shunt and a divider (Option A)
@@ -200,7 +200,7 @@ is in `docs/design/parts-research/`.
 
 **Martin's own printed case** (decided 4 Nov 2026, PETRO-6), designed around the board. It must be
 printed in a **UL94 V-0 flame-retardant filament** (FR-ABS, FR-PC/ABS or FR-PETG; never plain PLA
-or PETG), checked against what the CR6-SE can print. The board sets the case: 120 × 85 mm, M3
+or PETG), checked against what the CR6-SE can print. The board sets the case: 120 × 80 mm with 4 mm rounded corners, M3
 holes near the corners (unplated), the C6's antenna overhanging the bottom edge (the case leaves it
 clear space), and the heights and openings in `pcb/out/petro/case-interface.json`. With the board
 live, the case is the safety barrier: no opening a finger or a wire can reach a part through, and

@@ -59,8 +59,9 @@ def test_every_part_is_placed():
     assert set(P.at) == set(C.instances)
 
 
-def test_board_is_120_by_85():
-    assert P.outline == (0.0, 0.0, 120.0, 85.0)
+def test_board_is_120_by_80_with_rounded_corners():
+    assert P.outline == (0.0, 0.0, 120.0, 80.0)
+    assert pb.CORNER_R == 4.0 and pb.HOLES["H1"] == (pb.CORNER_R, pb.CORNER_R)     # each arc centred on its hole
 
 
 def test_bodies_do_not_overlap():

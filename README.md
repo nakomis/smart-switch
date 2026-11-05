@@ -66,7 +66,7 @@ The board's block diagram and the system diagram are still to come
 
 ## Status
 
-The board (PETRO-2) is designed and routed: revision B, 120 × 85 mm, two layers, generated as code
+The board (PETRO-2) is designed and routed: revision B, 120 × 80 mm with 4 mm rounded corners, two layers, generated as code
 in `pcb/` and DRC-clean against its own mains rules. It is waiting for its design review (safety
 gate 1) before it is ordered. The firmware (PETRO-3 to PETRO-5) and the case (PETRO-6) are next.
 The design decisions, and why, are in [`docs/DESIGN.md`](docs/DESIGN.md).
