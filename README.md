@@ -36,8 +36,9 @@ resistive load of up to **10 A at 230 V AC**. It has:
 - Alexa Smart Home control;
 - back-up over-current and over-temperature trips in firmware.
 
-It runs on an ESP32-S3-MINI-1, powered from the mains through an isolated Mean Well module, so
-everything on the low-voltage side is SELV.
+It runs on an ESP32-C6, powered straight from the mains by a non-isolated buck converter, so the
+whole board is at mains potential: it is only ever powered closed in its case, and USB is used
+only with mains unplugged.
 
 Petro is named after a Clone Wars youngling: microcontrollers in this house are Younglings.
 
@@ -58,15 +59,17 @@ The board's block diagram and the system diagram are still to come
 | Path | What's there |
 |---|---|
 | `pcb/` | The board, generated as code: a Python generator for KiCad 10, with DRC rules for mains creepage and 10 A tracks, and outputs for PCBWay and JLCPCB |
-| `firmware/` | ESP-IDF 5.5 firmware for the ESP32-S3: portable C with host tests, plus the IDF project |
-| `case/` | The enclosure: a UL94 V-0 junction box with glands, plus any printed internal parts |
+| `firmware/` | ESP-IDF 5.5 firmware for the ESP32-C6: portable C with host tests, plus the IDF project |
+| `case/` | The enclosure: a printed case in UL94 V-0 flame-retardant filament, with glands and cord grips |
 | `docs/` | Design notes, the test procedures for the safety gates, the logo |
 | `.github/workflows/` | CI |
 
 ## Status
 
-Early days: the repo is scaffolded and the work is planned in Plane (project `PETRO`). The board
-and firmware haven't been started yet.
+The board (PETRO-2) is designed and routed: revision B, 120 × 85 mm, two layers, generated as code
+in `pcb/` and DRC-clean against its own mains rules. It is waiting for its design review (safety
+gate 1) before it is ordered. The firmware (PETRO-3 to PETRO-5) and the case (PETRO-6) are next.
+The design decisions, and why, are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Architecture Diagrams
 

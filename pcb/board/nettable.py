@@ -12,7 +12,7 @@ def _pin_name(inst, pad):
 
 
 def net_table(c, groups):
-    order = ["LINE", "LIVE", "PSU", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "low voltage"]
+    order = ["LINE", "LIVE", "PSU", "SWNODE", "NEUTRAL", "LOAD", "DIV1", "DIV2", "DIV3", "DIV4", "low voltage"]
     rows = []
     for name, pads in c.nets.items():
         g = groups.get(name, "low voltage")

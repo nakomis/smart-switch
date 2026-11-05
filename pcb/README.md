@@ -28,31 +28,42 @@ Every mains net is in one potential group:
 | Group | What's in it |
 |---|---|
 | LINE | Live before F1 |
-| LIVE | Live after F1, plus the metering island |
-| PSU | Live after F2 |
-| NEUTRAL | Neutral |
+| LIVE | Live after F1 |
+| PSU | Live after F2: the supply's DC bus |
+| SWNODE | The LNK306's switching node and what rides on it (SW, BP, FB, FBH) |
+| NEUTRAL | Neutral, and every other net: GND is neutral |
 | LOAD | The relay's output |
 | DIV1–4 | The voltage divider's chain |
 
-Every other net is SELV. Each fault scenario (relay closed or open, either fuse blown) gives every
-group a potential. The worst difference between two groups is their working voltage, and IEC
-60664-1 Table F.4 (pollution degree 2, material group III) turns that into a creepage distance.
-`rules.py` writes the result as KiCad DRC rules, and `tests/test_rules.py` proves each rule fails a
-board that breaks it.
+Rev B is non-isolated (`Rules(rest="NEUTRAL")`): every net not named in a group sits at neutral,
+so the low-voltage side is one more mains potential. Each fault scenario (relay closed or open,
+either fuse blown) gives every group a potential. The worst difference between two groups is
+their working voltage, and IEC 60664-1 Table F.4 (pollution degree 2, material group III) turns
+that into a creepage distance: 2.5 mm between the mains potentials, less down the divider's chain,
+and 1.0 mm for SWNODE (`Rules.reduced`: functional insulation inside the converter). `rules.py`
+writes the result as KiCad DRC rules, and `tests/test_rules.py` proves each rule fails a board
+that breaks it.
 
-Mains to SELV is 8 mm clearance and 8 mm creepage. There is one exception: between a certified
-barrier part's own pads (the isolator, relay and PSUs), clearance may drop to 3.0 mm, IEC's
-reinforced clearance at 4 kV. Creepage stays at 8 mm.
+`rules.py` still supports the isolated designs (rev A's 8 mm mains↔SELV barrier, and rev B's
+isolated J3 as a SELV island, with `barrier_creepage()` for the pads of certified barrier parts),
+but Petro's board uses neither now: see the tags in `docs/DESIGN.md`.
 
-KiCad 10 doesn't check creepage between two pads of one footprint, so `barrier_creepage()` checks
-those pairs itself, around any slots. Its estimate can only be shorter than the true path.
+The high-current nets (N_IN, N_OUT, L_IN, L_F, L_OUT) are not tracks but solid pours on both
+layers, stitched with vias (`petro_board.mains_zones()` and `stitch_vias()`). Each pour is drawn
+as a generous polygon, and KiCad's fill trims it to the rules. Its `min_thickness` is the
+IPC-2221 width for 8 A at 1 oz (3.5 mm), half the 16 A design current, so KiCad drops any neck
+thinner than that. `tests/test_copper.py` refills the zones and checks that each layer, on its
+own, is one piece reaching every through-hole pad of its net, so the two layers carry the current
+in parallel. The GND pour covers the low-voltage area, kept 2.5 mm from every other potential.
 
-The high-current nets (N, L_IN, L_F, L_SH, L_OUT) are not tracks but solid pours on both layers,
-stitched with vias (`petro_board.mains_zones()` and `stitch_vias()`). Each pour is drawn as a
-generous polygon, and KiCad's fill trims it to the rules. Its `min_thickness` is half the IPC-2221
-width for 16 A, so KiCad drops any neck thinner than that. `tests/test_copper.py` refills the zones
-and checks that each layer, on its own, is one piece reaching every through-hole pad of its net,
-so the two layers carry the current in parallel. The ground pour covers the SELV strip only.
+## Routing
+
+`build.py --route` routes in one Freerouting pass: the low-voltage nets inside the low-voltage
+area (`petro_board.lv_area()`), with keep-outs round everything at another potential, since the
+router knows only plain clearances. By hand, before routing (`petro_board.hand_wiring()`): the
+divider chain, the supply's high-voltage nets, the shunt's Kelvin pair (into R10), the LDO's
+ground and the USB protection's flow-through ties. DRC then runs with the generated rules, and
+the build fails on any error, unconnected item or broken mains pour.
 
 ## Setting up
 
