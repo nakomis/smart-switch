@@ -27,6 +27,7 @@ from collections import Counter
 from pathlib import Path
 
 from board import gnd
+from board.dsn import ROUTER_MARGIN
 from board import petro_board as pb
 from board.checks import pour_problems
 from board.cleanup import prune
@@ -41,6 +42,7 @@ OUT = HERE / "out" / "petro"
 KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 LAYERS = 2
 STEM = "petro"
+DROP_CLEAR = 0.2 + ROUTER_MARGIN + 0.04       # mm: a ground drop to another net's copper
 MASK, SILK = "Black", "White"     # gerbers carry no colour; this only makes the renders match
 
 
@@ -134,7 +136,9 @@ def main():
     hand_t, hand_v = pb.hand_wiring(c, p)
     keep, ikeep = pb.lv_keepouts(c, p), pb.island_keepouts(c, p)
     for net, inside, skip in (("GND", inside_lv(keep), ("U1", "RS1")), ("ISO_GND", inside_island(ikeep), ())):
-        dt, dv, missed = gnd.drops(c, p, hand_t, hand_v, net, inside, skip=skip)
+        # clear of other nets by the router's own power clearance (dsn: 0.2 + ROUTER_MARGIN), or each drop
+        # is a standing violation Freerouting routes round and the pads beside it go unreached
+        dt, dv, missed = gnd.drops(c, p, hand_t, hand_v, net, inside, skip=skip, clear=DROP_CLEAR)
         print(f"{net} drops: {len(dv)}; no room beside: {missed or 'none'}")
         hand_t, hand_v = hand_t + dt, hand_v + dv
 

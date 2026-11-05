@@ -456,7 +456,7 @@ AT = {
     "D6": (108.5, 58.5, 0), "R7": (112.5, 55.5, 90),
     # the safe I/O island, bottom left: J3 on the bottom edge, the isolators across the barrier
     # (side 2, the island's, facing down), their island-side parts between them and J3
-    "J3": (25.75, 81.0, 0),
+    "J3": (25.85, 81.0, 0),
     "U7": (ISO_X[0], ISO_Y, 180), "U8": (ISO_X[1], ISO_Y, 180), "U9": (ISO_X[2], ISO_Y, 180),
     "FB1": (5.0, 74.0, 90), "FB2": (6.5, 74.0, 90), "C30": (8.5, 74.0, 90), "C31": (10.1, 74.0, 90),
     "C32": (11.5, 74.0, 90), "C33": (13.1, 74.0, 90), "R27": (15.5, 74.0, 90),
@@ -524,7 +524,7 @@ def island_keepouts(c=None, p=None, margin=0.1):
     return [(layer, *b) for layer in CU for b in boxes]
 
 
-def band_keepouts(c, p, side, margin=0.25):
+def band_keepouts(c, p, side, margin=0.32):
     """Boxes (x0, y0, x1, y1) keeping one side's router out of the 8 mm band and off the other
     side, without covering any of its own pads (Freerouting will not route to a pad inside a
     keep-out, and lets a track leave a pad in any direction, out of its area too).

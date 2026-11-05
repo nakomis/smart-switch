@@ -6,6 +6,7 @@ import math
 import pytest
 
 from board import petro_board as pb
+from board.dsn import ROUTER_MARGIN
 from board.gnd import pad_boxes
 
 C = pb.build_petro()
@@ -143,7 +144,7 @@ def test_no_keepout_covers_a_pad_its_router_must_reach():
                 continue
             for _, x0, y0, x1, y1 in keep:
                 gap = math.hypot(max(x0 - b[2], 0, b[0] - x1), max(y0 - b[3], 0, b[1] - y1))
-                assert gap >= 0.2 - 1e-6, (net, b, (x0, y0, x1, y1))      # the power class's clearance
+                assert gap >= 0.2 + ROUTER_MARGIN, (net, b, (x0, y0, x1, y1))     # the router's power clearance
 
 
 def test_the_band_between_the_two_sides_is_kept_out_of_both_routers():
