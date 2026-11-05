@@ -116,7 +116,9 @@ def test_the_low_voltage_area_keeps_off_every_hand_track_of_another_group(hand):
 
 def test_the_low_voltage_area_keeps_off_every_mains_supply_and_divider_pad():
     """No point of the area outside the keep-outs is nearer to a pad of another group than the
-    rules' spacing from the rest of the nets."""
+    rules' spacing from the rest of the nets (the isolators' own pads aside: the slot)."""
+    from board.rules import _pad_box
+    iso_pads = [_pad_box(P, ref, q) for ref in pb.BARRIERS for q in C.instances[ref].part.footprint.pads]
     for net, *b in pad_boxes(C, P):
         need = R.spacing(_group(net), R.rest)
         if not need:
@@ -126,7 +128,9 @@ def test_the_low_voltage_area_keeps_off_every_mains_supply_and_divider_pad():
                 x = b[0] - need + (b[2] - b[0] + 2 * need) * k / 29
                 y = b[1] - need + (b[3] - b[1] + 2 * need) * j / 29
                 d = math.hypot(max(b[0] - x, 0, x - b[2]), max(b[1] - y, 0, y - b[3]))
-                if d < need - 0.05 and pb.in_lv(x, y):
+                # on, or within the router's clearance and a half track of, an isolator's own pad
+                on_own = any(o[0] - 0.35 <= x <= o[2] + 0.35 and o[1] - 0.35 <= y <= o[3] + 0.35 for o in iso_pads)
+                if d < need - 0.05 and not on_own and pb.in_lv(x, y):
                     pytest.fail(f"{net} pad at {b}: ({x:.2f}, {y:.2f}) is in the area, {d:.2f} mm away")
 
 
@@ -161,13 +165,31 @@ def test_the_band_between_the_two_sides_is_kept_out_of_both_routers():
                 assert any(x0 <= x <= x1 and y0 <= y <= y1 for _, x0, y0, x1, y1 in keep), (round(x, 2), y)
 
 
-def test_the_low_voltage_area_keeps_8mm_from_the_island():
-    xs = [p[0] for p in pb.island_area()]
-    ys = [p[1] for p in pb.island_area()]
+def test_where_the_low_voltage_router_may_go_keeps_8mm_from_the_island():
+    """Its area less its keep-outs, bar the isolators' board-side pads themselves."""
+    from board.rules import _pad_box
+    own = [_pad_box(P, ref, pad) for ref in pb.BARRIERS for pad in C.instances[ref].part.footprint.pads]
+    keep = pb.lv_keepouts(C, P)
+    xs = [p[0] for p in pb.island_extent()]
+    ys = [p[1] for p in pb.island_extent()]
     for k in range(200):
         for j in range(60):
             x = min(xs) - 8 + (max(xs) - min(xs) + 16) * k / 199
             y = min(ys) - 8 + (max(ys) - min(ys) + 8) * j / 59
             d = math.hypot(max(min(xs) - x, 0, x - max(xs)), max(min(ys) - y, 0, y - max(ys)))
-            if d < 8.0 - 0.05:
-                assert not pb._in_poly(x, y, pb.lv_area()), (round(x, 2), round(y, 2), round(d, 2))
+            if d < 8.0 - 0.05 and not any(b[0] <= x <= b[2] and b[1] <= y <= b[3] for b in own):
+                assert not pb.in_lv(x, y, keep), (round(x, 2), round(y, 2), round(d, 2))
+
+
+def test_each_routers_area_holds_its_isolator_pads_whole():
+    """Freerouting takes its area for the board outline: a pad that pokes out of it is a standing
+    violation it cannot route to."""
+    from board.rules import _pad_box
+    for side, area in (("lv", pb.lv_area()), ("island", pb.island_area())):
+        for ref in pb.BARRIERS:
+            for pad in C.instances[ref].part.footprint.pads:
+                if (pb.GROUPS.get(C.net_of(ref, pad.number)) == "SELV") != (side == "island"):
+                    continue
+                x0, y0, x1, y1 = _pad_box(P, ref, pad)
+                for x, y in ((x0 - 0.3, y0 - 0.3), (x1 + 0.3, y0 - 0.3), (x0 - 0.3, y1 + 0.3), (x1 + 0.3, y1 + 0.3)):
+                    assert pb._in_poly(x, y, area), (side, ref, pad.number)

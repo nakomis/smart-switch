@@ -166,7 +166,7 @@ def test_every_island_pad_is_in_the_island():
 
 def test_everything_else_keeps_8mm_from_the_island():
     """Bar the isolators' own board-side pads, which the slot takes care of."""
-    area = pb.island_area()
+    area = pb.island_extent()
     for ref in C.instances:
         for net, b in _pads(ref):
             if pb.GROUPS.get(net) == "SELV":

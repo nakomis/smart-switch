@@ -496,17 +496,27 @@ def place_petro(c):
 
 ISO_SLOT_W = 1.5
 ISO_ROW_IN = 3.55       # the isolators' pad rows' inner edges, either side of ISO_Y
-REINFORCED_GAP = 8.1    # 8 mm and a margin: each side's area from the other side's pad row
+REINFORCED_GAP = 8.1    # 8 mm and a margin: each side's copper from the other side's pad row
+AREA_PAD_MARGIN = 0.4   # each router's area past its own isolator pads' outer ends
+
+
+def island_extent():
+    """The safe I/O island (SELV), as far as its copper may reach: from 8 mm below the isolators'
+    board-side pad rows down to the bottom edge, between ISL_X (8 mm and more short of the
+    module's pads); only the isolators' own island-side pads stand out of it at the top. The
+    board side keeps 8 mm from it (LV_ISLAND_X, LV_ISLAND_Y)."""
+    top = ISO_Y - ISO_ROW_IN + REINFORCED_GAP
+    x0, x1 = ISL_X
+    return [(x0, top), (x1, top), (x1, H - 0.5), (x0, H - 0.5)]
 
 
 def island_area():
-    """The safe I/O island (SELV): from 8 mm below the isolators' board-side pad rows down to the
-    bottom edge, between ISL_X (8 mm and more short of the module's pads). Its router, vias and ISO_GND
-    pour keep inside, so all of them keep 8 mm from the board side; the isolators' island-side
-    pads stand a little out of it at the top (Freerouting reaches a pad from any side). The
-    board side keeps 8 mm from the island likewise (lv_area)."""
-    top = ISO_Y - ISO_ROW_IN + REINFORCED_GAP
+    """The island's router area and ISO_GND pour: island_extent() reaching up just past the
+    isolators' island-side pads, so the router (which takes its area for the board outline)
+    sees those pads on the board. The band keep-outs hold its tracks and vias to the extent, and
+    KiCad's fill holds the pour 8 mm off the board side by the rules."""
     x0, x1 = ISL_X
+    top = ISO_Y + ISO_ROW_IN - AREA_PAD_MARGIN
     return [(x0, top), (x1, top), (x1, H - 0.5), (x0, H - 0.5)]
 
 
@@ -533,9 +543,9 @@ def band_keepouts(c, p, side, margin=0.32):
     isolators' board-side pads, which its tracks reach from above. side "island": the board side
     above the band, the strip, and the band but for gaps round the island-side pads."""
     from board.rules import _pad_box
-    lv_y, top = LV_ISLAND_Y, island_area()[0][1]
+    lv_y, top = LV_ISLAND_Y, island_extent()[0][1]
     x_end = LV_ISLAND_X - 0.1
-    strip = (island_area()[1][0] + 0.1, lv_y, x_end, H + 5.0)
+    strip = (island_extent()[1][0] + 0.1, lv_y, x_end, H + 5.0)
     want_selv = side == "island"
     pads = sorted((_pad_box(p, ref, pad) for ref in BARRIERS for pad in c.instances[ref].part.footprint.pads
                    if (GROUPS.get(c.net_of(ref, pad.number)) == "SELV") == want_selv), key=lambda b: b[0])
@@ -761,13 +771,14 @@ def hand_wiring(c, p):
 # router can't see.
 LV_ISLAND_X = ISL_X[1] + 8.0     # island_area's right edge + 8 mm
 LV_ISLAND_Y = ISO_Y + ISO_ROW_IN - REINFORCED_GAP     # 8 mm above the isolators' island-side rows
+LV_AREA_Y = ISO_Y - ISO_ROW_IN + AREA_PAD_MARGIN       # the area's edge: past the board-side pads
 
 
 def lv_area():
     return [(12.5, 9.0), (24.0, 9.0), (24.0, 10.6), (37.5, 10.6), (37.5, 38.0), (54.5, 38.0),
             (54.5, 44.0), (73.5, 44.0), (73.5, 52.0), (84.0, 52.0),
             (84.0, 41.0), (W - 0.5, 41.0), (W - 0.5, H - 0.5), (LV_ISLAND_X, H - 0.5),
-            (LV_ISLAND_X, LV_ISLAND_Y), (0.5, LV_ISLAND_Y), (0.5, 38.0),
+            (LV_ISLAND_X, LV_AREA_Y), (0.5, LV_AREA_Y), (0.5, 38.0),
             (29.5, 38.0), (29.5, 26.0), (22.5, 26.0), (22.5, 22.9), (16.5, 22.9), (16.5, 18.5),
             (12.5, 18.5)]
 
@@ -1005,7 +1016,7 @@ def case_interface(c, p):
         "tall_parts": {r: box(r) for r in ("K1", "XF1", "XF2", "XF3", "RV1", "L1", "L2", "C1", "C2", "C4")},
         "antenna_overhang": [ux - ANTENNA_HALF, H, ux + ANTENNA_HALF, H + ANTENNA_OVERHANG],
         "mains_area": {"whole_board": True,
-                       "except": [round(v, 3) for v in (*island_area()[0], *island_area()[2])],
+                       "except": [round(v, 3) for v in (*island_extent()[0], *island_extent()[2])],
                        "note": "non-isolated: every part of the board is at mains potential when "
                                "plugged in, except the safe I/O island (the 'except' box: J3's corner); "
                                "no opening may expose anything outside it"},

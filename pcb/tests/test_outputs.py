@@ -46,7 +46,7 @@ def test_case_interface_says_the_board_is_live_but_the_island():
     I/O island, whose J3 may be reached from outside; USB (J4) is internal only."""
     ci = json.loads(pb.case_interface(C, P))
     assert ci["mains_area"]["whole_board"] is True
-    assert ci["mains_area"]["except"] == [round(v, 3) for v in (*pb.island_area()[0], *pb.island_area()[2])]
+    assert ci["mains_area"]["except"] == [round(v, 3) for v in (*pb.island_extent()[0], *pb.island_extent()[2])]
     assert ci["connectors"]["J4"]["internal_only"] is True
     j3 = ci["connectors"]["J3"]
     assert j3["internal_only"] is False and j3["safe"] is True and j3["edge"] == "bottom"
