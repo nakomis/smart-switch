@@ -46,7 +46,7 @@ def test_dsn_two_layer_with_gnd_left_to_the_pours(tmp_path):
     assert "(plane" not in text and "In1.Cu" not in text
     assert "(layer F.Cu (type signal))" in text and "(layer B.Cu (type signal))" in text
     assert text.count("(net ") >= len(c.nets)
-    assert "(class gnd GND" not in text and '(class power "+3V3" VBUS' in text
+    assert '(class thin "+3V3" (circuit' in text and "(class power VBUS " in text
     assert _line(text, "(net GND").count("-") == 1        # one pin: nothing for the router to do
 
 

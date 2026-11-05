@@ -11,8 +11,14 @@ from pathlib import Path
 from board.netlist import Circuit  # noqa: F401  (documentation of the argument type)
 
 SCALE = 1000                        # DSN units per mm
+# The router's power class: 0.3 mm tracks, power clearance.
 POWER = ("VBUS", "VBUS_IN", "+3V3", "GND")
-POWER_WIDTH = 0.3                   # mm; 3V3 peaks at ~350 mA with Wi-Fi on (0.3 mm carries ~1 A)
+POWER_WIDTH = 0.3                   # mm
+# Power nets routed thin (default width, power clearance), as GND is on two layers. +3V3: its pads
+# are spread over the whole board and among fine-pitch parts, and at 0.3 mm Freerouting left it in
+# pieces every run on Petro rev B (5 Nov 2026). At 0.15 mm it carries the 3V3 peak (~350 mA with
+# Wi-Fi on) easily: IPC-2221 asks 0.07 mm for that at a 10 C rise on 1 oz copper.
+THIN_POWER = ("+3V3",)
 # Freerouting is told the clearances are this much larger than the design rules, because it
 # narrows some pad-escape stubs (which read_ses() then widens) and rounds pad outlines.
 ROUTER_MARGIN = 0.06
@@ -138,15 +144,16 @@ def write_dsn(circuit, placement, path, layers=4, route_area=None, fixed_vias=()
     # It must keep the Power class clearance (0.2 mm) from .kicad_pro; like every class the
     # router is given ROUTER_MARGIN extra, so runs that read_ses() widens back to 0.15 mm still clear.
     thin_gnd = layers == 2 and "GND" in circuit.nets and "GND" not in skip_nets
-    power = [n for n in sorted(circuit.nets) if n in POWER and not (n == "GND" and (thin_gnd or n in skip_nets))]
+    thin = [n for n in sorted(circuit.nets) if n in THIN_POWER and n not in skip_nets] + (["GND"] if thin_gnd else [])
+    power = [n for n in sorted(circuit.nets) if n in POWER and n not in thin and n not in skip_nets]
     other = [n for n in sorted(circuit.nets) if n not in POWER and n not in skip_nets]
     out.append(f"    (class default {' '.join(_q(n) for n in other)} "
                f"(circuit (use_via {_q(via)})) (rule (width {_u(0.15)}) (clearance {_u(ROUTER_MARGIN + 0.15)})))")
     if power:
         out.append(f"    (class power {' '.join(_q(n) for n in power)} "
                    f"(circuit (use_via {_q(via)})) (rule (width {_u(POWER_WIDTH)}) (clearance {_u(ROUTER_MARGIN + 0.2)})))")
-    if thin_gnd:
-        out.append(f"    (class gnd GND (circuit (use_via {_q(via)})) "
+    if thin:
+        out.append(f"    (class thin {' '.join(_q(n) for n in thin)} (circuit (use_via {_q(via)})) "
                    f"(rule (width {_u(0.15)}) (clearance {_u(ROUTER_MARGIN + 0.2)})))")
     out.append("  )")
     out.append("  (wiring")

@@ -120,6 +120,9 @@ def main():
     ap.add_argument("--passes", type=int, default=100)
     ap.add_argument("--out", type=Path, default=OUT)
     ap.add_argument("--step", action="store_true", help="also export the STEP model")
+    ap.add_argument("--drops", action="store_true",
+                    help="ground drop vias before routing (off: Freerouting counted their holes beside the pads "
+                         "as violations and routed round them; GND is routed and poured anyway)")
     a = ap.parse_args()
     out = a.out.resolve()
     tmp = out / "tmp"
@@ -135,7 +138,7 @@ def main():
     # the router leaves room.
     hand_t, hand_v = pb.hand_wiring(c, p)
     keep, ikeep = pb.lv_keepouts(c, p), pb.island_keepouts(c, p)
-    for net, inside, skip in (("GND", inside_lv(keep), ("U1", "RS1")), ("ISO_GND", inside_island(ikeep), ())):
+    for net, inside, skip in (() if not a.drops else (("GND", inside_lv(keep), ("U1", "RS1")), ("ISO_GND", inside_island(ikeep), ()))):
         # clear of other nets by the router's own power clearance (dsn: 0.2 + ROUTER_MARGIN), or each drop
         # is a standing violation Freerouting routes round and the pads beside it go unreached
         dt, dv, missed = gnd.drops(c, p, hand_t, hand_v, net, inside, skip=skip, clear=DROP_CLEAR)
