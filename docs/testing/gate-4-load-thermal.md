@@ -81,7 +81,7 @@ run, put a small piece of Kapton tape or a dot of black permanent marker on each
    force is back to about 10.5 A. Relay on: the radiator runs without tripping.
 6. **The real threshold and the fast path:**
    - Swap the radiator for the **kettle** (water in it), switched on, then relay on.
-   - At 13 A, the relay must open **within a second**, through the BL0939's OC output.
+   - At 13 A, the relay must open **within about 2 seconds**: the sustained trip (10.5 A for 2 s, PETRO-5). The instant trip, through the BL0939's OC output, is set at 15 A, above the kettle, so this tests the sustained path.
    - If it doesn't, **switch off at the wall at once**: 13 A is the plug fuse's rating and above
      Petro's.
    - Clear the trip (step 4).
