@@ -142,7 +142,8 @@ def test_no_keepout_covers_a_pad_its_router_must_reach():
             if net is None or not mine(net) or net.startswith("NC_") or b in own_boxes:
                 continue
             for _, x0, y0, x1, y1 in keep:
-                assert b[2] <= x0 or b[0] >= x1 or b[3] <= y0 or b[1] >= y1, (net, b, (x0, y0, x1, y1))
+                gap = math.hypot(max(x0 - b[2], 0, b[0] - x1), max(y0 - b[3], 0, b[1] - y1))
+                assert gap >= 0.2 - 1e-6, (net, b, (x0, y0, x1, y1))      # the power class's clearance
 
 
 def test_the_band_between_the_two_sides_is_kept_out_of_both_routers():
