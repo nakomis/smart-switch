@@ -8,7 +8,8 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
   },
-  collectCoverageFrom: ['lib/**/*.ts', '!**/*.d.ts'],
+  setupFiles: ['<rootDir>/test/jest-setup.js'],
+  collectCoverageFrom: ['lib/**/*.ts', 'lambda/**/*.ts', '!**/*.d.ts'],
   coverageThreshold: {
     global: { lines: 70, branches: 70, functions: 70, statements: 70 },
   },

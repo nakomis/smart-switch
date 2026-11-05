@@ -13,17 +13,27 @@
     "synth-prod": "NPM_ENVIRONMENT=prod cdk synth --profile nakom.is-admin --all",
     "diff-prod": "NPM_ENVIRONMENT=prod cdk diff --profile nakom.is-admin --all",
     "deploy-prod": "NPM_ENVIRONMENT=prod cdk deploy --profile nakom.is-admin --all",
-    "ci-synth-sandbox": "NPM_ENVIRONMENT=sandbox CDK_DEFAULT_ACCOUNT=000000000000 cdk synth --all",
-    "ci-synth-prod": "NPM_ENVIRONMENT=prod CDK_DEFAULT_ACCOUNT=000000000000 cdk synth --all"
+    "ci-synth-sandbox": "NPM_ENVIRONMENT=sandbox CDK_DEFAULT_ACCOUNT=000000000000 cdk synth --all -c alexaSkillId=SKILL_ID_NOT_SET -c alexaVendorId=VENDOR_ID_NOT_SET",
+    "ci-synth-prod": "NPM_ENVIRONMENT=prod CDK_DEFAULT_ACCOUNT=000000000000 cdk synth --all -c alexaSkillId=SKILL_ID_NOT_SET -c alexaVendorId=VENDOR_ID_NOT_SET",
+    "stage-skill": "ts-node scripts/stage-skill.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1161.0",
+    "@aws-sdk/client-iot": "^3.1161.0",
+    "@aws-sdk/client-iot-data-plane": "^3.1161.0",
+    "@aws-sdk/client-secrets-manager": "^3.1161.0",
+    "@aws-sdk/lib-dynamodb": "^3.1161.0",
     "aws-cdk-lib": "2.257.0",
+    "aws-jwt-verify": "^5.2.1",
     "constructs": "^10.0.0"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
     "@types/jest": "^30.0.0",
     "@types/node": "22.x",
     "aws-cdk": "^2.1125.0",
+    "aws-sdk-client-mock": "^4.1.0",
+    "esbuild": "^0.28.2",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",

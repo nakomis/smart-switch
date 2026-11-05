@@ -46,3 +46,6 @@ firmware/build-cov/
 
 # Device certificates, keys and prov.bin from firmware/scripts/provision-device.sh: never committed
 firmware/certs/
+
+# CDK lookups (SSM skill and vendor IDs): cached per account, never committed
+infra/cdk.context.json
