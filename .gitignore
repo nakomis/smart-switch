@@ -1,0 +1,37 @@
+# Planning
+PLAN.md
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# ESP-IDF
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# KiCad
+*.kicad_prl
+*-backups/
+fp-info-cache
+\#auto_saved_files#
+pcb/**/out/
+
+# Node / CDK (infra, once it exists)
+node_modules/
+cdk.out/
+*.out/
+
+# Coverage
+coverage/
+lcov.info
+.coverage
+htmlcov/
