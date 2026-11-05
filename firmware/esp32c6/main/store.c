@@ -42,10 +42,13 @@ static esp_err_t commit(esp_err_t err)
     return err;
 }
 
+// A blob of up to size bytes; a shorter one (from an older image: 0.2.x stored two trip causes,
+// 0.3.0 four) is kept and the rest zeroed.
 static void load_blob(const char *key, void *out, size_t size)
 {
-    size_t len = size;
-    if (nvs_get_blob(nvs, key, out, &len) != ESP_OK || len != size)
+    size_t len = 0;
+    memset(out, 0, size);
+    if (nvs_get_blob(nvs, key, NULL, &len) != ESP_OK || len > size || nvs_get_blob(nvs, key, out, &len) != ESP_OK)
         memset(out, 0, size);
 }
 

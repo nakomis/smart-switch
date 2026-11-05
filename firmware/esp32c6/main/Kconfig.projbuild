@@ -1,0 +1,41 @@
+menu "Petro protection (PETRO-5)"
+
+    config PETRO_OVERTEMP_C
+        int "Over-temperature trip on the NTC (C)"
+        range 40 70
+        default 55
+        help
+            The NTC (TH1, beside the relay) reading at which Petro trips, held for 2 s. The NTC
+            under-reads the hot spots, so this is set from Gate 4's ratio
+            (docs/testing/gate-4-load-thermal.md 5):
+                limit = room + (70 - room) / ratio, room = 35 C.
+            55 C (a ratio of 1.75) is provisional until Gate 4 has run. A trip can't be cleared
+            while the NTC is within 5 C of this.
+
+    config PETRO_ZX_SWITCHING
+        bool "Switch the relay at the mains' zero crossings"
+        default y
+        help
+            Time the relay's close and open to the BL0939's ZX output, allowing for the relay's
+            operate and release times. Without ZX edges for 100 ms (no mains: on USB) it switches
+            at once. Trips always switch at once.
+
+    config PETRO_RELAY_OPERATE_US
+        int "Relay operate time (us)"
+        depends on PETRO_ZX_SWITCHING
+        range 0 20000
+        default 8000
+        help
+            From the coil energised to the contacts closed. HF115F: about 8 ms (the datasheet's
+            maximum is 15 ms). Measure it at Gate 2 and set it here.
+
+    config PETRO_RELAY_RELEASE_US
+        int "Relay release time (us)"
+        depends on PETRO_ZX_SWITCHING
+        range 0 20000
+        default 4000
+        help
+            From the coil de-energised to the contacts open. HF115F: about 4 ms, longer with a
+            plain flyback diode. Measure it at Gate 2 and set it here.
+
+endmenu

@@ -74,7 +74,9 @@ static int format(char *body, size_t cap)
         .reset_counts = store_reset_counts(),
         .resets = STORE_RESET_REASONS,
         .trips_overcurrent = store_trips(CTL_TRIP_OVERCURRENT),
+        .trips_overcurrent_instant = store_trips(CTL_TRIP_OVERCURRENT_INSTANT),
         .trips_overtemp = store_trips(CTL_TRIP_OVERTEMP),
+        .trips_meter_fault = store_trips(CTL_TRIP_METER_FAULT),
     };
     return prom_format(body, cap, &p);
 }

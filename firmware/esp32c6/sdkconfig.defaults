@@ -20,6 +20,10 @@ CONFIG_FREERTOS_HZ=1000
 # The brown-out detector stays on (its default): Gate 2 checks that relay cycling doesn't trip it.
 CONFIG_ESP_BROWNOUT_DET=y
 
+# The OC interrupt (PETRO-5's instant trip) reads OC and opens the relay itself, even while flash
+# is being written: gpio_get_level and gpio_set_level in IRAM.
+CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
+
 # Crashes are saved to flash (read with: idf.py coredump-info).
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
@@ -38,8 +42,8 @@ CONFIG_MQTT_OUTBOX_EXPIRED_TIMEOUT_MS=10000
 CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
 
-# Task watchdog: the control task (which drives the relay) subscribes itself; if it, or the idle
-# task, goes 5 s without resetting it, Petro panics and restarts, and a restart leaves the relay
+# Task watchdog: the control task (which drives the relay) and the meter task (the protection's
+# readings) subscribe themselves; if either, or the idle task, goes 5 s without resetting it, Petro panics and restarts, and a restart leaves the relay
 # off. A new image on probation that hangs is therefore rolled back too.
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_INIT=y
