@@ -1,0 +1,44 @@
+# Cabal consultation — summary
+
+## Prompt
+
+```
+Design review question for a home-built (personal use only, never sold) 230 V AC / 10 A continuous Wi-Fi smart switch, an in-line cord unit (cable in, cable out). ESP32-S3 on the low-voltage side, powered by an isolated Mean Well IRM-03-5 module (reinforced isolation) so everything after it is SELV, with a house USB connector for flashing that must be safe to touch while mains-connected. A 16 A relay with reinforced coil-contact insulation bridges SELV/mains. Metering chip: BL0942 (UART, single-phase). 2-layer PCB, 2 oz copper, 8 mm creepage mains↔SELV.
+
+The BL0942's ground sits at whatever its sense inputs reference. Two options:
+
+Option A (what commercial plugs do): a 1 mΩ manganin 2512 shunt in the live, plus a resistor divider for voltage. The BL0942 lives on the mains side, powered by its own tiny supply there (a capacitive dropper ~1 mA, or a second small isolated module, or a winding?). Its UART TX/RX crosses the 8 mm gap through two reinforced-isolation optocouplers or a reinforced digital isolator (wide-body, e.g. ISO6721-style), with the isolator's mains-side supply coming from the mains-side rail.
+
+Option B: a current transformer (e.g. ZMCT103C) and a voltage transformer (e.g. ZMPT101B) feed the BL0942 on the SELV side. No isolators, no mains-side supply, but bulkier, adds phase error that calibration must remove, and is less accurate at low loads.
+
+Questions, answer in order:
+1. Which option would you choose for this build, and why? Be concrete.
+2. For Option A: what is the best way to power the BL0942 and the isolator's mains side (capacitive dropper, a second IRM module, an IRM with a non-isolated tap, something else)? Any trap with a dropper here (inrush, surge, MOV placement, the dropper's X2 cap)?
+3. For Option A: optocouplers or a digital isolator for the 4800-baud UART, and what isolation rating/creepage must the part itself have to count as reinforced at 230 V for a personal device (IEC 62368 / 60664 terms)?
+4. For Option B: is the ZMPT101B actually rated as a safety isolation barrier, or is it a cheap module whose insulation you should not trust? Same for the ZMCT103C.
+5. Anything about the shunt (manganin 1 mΩ at 10 A = 0.1 W; Kelvin connection; thermal EMF; which side of the relay; placement relative to the fuse) that commonly goes wrong?
+6. Any failure mode of either option that would compromise the SELV side's safety (i.e., make the USB connector live) that I should design out?
+7. One thing you think I have not considered at all.
+```
+
+**System prompt:**
+
+```
+Be blunt. If any part of the question or design is wrong, hand-wavy, or based on a misunderstanding, say so directly. Prefer "this won't work because X" over polite hedging. Don't pad with caveats unless the caveat *is* the answer. If a question is malformed, point that out instead of answering it as asked. If the questions are numbered, answer them in order using the same numbering so the replies can be diffed across models.
+```
+
+## Results
+
+| Provider | Input tokens | Output tokens | Cost (USD) | Latency | Status |
+|---|---:|---:|---:|---:|---|
+| `bedrock:mistral-large` | 893 | 715 | $0.006076 | 14822 ms | ✓ |
+| `bedrock:llama3-70b` | 766 | 546 | $0.000945 | 12366 ms | ✓ |
+| `bedrock:nova-pro` | 823 | 423 | $0.002012 | 4428 ms | ✓ |
+
+**Total cost: $0.009033 USD**
+
+## Files
+
+- `/Users/nakomis/repos/nakomis/smart-switch/docs/design/cabal/20261102-135056Z-2026-11-02-metering-option-bedrock-bedrock-mistral-large.md`
+- `/Users/nakomis/repos/nakomis/smart-switch/docs/design/cabal/20261102-135056Z-2026-11-02-metering-option-bedrock-bedrock-llama3-70b.md`
+- `/Users/nakomis/repos/nakomis/smart-switch/docs/design/cabal/20261102-135056Z-2026-11-02-metering-option-bedrock-bedrock-nova-pro.md`
