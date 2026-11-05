@@ -36,7 +36,8 @@ void app_led_release(void);
 // While true, presses of SW1 are only watched (the console's button test), not acted on.
 void app_button_watch(bool watching);
 
-// The trip hook (PETRO-5): latch a trip, open the relay at once and count it.
+// The trip hook (PETRO-5): latch a trip, open the relay at once, store it (it survives a reboot;
+// only a press clears it) and count it.
 void app_trip(ctl_trip_cause cause);
 
 // A copy of the device's state, for the console's info, the status and the metrics.
@@ -50,6 +51,7 @@ typedef struct
     uint32_t cycle_done, cycle_n;
     double trip_amps;
     bool trip_amps_temporary;
+    bool meter_ok;   // the BL0939 started and its latest reads are good
     bool have_meter;
     double volts, amps, watts;
     double energy_kwh;

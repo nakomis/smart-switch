@@ -5,12 +5,16 @@
 
 #include "console_parse.h"
 
-void ctl_init(ctl_t *c, bool have_stored, int stored_mode)
+void ctl_init(ctl_t *c, bool have_stored, int stored_mode, int stored_trip)
 {
     memset(c, 0, sizeof(*c));
     c->mode = CTL_MODE_OFF;
     if (have_stored && (stored_mode == CTL_MODE_ON || stored_mode == CTL_MODE_AUTO))
         c->mode = (ctl_mode)stored_mode;
+    if (stored_trip == CTL_TRIP_OVERTEMP)
+        c->trip = CTL_TRIP_OVERTEMP;
+    else if (stored_trip != CTL_TRIP_NONE)
+        c->trip = CTL_TRIP_OVERCURRENT;
     c->trip_amps = CTL_TRIP_AMPS_DEFAULT;
 }
 
@@ -63,18 +67,21 @@ ctl_result ctl_set_mode(ctl_t *c, ctl_mode mode)
 {
     if (mode != CTL_MODE_OFF && mode != CTL_MODE_ON && mode != CTL_MODE_AUTO)
         return CTL_ERR_INVALID;
-    if (c->trip != CTL_TRIP_NONE)
-    {
-        if (mode != CTL_MODE_OFF)
-            return CTL_ERR_TRIPPED;
-        c->trip = CTL_TRIP_NONE;  // off clears it, as a press does
-    }
-    else if (mode == c->mode)
+    if (c->trip != CTL_TRIP_NONE && mode != CTL_MODE_OFF)
+        return CTL_ERR_TRIPPED;  // off is accepted, and the trip stays latched
+    if (mode == c->mode)
         return CTL_OK;  // nothing to change: a running cycle or the bench carries on
     interrupt(c);
     c->want = false;
     c->mode = mode;
     return CTL_OK;
+}
+
+ctl_result ctl_remote_mode(ctl_t *c, ctl_mode mode)
+{
+    if (mode != CTL_MODE_OFF)
+        return mode == CTL_MODE_ON || mode == CTL_MODE_AUTO ? CTL_ERR_LOCAL_ONLY : CTL_ERR_INVALID;
+    return ctl_set_mode(c, mode);
 }
 
 bool ctl_cycle_valid(uint32_t n, uint32_t on_ms, uint32_t off_ms, uint32_t max_total_ms)
@@ -183,9 +190,15 @@ bool ctl_trip(ctl_t *c, ctl_trip_cause cause)
     return true;
 }
 
+void ctl_shutdown(ctl_t *c)
+{
+    interrupt(c);
+    c->shutdown = true;
+}
+
 bool ctl_relay(ctl_t *c, int64_t now_ms)
 {
-    if (c->trip != CTL_TRIP_NONE)
+    if (c->trip != CTL_TRIP_NONE || c->shutdown)
         return false;
     if (c->cycle.active)
     {
@@ -258,9 +271,11 @@ const char *ctl_result_message(ctl_result r)
     case CTL_ERR_NOT_AUTO:
         return "refused: the mode is a local override (on or off); set mode auto first";
     case CTL_ERR_TRIPPED:
-        return "refused: tripped; press the button or set mode off to clear it";
+        return "refused: tripped; only a press of the button clears it";
     case CTL_ERR_INVALID:
         return "out of range";
+    case CTL_ERR_LOCAL_ONLY:
+        return "refused: only off can be set remotely; on and auto are set with the button";
     }
     return "?";
 }

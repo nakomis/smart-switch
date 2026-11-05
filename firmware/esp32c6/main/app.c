@@ -43,6 +43,7 @@ static const char *TAG = "app";
 #define METER_STALE_READS 3  // failed reads in a row before V/A/W go unknown
 #define RESTART_DELAY_MS 2000  // for the response to reach IoT Core first
 #define STATUS_MAX 512
+#define STORE_RETRY_MS 5000  // a failed NVS write of the mode or the trip latch is retried this often
 
 typedef struct
 {
@@ -74,6 +75,8 @@ static reporter_t reporter;
 static bool applied_relay;
 static ctl_mode stored_mode;
 static bool have_stored_mode;
+static ctl_trip_cause stored_trip;
+static int64_t store_retry_at_ms;
 static bool healthy;
 
 // The console's LED hold (any task writes, the control task reads).
@@ -181,6 +184,7 @@ void app_trip(ctl_trip_cause cause)
     if (latched)
     {
         ESP_LOGW(TAG, "TRIP: %s, relay open", ctl_trip_name(cause));
+        // The latch itself is stored by the control task's step() (with retries); counted here.
         store_count_trip(cause);
     }
 }
@@ -199,6 +203,7 @@ void app_get_state(app_state *out)
     out->cycle_n = ctl.cycle.n;
     out->trip_amps = ctl.trip_amps;
     out->trip_amps_temporary = ctl_trip_amps_temporary(&ctl);
+    out->meter_ok = board_part_ok(BOARD_BL0939) && readings.have_meter;
     out->have_meter = readings.have_meter;
     out->volts = readings.volts;
     out->amps = readings.amps;
@@ -287,6 +292,9 @@ static void meter_task(void *arg)
         // TODO(PETRO-5): the over-current trip (readings.amps against ctl.trip_amps, and the
         // BL0939's OC output through board_oc_edges) and the over-temperature trip (the NTC),
         // each calling app_trip(). Until then trips_enforced is false in the status.
+        // TODO(PETRO-5): once trips are enforced, refuse relay-on (every route: button, Fleet,
+        // bench) while the meter is unhealthy (app_state.meter_ok false: the BL0939 didn't start,
+        // or METER_STALE_READS reads in a row failed): a trip that can't see the current is none.
         save_energy();
     }
 }
@@ -305,6 +313,7 @@ static bool publish_status(report_reason reason)
         .trip = s.trip,
         .remote = s.remote,
         .bench = s.bench,
+        .meter_ok = s.meter_ok,
         .cycle_active = s.cycle_active,
         .cycle_done = s.cycle_done,
         .cycle_n = s.cycle_n,
@@ -380,7 +389,10 @@ static void handle_command(const char *json, size_t len)
         respond_result(cmd.kind, r);
         break;
     case FLEET_CMD_SET_MODE:
-        r = app_set_mode(cmd.mode);
+        take();
+        r = ctl_remote_mode(&ctl, cmd.mode);  // off only
+        apply_locked();
+        give();
         ESP_LOGI(TAG, "Fleet: mode %s: %s", ctl_mode_name(cmd.mode), ctl_result_message(r));
         respond_result(cmd.kind, r);
         break;
@@ -515,16 +527,35 @@ static bool step(void)
     bool relay = apply_locked();
     ctl_mode mode = ctl.mode;
     bool tripped = ctl.trip != CTL_TRIP_NONE;
+    ctl_trip_cause trip = ctl.trip;
     bool cycling = ctl.cycle.active;
     give();
 
-    if (!have_stored_mode || mode != stored_mode)
+    // The power-on state and the trip latch, kept in NVS. A failed write (logged by store.c) is
+    // retried every STORE_RETRY_MS until it succeeds.
+    ctl_trip_cause trip_now = tripped ? trip : CTL_TRIP_NONE;
+    if ((!have_stored_mode || mode != stored_mode || trip_now != stored_trip) && now >= store_retry_at_ms)
     {
-        // The power-on state. A failed write is retried on the next change only (NVS is logged).
-        if (store_set_mode(mode) == ESP_OK)
-            ESP_LOGI(TAG, "mode %s stored", ctl_mode_name(mode));
-        stored_mode = mode;
-        have_stored_mode = true;
+        bool ok = true;
+        if (!have_stored_mode || mode != stored_mode)
+        {
+            if (store_set_mode(mode) == ESP_OK)
+            {
+                ESP_LOGI(TAG, "mode %s stored", ctl_mode_name(mode));
+                stored_mode = mode;
+                have_stored_mode = true;
+            }
+            else
+                ok = false;
+        }
+        if (trip_now != stored_trip)
+        {
+            if (store_set_trip(trip_now) == ESP_OK)
+                stored_trip = trip_now;
+            else
+                ok = false;
+        }
+        store_retry_at_ms = ok ? 0 : now + STORE_RETRY_MS;
     }
     show_led(now, mode, relay, tripped);
 
@@ -575,6 +606,8 @@ static void on_shutdown(void)
     board_relay(false);
     if (xSemaphoreTake(lock, pdMS_TO_TICKS(200)) == pdTRUE)
     {
+        ctl_shutdown(&ctl);  // nothing re-closes it before the reset
+        apply_locked();
         uint64_t mwh = energy_mwh(&energy);
         bool changed = mwh != energy.saved_mwh;
         xSemaphoreGive(lock);
@@ -596,7 +629,11 @@ void app_start(bool is_provisioned)
 
     int mode = CTL_MODE_OFF;
     have_stored_mode = store_mode(&mode);
-    ctl_init(&ctl, have_stored_mode, mode);
+    ctl_init(&ctl, have_stored_mode, mode, store_trip());
+    stored_trip = ctl.trip;
+    if (ctl.trip != CTL_TRIP_NONE)
+        ESP_LOGW(TAG, "a %s trip is still latched: relay open until the button is pressed",
+                 ctl_trip_name(ctl.trip));
     stored_mode = ctl.mode;
     have_stored_mode = have_stored_mode && stored_mode == (ctl_mode)mode;
     energy_init(&energy, store_energy_mwh(), bl0939_petro_scale().pulses_per_kwh, now_ms());

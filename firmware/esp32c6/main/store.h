@@ -26,6 +26,10 @@ esp_err_t store_set_energy_mwh(uint64_t mwh);
 const uint32_t *store_reset_counts(void);
 const char *const *store_reset_names(void);
 uint32_t store_trips(ctl_trip_cause cause);
+
+// The latched trip (CTL_TRIP_NONE if none), so a reboot doesn't clear it: only a press does.
+int store_trip(void);
+esp_err_t store_set_trip(ctl_trip_cause cause);
 esp_err_t store_count_trip(ctl_trip_cause cause);
 
 // This boot's reset reason, by name ("poweron", "brownout", ...).

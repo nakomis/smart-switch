@@ -67,7 +67,7 @@ On the C6's USB-Serial-JTAG (J4), prompt `petro>`:
 | Command | Does |
 |---|---|
 | `info` | Firmware version, MAC, chip revision, reset reason, uptime, the mode, the relay (and any bench override or cycle), the trip and the threshold in force, the trip counts, the meter's last reading and the energy total, the network, which `prov` keys are present |
-| `mode on` / `mode off` / `mode auto` | Sets the mode, as the button does (stored: the power-on state). `mode off` also clears a trip |
+| `mode on` / `mode off` / `mode auto` | Sets the mode, as the button does (stored: the power-on state). While a trip is latched only `mode off` is accepted, and the trip stays latched |
 | `relay on` / `relay off` | Drives the relay directly: a **bench override**, never stored, until the next press, mode change, remote relay command or trip. `relay on` is refused while a trip is latched |
 | `relay cycle <n> <on_ms> <off_ms>` | Cycles it n times (1–10000, 50–60000 ms each, an hour at most in all), in any mode, leaving it off (a bench override). Any key, a press, a mode change or a trip stops it, relay off |
 | `led <r> <g> <b>` / `led auto` | Holds the LED at a colour (0–255 each) for 60 s / gives it back to the status patterns |
@@ -92,15 +92,22 @@ opens it. A press counts once it has held 30 ms (5 ms polls).
 - The mode is stored in NVS (the default `nvs` partition, namespace `state`) at every change and is
   the **power-on state**: a unit left on closes its relay as soon as it boots (README rule 8). In
   auto the relay starts open. Nothing stored means off.
-- **A trip** (PETRO-5) opens the relay and latches: every remote command that would close it is
-  refused. A press clears it and leaves the relay off (the mode goes to off); so does `set_mode
-  off`. A temporary trip threshold from Fleet lives in RAM only: every boot starts at 10.5 A.
+- **Fleet can only set the mode to off** (always the safe direction; the gates use it). `set_mode`
+  on or auto from Fleet is refused ("only off can be set remotely"): on and auto are the button's.
+  Relay on/off and relay cycle from Fleet are accepted only in auto with no trip latched.
+- **A trip** (PETRO-5) opens the relay and latches, and the latch is stored in NVS, so it
+  **survives a reboot** (the relay stays open even if the mode is on). **Only a press clears it**,
+  leaving the relay off (the mode goes to off); nothing from Fleet can. A temporary trip threshold
+  from Fleet lives in RAM only: every boot starts at 10.5 A.
+- A failed NVS write of the mode or the trip latch is retried every 5 s.
 
 **The relay** is latched low before anything else at boot, and every reset leaves it open (the
 gate's 100 k pull-down; the GPIO resets to an input). Only the control task drives it from the
 mode; it runs every 5 ms at priority 8, above MQTT (5), the OTA download (4), the metrics push (2)
 and the Wi-Fi stress (1), and is watched by the 5 s task watchdog (a hang panics and restarts,
-relay off). Every `esp_restart` opens the relay and saves the energy total first. Nothing on the
+relay off). Every `esp_restart` opens the relay, holds it open until the reset (nothing can re-close it in
+between), and saves the energy total first. `board_init` starts each part (relay, inputs, LED, NTC,
+BL0939) independently, so one failing doesn't stop the rest; `info` lists which started. Nothing on the
 control task waits on the network: publishing only copies into a queue.
 
 **Unprovisioned** (`prov` empty or incomplete): no network; the console, the button and the relay
@@ -142,7 +149,7 @@ below).
 |---|---|
 | `{"command":"get_status"}` | Publishes a status now (`"reason":"request"`) |
 | `{"command":"relay","on":true}` | The relay, in auto only |
-| `{"command":"set_mode","mode":"off"}` | `on`, `off` or `auto`, stored; `off` also clears a trip |
+| `{"command":"set_mode","mode":"off"}` | **`off` only**, stored. `on` and `auto` are refused (`"status":"error"`): they're set with the button. Doesn't clear a trip |
 | `{"command":"relay_cycle","n":500,"on_ms":3000,"off_ms":5000}` | Auto only. n 1–10000, 50–60000 ms each, **two hours at most in all** (Gate 4's 500 × 8 s is about 67 minutes; the console's cap stays at one hour). Leaves the relay open |
 | `{"command":"relay_cycle_stop"}` | Stops a cycle, relay open |
 | `{"command":"set_trip_threshold","amps":6.5}` | A **temporary** over-current threshold, 0.5–10.5 A (never above the default), RAM only, gone after a reboot; `"amps":null` restores 10.5 A. A status follows. Recorded and reported now; PETRO-5 enforces it |
@@ -155,13 +162,15 @@ and on request:
 
 ```json
 {"mode":"auto","relay":true,"trip":null,"remote":true,"bench":false,"cycle":null,
- "volts":239.81,"amps":0.2611,"watts":61.24,"energy_kwh":1.234568,"board_c":24.1,"zx_hz":100.0,
+ "meter_ok":true,"volts":239.81,"amps":0.2611,"watts":61.24,"energy_kwh":1.234568,"board_c":24.1,"zx_hz":100.0,
  "trip_amps":10.5,"trip_amps_temporary":false,"trips_enforced":false,"stress_s":null,
  "rssi":-61,"uptime_s":3600,"reason":"heartbeat","version":"0.2.0"}
 ```
 
 `remote` says whether a relay command would be accepted; `cycle` is `{"done","n"}` while one runs;
-`stress_s` is the stress seconds left; readings are `null` until read.
+`stress_s` is the stress seconds left; `meter_ok` is whether the BL0939 started and its latest
+reads are good (once PETRO-5 enforces trips, relay-on is refused without it); readings are `null`
+until read.
 
 ### OTA
 
@@ -181,6 +190,10 @@ Every 10 s, Prometheus text POSTed to `prov`'s `metrics_url` (with `/api/v1/impo
 appended when it has no path) with basic auth from `metrics_user` and `metrics_pass`. Skipped while
 Wi-Fi is down or an update runs; a failed push is dropped and logged once per run of failures. It
 has its own low-priority task and a 3 s timeout, so it never affects the relay.
+
+The push is **plain HTTP** on purpose: vmauth on Cal is reached over the LAN by design (as
+tinycrypt's), and each device's credential can only write metrics as that device. An `https://`
+`metrics_url` works too (the IDF certificate bundle).
 
 | Metric | |
 |---|---|

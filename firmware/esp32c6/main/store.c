@@ -14,6 +14,7 @@ static const char *TAG = "store";
 #define KEY_ENERGY "energy_mwh"
 #define KEY_RESETS "resets"
 #define KEY_TRIPS "trips"
+#define KEY_LATCHED "trip_latched"
 
 static const char *const reset_names[STORE_RESET_REASONS] = {
     [ESP_RST_UNKNOWN] = "unknown",     [ESP_RST_POWERON] = "poweron",
@@ -121,6 +122,21 @@ esp_err_t store_count_trip(ctl_trip_cause cause)
     if (!nvs_ok)
         return ESP_ERR_INVALID_STATE;
     return commit(nvs_set_blob(nvs, KEY_TRIPS, trips, sizeof(trips)));
+}
+
+int store_trip(void)
+{
+    uint8_t v = CTL_TRIP_NONE;
+    if (nvs_ok)
+        nvs_get_u8(nvs, KEY_LATCHED, &v);
+    return v;
+}
+
+esp_err_t store_set_trip(ctl_trip_cause cause)
+{
+    if (!nvs_ok)
+        return ESP_ERR_INVALID_STATE;
+    return commit(nvs_set_u8(nvs, KEY_LATCHED, (uint8_t)cause));
 }
 
 const char *store_reset_reason(void)

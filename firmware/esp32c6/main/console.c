@@ -67,7 +67,12 @@ static void cmd_info(void)
         printf("meter      %.2f V, %.4f A, %.2f W", st.volts, st.amps, st.watts);
     else
         printf("meter      no reading");
-    printf("; %.6f kWh total; %" PRIu32 " failed reads\n", st.energy_kwh, st.meter_errors);
+    printf("; %.6f kWh total; %" PRIu32 " failed reads; %s\n", st.energy_kwh, st.meter_errors,
+           st.meter_ok ? "healthy" : "UNHEALTHY");
+    printf("board     ");
+    for (int i = 0; i < BOARD_PARTS; i++)
+        printf(" %s%s", board_part_ok((board_part)i) ? "+" : "-", board_part_name((board_part)i));
+    printf("  (+ started, - failed)\n");
     printf("network    %s, Wi-Fi %s, Fleet %s%s%s\n", net_started() ? "started" : "off",
            net_wifi_up() ? "up" : "down", net_subscribed() ? "subscribed" : "not connected",
            ota_busy() ? ", OTA in progress" : "", stress_left_s() ? ", Wi-Fi stress on" : "");

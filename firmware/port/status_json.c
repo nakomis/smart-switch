@@ -81,6 +81,8 @@ int status_json(char *out, size_t cap, const status_view *v)
         put(&s, "{\"done\":%lu,\"n\":%lu}", (unsigned long)v->cycle_done, (unsigned long)v->cycle_n);
     else
         put(&s, "null");
+    put(&s, ",\"meter_ok\":");
+    put_bool(&s, v->meter_ok);
     put(&s, ",\"volts\":");
     put_number(&s, v->have_meter, "%.2f", v->volts);
     put(&s, ",\"amps\":");

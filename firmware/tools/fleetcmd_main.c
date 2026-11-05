@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     (void)argv;
     if (argc > 1)
     {
-        for (int r = CTL_OK; r <= CTL_ERR_INVALID + 1; r++)
+        for (int r = CTL_OK; r <= CTL_ERR_LOCAL_ONLY + 1; r++)
             puts(ctl_result_message((ctl_result)r));
         printf("%s %s\n", ctl_mode_name((ctl_mode)99), fleet_cmd_result_type((fleet_cmd_kind)99));
         return 0;

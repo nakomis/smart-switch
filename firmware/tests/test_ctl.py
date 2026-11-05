@@ -3,7 +3,8 @@
 Spec (CLAUDE.md, Control; PETRO-3): one button cycling the mode on -> off -> auto -> on (Martin's
 decision; nothing stored means off); on and off are local overrides, so remote relay commands are refused;
 auto follows remote commands; the mode persists and is the power-on state; a press with a trip
-latched clears the trip and leaves the relay off.
+latched clears the trip and leaves the relay off. Review decisions (PR #8): the trip survives a
+reboot and only a press clears it; Fleet's set_mode accepts only off.
 """
 
 import json
@@ -105,6 +106,16 @@ def test_remote_relay_commands_are_refused_in_on_and_off(c, mode):
     assert s["remote"] is False
 
 
+def test_fleet_can_only_set_off(c):
+    c("init", stored=True, mode=ON)
+    assert c("remote_mode", mode="on")["result"] == "local_only"
+    s = c("remote_mode", mode="auto")
+    assert s["result"] == "local_only" and s["mode"] == "on" and s["relay"] is True
+    assert c("remote_mode", mode="bogus")["result"] == "invalid"
+    s = c("remote_mode", mode="off")
+    assert (s["result"], s["mode"], s["relay"]) == ("ok", "off", False)
+
+
 def test_set_mode(c):
     c("init")
     assert c("mode", mode="on")["relay"] is True
@@ -162,11 +173,33 @@ def test_while_tripped_nothing_remote_closes_the_relay(c):
     assert s["relay"] is False and s["remote"] is False
 
 
-def test_set_mode_off_clears_a_trip(c):
+def test_set_mode_off_does_not_clear_a_trip(c):
     in_auto(c)
     c("trip", cause="overcurrent")
-    s = c("mode", mode="off")
-    assert (s["result"], s["trip"], s["mode"], s["relay"]) == ("ok", None, "off", False)
+    for op in ("mode", "remote_mode"):
+        s = c(op, mode="off")
+        assert (s["result"], s["trip"], s["mode"], s["relay"]) == ("ok", "overcurrent", "off", False)
+    assert c("remote_mode", mode="auto")["result"] == "local_only"
+
+
+@pytest.mark.parametrize("stored,cause", [(1, "overcurrent"), (2, "overtemp"), (7, "overcurrent")])
+def test_a_trip_survives_a_reboot(c, stored, cause):
+    c("init", stored=True, mode=ON)
+    c("trip", cause=cause)
+    s = c("init", stored=True, mode=ON, trip=stored)  # the reboot, the stored cause handed back
+    assert (s["trip"], s["mode"], s["relay"]) == (cause, "on", False)
+    assert c("bench", on=True)["result"] == "tripped"
+    s = c("press")
+    assert (s["trip"], s["mode"], s["relay"]) == (None, "off", False)
+
+
+def test_shutdown_holds_the_relay_open(c):
+    c("init", stored=True, mode=ON)
+    assert c("tick")["relay"] is True
+    assert c("shutdown")["relay"] is False
+    assert c("bench", on=True)["relay"] is False
+    assert c("press")["relay"] is False  # press -> off -> auto; nothing re-closes it
+    assert c("press")["relay"] is False
 
 
 def test_bench_off_is_allowed_while_tripped(c):
@@ -315,7 +348,8 @@ def test_messages(tool):
     lines = tool("petro-fleetcmd", "messages")().splitlines()
     assert lines[0] == "ok"
     assert "set mode auto" in lines[1]
-    assert "press the button" in lines[2]
+    assert "only a press" in lines[2]
     assert lines[3] == "out of range"
-    assert lines[4] == "?"
-    assert lines[5] == "? error"
+    assert "only off can be set remotely" in lines[4]
+    assert lines[5] == "?"
+    assert lines[6] == "? error"

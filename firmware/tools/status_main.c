@@ -50,6 +50,7 @@ int main(int argc, char **argv)
         v.relay = flag(in, "relay");
         v.remote = flag(in, "remote");
         v.bench = flag(in, "bench");
+        v.meter_ok = flag(in, "meter_ok");
         v.cycle_n = (uint32_t)num(in, "cycle_n", &v.cycle_active);
         v.cycle_done = (uint32_t)num(in, "cycle_done", NULL);
         v.volts = num(in, "volts", &v.have_meter);
