@@ -40,6 +40,22 @@
       "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"
     }
   ],
+  "tooling_holes": [
+    {
+      "ref": "H5",
+      "x": 5.0,
+      "y": 66.0,
+      "diameter": 1.152,
+      "note": "JLCPCB's assembly tooling hole: not for a screw"
+    },
+    {
+      "ref": "H6",
+      "x": 116.5,
+      "y": 64.0,
+      "diameter": 1.152,
+      "note": "JLCPCB's assembly tooling hole: not for a screw"
+    }
+  ],
   "led": {
     "x": 58.5,
     "y": 44.5,

@@ -313,6 +313,8 @@ def build_petro():
     # the screw at mains potential. All copper keeps 3 mm from them (rules: copper to mounting holes).
     for ref in ("H1", "H2", "H3", "H4"):
         part("MHN", ref)
+    for ref in TOOLING:
+        part("TOOLING", ref)
 
     # Test holes for push-in probe loops: bench use only (a 5 V supply with mains disconnected, or
     # a differential probe).
@@ -354,6 +356,11 @@ CORNER_R = 4.0                          # mm: rounded corners, centred on the mo
 COPPER_OZ = 1
 MAINS_Y, SELV_Y = 38.5, 41.0            # the live chain's lower edge; the low-voltage side's top
 HOLES = {"H1": (4.0, 4.0), "H2": (116.0, 4.0), "H3": (4.0, H - 4.0), "H4": (116.0, H - 4.0)}
+# JLCPCB's assembly tooling holes, ours ("Added by Customer"): 1.152 mm unplated, as far apart as
+# the board allows while staying in empty ground, well clear of the mains copper (two of the
+# corners are mains, where JLCPCB would otherwise put its own)
+TOOLING = {"H5": (5.0, H - 14.0), "H6": (116.5, H - 16.0)}
+TOOLING_DRILL = 1.152
 F1_CLIP_PITCH = 34.21 - 7.62            # clip centres for a 1 1/4 in fuse (Littelfuse "A")
 F1_Y = 32.0
 LED_RING = 2.0                          # mm of clear board round the LED (the light pipe's flange)
@@ -411,6 +418,7 @@ AT = {
     # the NTC beside the relay's left-hand side, above the module
     "TH1": (58.5, 55.5, 90), "R25": (60.1, 55.5, 90), "C25": (59.3, 58.4, 0),
     **{ref: (x, y, 0) for ref, (x, y) in HOLES.items()},
+    **{ref: (x, y, 0) for ref, (x, y) in TOOLING.items()},
     # test holes (TEST_HOLES): three rows in the open ground left of the 5 V converter, 5 mm
     # apart and on a 3.2 mm pitch so each hole's label fits above it, on both sides
     **{f"TP{7 + k}": (TP_X + TP_PITCH * k, TP_ROWS[0], 0) for k in range(3)},
@@ -553,6 +561,7 @@ def divider_tracks(c, p):
 
 HV_W, SW_W, KELVIN_W = 0.5, 0.6, 0.25
 KELVIN_VIA = (0.6, 0.3)
+SHUNT_KEEPOUT = (24.5, 3.0, 37.5, 10.0)    # x0, y0, x1, y1: F.Cu, the neutral pours round RS1
 
 
 def _route(net, layer, width, *pts):
@@ -604,14 +613,21 @@ def kelvin_route(c, p):
     t = _route("GND", "F.Cu", KELVIN_W, (gx, gy), gv)
     t += _route("GND", "B.Cu", KELVIN_W, gv, (gx, 11.2))
     t += _route("SENSE", "F.Cu", KELVIN_W, (sx, sy), sv)
-    t += _route("SENSE", "B.Cu", KELVIN_W, sv, (sv[0], 11.2))
+    t += _route("SENSE", "B.Cu", KELVIN_W, sv, (sv[0], 10.4), (sv[0], 11.2))
     # ... and on into R10's sense pad (the lower one, between IBP above it and C15's ground below,
     # where the router found no room for a via): a via in the gap between R10 and R11, then F.Cu.
     (rx, ry), (nx, _) = pad_xy(c, p, "R10", "1"), pad_xy(c, p, "R11", "1")
     end = (round((rx + nx) / 2, 3), ry)
     t += _route("SENSE", "B.Cu", KELVIN_W, (sv[0], 11.2), (end[0], 11.2), end)
     t += _route("SENSE", "F.Cu", KELVIN_W, end, (rx, ry))
-    return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA), Via("SENSE", *end, *KELVIN_VIA)]
+    # ... and R8's: off the bottom-layer run at y 10.4 (under the top neutral, where the router is
+    # kept out), a via between R8 and R9, then F.Cu into R8's sense pad
+    (ax, ay), (bx, _) = pad_xy(c, p, "R8", "1"), pad_xy(c, p, "R9", "1")
+    end8 = (round((ax + bx) / 2, 3), ay)
+    t += _route("SENSE", "B.Cu", KELVIN_W, (sv[0], 10.4), (end8[0], 10.4), end8)
+    t += _route("SENSE", "F.Cu", KELVIN_W, end8, (ax, ay))
+    return t, [Via("GND", *gv, *KELVIN_VIA), Via("SENSE", *sv, *KELVIN_VIA), Via("SENSE", *end, *KELVIN_VIA),
+               Via("SENSE", *end8, *KELVIN_VIA)]
 
 
 def usb_ties(c, p):
@@ -674,6 +690,12 @@ def lv_keepouts(c, p, margin=0.1):
         out.append((t.layer, min(t.x1, t.x2) - s, min(t.y1, t.y2) - s, max(t.x1, t.x2) + s, max(t.y1, t.y2) + s))
     hole = 3.2 / 2 + 3.0 + margin
     boxes = [(x - hole, y - hole, x + hole, y + hole) for x, y in HOLES.values()]
+    th = TOOLING_DRILL / 2 + 3.0 + margin
+    boxes += [(x - th, y - th, x + th, y + th) for x, y in TOOLING.values()]
+    # The top layer's neutral round the shunt, where only the hand-routed Kelvin pair belongs: the
+    # router once ran SENSE out of the sense via across N_IN and the pour's clearance round it cut
+    # N_IN off from the shunt. (It reaches R8 from the pair's bottom-layer run below instead.)
+    out.append(("F.Cu", *SHUNT_KEEPOUT))
     for v in stitch_vias():                     # the mains pours' stitching vias
         s = r.spacing(GROUPS[v.net], r.rest) + v.size / 2 + margin
         boxes.append((v.x - s, v.y - s, v.x + s, v.y + s))
@@ -784,7 +806,7 @@ def silk(c, p):
 
 # Parts without a reference label: the test holes and debug pads (labelled with their signals)
 # and the mounting holes.
-UNLABELLED = tuple(TEST_HOLES) + ("TP1", "H1", "H2", "H3", "H4")
+UNLABELLED = tuple(TEST_HOLES) + ("TP1", "H1", "H2", "H3", "H4") + tuple(TOOLING)
 
 
 def ref_labels(c, p, texts):
@@ -868,6 +890,8 @@ def case_interface(c, p):
         "holes": [{"ref": r, "x": x, "y": y, "diameter": 3.2, "plated": False,
                    "note": "unplated; copper keeps 3 mm off, but use nylon screws or keep metal ones inside"}
                   for r, (x, y) in HOLES.items()],
+        "tooling_holes": [{"ref": r, "x": x, "y": y, "diameter": TOOLING_DRILL,
+                           "note": "JLCPCB's assembly tooling hole: not for a screw"} for r, (x, y) in TOOLING.items()],
         "led": {"x": AT["D1"][0], "y": AT["D1"][1], "part": "SK6812-EC20", "body": box("D1"),
                 "flange_ring": [round(v, 3) for v in led_ring()],
                 "note": f"{LED_RING} mm clear board round the LED for the light pipe's flange"},

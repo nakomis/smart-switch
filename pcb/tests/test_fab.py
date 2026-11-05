@@ -109,18 +109,18 @@ def test_footprint_origins_are_pad_pattern_centres():
     for key, p in PARTS.items():
         pads = [q for q in p.footprint.pads if q.number]
         if not pads:
-            continue                       # the unplated mounting hole: no numbered pad, not in the CPL
+            continue                       # the unplated mounting and tooling holes: no numbered pad, not in the CPL
         xs, ys = [q.x for q in pads], [q.y for q in pads]
         assert abs((min(xs) + max(xs)) / 2) < 0.05 and abs((min(ys) + max(ys)) / 2) < 0.05, key
         checked += 1
-    assert checked == len(PARTS) - 1
+    assert checked == len(PARTS) - 2
 
 
 def test_parts_without_numbered_pads_are_never_assembled():
-    """MHN (unplated hole) has only an unnumbered NPTH pad, so the origin test cannot apply; it
-    has no LCSC number and so is in neither the BOM nor the CPL."""
+    """MHN and TOOLING (unplated holes) have only an unnumbered NPTH pad, so the origin test
+    cannot apply; they have no LCSC number and so are in neither the BOM nor the CPL."""
     bare = [k for k, p in PARTS.items() if not [q for q in p.footprint.pads if q.number]]
-    assert bare == ["MHN"]
+    assert bare == ["MHN", "TOOLING"]
     assert all(PARTS[k].lcsc is None for k in bare)
 
 

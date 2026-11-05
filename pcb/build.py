@@ -77,8 +77,10 @@ def lv_route(c, p, tmp, passes, hand_tracks, hand_vias, keep):
     GND is routed as a net as well as poured: otherwise the signal tracks can wall a pocket of
     pour off on both layers (it happened between U1 and J4 on rev A). Freerouting lets a track
     leave a pin in any direction, out of its area too; it does so between the module's GND pads
-    along the board edge, and those runs (GND only, which the pour joins anyway) are dropped. DRC
-    then shows if anything is left unjoined, or too near another potential."""
+    along the board edge, and out of the shunt's GND pad into the neutral pour (whose clearance
+    from it then cut N_IN off from the shunt), and those runs (GND only, which the pour joins
+    anyway) are dropped. DRC then shows if anything is left unjoined, or too near another
+    potential."""
     return route_pass(c, p, tmp / "lv", passes, lv_nets(c), "GND", pb.lv_area(), keep, hand_tracks, hand_vias)
 
 
@@ -90,8 +92,19 @@ def route_pass(c, p, work, passes, nets, ground, area, keep, hand_tracks, hand_v
                  fixed_vias=fixed_v, fixed_tracks=fixed_t, layer_keepouts=keep, skip_nets=skip)
     x0, y0, x1, y1 = p.outline
     on_board = lambda x, y, m=0.45: x0 + m <= x <= x1 - m and y0 + m <= y <= y1 - m
-    tracks = [x for x in t if x.net in nets and (x.net != ground or (on_board(x.x1, x.y1) and on_board(x.x2, x.y2)))]
-    vias = [x for x in v if x.net in nets and (x.net != ground or on_board(x.x, x.y, x.size / 2 + 0.3))]
+    # Nothing the router lays may sit in a mains pour (on that pour's layer): the pour's clearance
+    # round it can cut the pour apart, as a SENSE run across N_IN once cut it off from the shunt.
+    # Such runs belong to the hand routing; DRC reports anything their loss leaves unjoined.
+    pours = [(z.layers, z.pts) for z in pb.mains_zones()]
+    in_pour = lambda x, y, layers: any(set(layers) & set(zl) and pb._in_poly(x, y, pts) for zl, pts in pours)
+    tracks = [x for x in t if x.net in nets and not in_pour(x.x1, x.y1, [x.layer]) and not in_pour(x.x2, x.y2, [x.layer])
+              and (x.net != ground or (on_board(x.x1, x.y1) and on_board(x.x2, x.y2)))]
+    vias = [x for x in v if x.net in nets and not in_pour(x.x, x.y, ("F.Cu", "B.Cu"))
+            and (x.net != ground or on_board(x.x, x.y, x.size / 2 + 0.3))]
+    dropped = [x for x in t if x.net in nets and x.net != ground and x not in tracks]
+    if dropped:
+        print(f"dropped {len(dropped)} router segments in mains pours: "
+              + ", ".join(f"{x.net} {x.layer} ({x.x1:.1f},{x.y1:.1f})" for x in dropped[:8]))
     return tracks, vias
 
 

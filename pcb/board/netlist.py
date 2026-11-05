@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from board.parts import part
 
 PREFIX = {"SW": "SW", "TOGGLE": "SW", "LED": "D", "DIODE": "D", "TVS": "D", "JST5": "J", "TERM": "J",
-          "RELAY": "K", "FET": "Q", "PTC": "F", "DEBUG": "TP", "MH": "H", "MHN": "H",
+          "RELAY": "K", "FET": "Q", "PTC": "F", "DEBUG": "TP", "MH": "H", "MHN": "H", "TOOLING": "H",
           "RECT": "D", "FASTREC": "D", "L1MF": "L", "L680U": "L", "L3U3": "L", "RFUSE": "R",
           "BEAD": "FB"}
 

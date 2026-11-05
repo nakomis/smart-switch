@@ -117,6 +117,8 @@ _TABLE = {
     "DEBUG": ("Debug pads", None, "DebugPads_1x5_P2.54", None, False, 0),
     "MH": ("M3 hole", None, "MountingHole_M3_3.2mm_Pad6", None, False, 0),
     "MHN": ("M3 hole, unplated", None, "MountingHole_M3_3.2mm_NPTH", None, False, 0),
+    # JLCPCB's assembly tooling hole, placed by us ("Added by Customer") so it lands clear of mains copper
+    "TOOLING": ("tooling hole", None, "ToolingHole_1.152mm_NPTH", None, False, 0),
     # A bare plated hole for Martin's push-in ceramic test loops (inserted, never soldered).
     "TESTHOLE": ("test hole", None, "TestHole_0.8mm", None, False, 0),
 }

@@ -138,8 +138,9 @@ def test_no_keepout_covers_a_pad_its_router_must_reach():
     own_boxes = [list(_pad_box(P, r, q)) for r in pb.OWN_LEADS
                  for q in C.instances[r].part.footprint.pads if C.net_of(r, q.number) == "GND"]
     keep = pb.lv_keepouts(C, P)
+    rs1 = [list(_pad_box(P, "RS1", q)) for q in C.instances["RS1"].part.footprint.pads]   # the Kelvin pair is by hand
     for net, *b in pad_boxes(C, P):
-        if net is None or net in pb.GROUPS or net.startswith("NC_") or b in own_boxes:
+        if net is None or net in pb.GROUPS or net.startswith("NC_") or b in own_boxes or b in rs1:
             continue
         for _, x0, y0, x1, y1 in keep:
             gap = math.hypot(max(x0 - b[2], 0, b[0] - x1), max(y0 - b[3], 0, b[1] - y1))
@@ -197,11 +198,13 @@ def test_the_router_area_holds_j3_and_its_resistors_whole():
                 assert pb._in_poly(x, y, pb.lv_area()), (ref, q.number)
 
 
-def test_the_kelvin_sense_line_reaches_r10_by_hand():
-    """Via between R10 and R11, then F.Cu into R10's sense pad: the router found no room there."""
+def test_the_kelvin_sense_line_reaches_r8_and_r10_by_hand():
+    """Vias between R8 and R9 and between R10 and R11, then F.Cu into each sense pad: the router
+    found no room at R10, and its only way to R8 was across the top neutral."""
     tracks, vias = pb.kelvin_route(C, P)
     sense = [t for t in tracks if t.net == "SENSE"]
-    assert any(abs(t.x2 - pb.pad_xy(C, P, "R10", "1")[0]) < 1e-6 and t.layer == "F.Cu" for t in sense)
+    for r in ("R8", "R10"):
+        assert any(abs(t.x2 - pb.pad_xy(C, P, r, "1")[0]) < 1e-6 and t.layer == "F.Cu" for t in sense), r
     others = [(net, b) for net, *b in pad_boxes(C, P) if net not in ("SENSE", None)]
     for v in [v for v in vias if v.net == "SENSE"]:
         for net, b in others:
@@ -211,6 +214,15 @@ def test_the_kelvin_sense_line_reaches_r10_by_hand():
         for net, b in others:
             if net not in pb.GROUPS:
                 assert _seg_box_dist(t, b) >= 0.26 or t.layer == "B.Cu", (t, net, b)
+
+
+def test_the_router_keeps_off_the_top_neutral_round_the_shunt():
+    """Only the hand-routed Kelvin pair may cross the top layer's neutral round RS1."""
+    x0, y0, x1, y1 = pb.SHUNT_KEEPOUT
+    assert ("F.Cu", x0, y0, x1, y1) in pb.lv_keepouts(C, P)
+    for ref in ("R8", "R9", "R10", "R11"):                       # the sense filters stay reachable
+        for q in C.instances[ref].part.footprint.pads:
+            assert pb.pad_xy(C, P, ref, q.number)[1] > y1 + 1.0, ref
 
 
 def test_the_usb_protections_flow_through_pins_are_tied_by_hand():

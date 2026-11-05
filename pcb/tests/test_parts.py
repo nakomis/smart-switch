@@ -13,7 +13,7 @@ ESPRESSIF_GND = {1, 2, 42, 43} | set(range(46, 61))
 def test_every_assembled_part_has_footprint_and_lcsc():
     for key, p in PARTS.items():
         assert p.footprint.pads, key
-        if key in ("DEBUG", "MH", "MHN", "TESTHOLE"):
+        if key in ("DEBUG", "MH", "MHN", "TESTHOLE", "TOOLING"):
             assert p.lcsc is None, key            # board-only: never in the BOM or CPL
         else:
             assert p.lcsc.startswith("C"), key

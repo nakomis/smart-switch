@@ -107,16 +107,18 @@ def test_pads_of_different_parts_keep_the_matrix_spacing():
     assert bad == []
 
 
-def test_all_copper_keeps_3mm_from_the_mounting_holes():
-    for h, (hx, hy) in pb.HOLES.items():
-        assert C.instances[h].part.key == "MHN"
-        r = 3.2 / 2 + MAINS_EDGE
-        for ref in C.instances:
-            if ref == h:
-                continue
-            for net, b in _pads(ref):
-                d = math.hypot(max(b[0] - hx, 0, hx - b[2]), max(b[1] - hy, 0, hy - b[3]))
-                assert d >= r - 1e-6, (h, ref, net, round(d, 2))
+@pytest.mark.parametrize("h", sorted(pb.HOLES) + sorted(pb.TOOLING))
+def test_all_copper_keeps_3mm_from_the_mounting_and_tooling_holes(h):
+    hx, hy = {**pb.HOLES, **pb.TOOLING}[h]
+    tooling = h in pb.TOOLING
+    assert C.instances[h].part.key == ("TOOLING" if tooling else "MHN")
+    r = (pb.TOOLING_DRILL if tooling else 3.2) / 2 + MAINS_EDGE
+    for ref in C.instances:
+        if ref == h:
+            continue
+        for net, b in _pads(ref):
+            d = math.hypot(max(b[0] - hx, 0, hx - b[2]), max(b[1] - hy, 0, hy - b[3]))
+            assert d >= r - 1e-6, (h, ref, net, round(d, 2))
 
 
 def test_mains_pads_keep_3mm_from_the_edges():
@@ -155,3 +157,15 @@ def test_j3s_pull_resistors_sit_above_their_pins():
     for ref, pin in (("R26", "7"), ("R27", "8"), ("R28", "9")):
         assert P.at[ref][0] == pytest.approx(pb.pad_xy(C, P, "J3", pin)[0]), ref
         assert _box(ref)[3] < _box("J3")[1], ref
+
+
+def test_tooling_holes_sit_in_the_low_voltage_area_far_from_the_mains_pours():
+    """JLCPCB would drill its own in the corners, two of which are mains; ours keep clear."""
+    for h, (x, y) in pb.TOOLING.items():
+        assert pb._in_poly(x, y, pb.lv_area()), h
+        for net, poly in pb.MAINS_POLYS.items():
+            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+            d = math.hypot(max(min(xs) - x, 0, x - max(xs)), max(min(ys) - y, 0, y - max(ys)))
+            assert d >= 6.0, (h, net, round(d, 2))
+    (ax, ay), (bx, by) = pb.TOOLING.values()
+    assert math.hypot(ax - bx, ay - by) > 100            # as far apart as the board allows
