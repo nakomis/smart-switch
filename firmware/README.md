@@ -69,7 +69,7 @@ On the C6's USB-Serial-JTAG (J4), prompt `petro>`:
 |---|---|
 | `info` | Firmware version, MAC, chip revision, reset reason, uptime, the mode (none yet), the relay, the trips (none yet), which `prov` keys are present |
 | `relay on` / `relay off` | Drives the relay |
-| `relay cycle <n> <on_ms> <off_ms>` | Cycles it n times (1–10000, 50–60000 ms each), leaving it off |
+| `relay cycle <n> <on_ms> <off_ms>` | Cycles it n times (1–10000, 50–60000 ms each, an hour at most in all), leaving it off. Any key stops it, relay off |
 | `led <r> <g> <b>` | Sets the LED (0–255 each) |
 | `button` | Logs SW1's presses and releases for 10 s (20 ms debounce) |
 | `bl` | Three full-packet reads of the BL0939, 0.5 s apart: whether each frame's checksum was good, then V, IA, IB, PA, PB raw and scaled, the CF counts and the chip's temperature |

@@ -23,11 +23,13 @@ typedef enum
     CONSOLE_J3,
 } console_kind_t;
 
-// relay cycle's limits: the relay is rated for far more, but 50 ms is below its operate time
-// plus bounce, and Gate 4 needs 500 cycles.
+// relay cycle's limits: 50 ms is the shortest on or off time, comfortably above the relay's operate
+// time plus bounce, so every cycle really switches; Gate 4 needs 500 cycles. The whole run
+// (n x (on_ms + off_ms)) is capped at an hour, because the console is busy while it runs.
 #define CONSOLE_CYCLE_MAX_N 10000
 #define CONSOLE_CYCLE_MIN_MS 50
 #define CONSOLE_CYCLE_MAX_MS 60000
+#define CONSOLE_CYCLE_MAX_TOTAL_MS 3600000u
 
 typedef struct
 {

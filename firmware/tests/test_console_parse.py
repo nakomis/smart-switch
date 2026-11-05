@@ -24,8 +24,20 @@ def test_relay_cycle(parse):
 
 
 def test_relay_cycle_limits(parse):
-    assert parse("relay cycle 10000 50 60000")["ok"]
-    assert parse("relay cycle 1 60000 50")["ok"]
+    assert parse("relay cycle 10000 50 50")["ok"]
+    assert parse("relay cycle 1 60000 60000")["ok"]
+    assert parse("relay cycle 10000 180 180")["ok"]  # exactly an hour
+
+
+@pytest.mark.parametrize("line", [
+    "relay cycle 10000 60000 60000",  # about 14 days
+    "relay cycle 10000 180 181",      # an hour and 10 s
+    "relay cycle 31 60000 60000",     # 62 minutes
+])
+def test_relay_cycle_over_an_hour_is_refused(parse, line):
+    r = parse(line)
+    assert r["ok"] is False
+    assert "at most 1 h" in r["error"]
 
 
 @pytest.mark.parametrize("line,why", [

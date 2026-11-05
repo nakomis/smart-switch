@@ -12,6 +12,7 @@
 #include "bl0939.h"
 #include "console_parse.h"
 #include "driver/i2c_master.h"
+#include "driver/usb_serial_jtag.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_console.h"
@@ -101,19 +102,50 @@ static void cmd_info(void)
     printf("  (+ present, - missing; values never shown)\n");
 }
 
+// True once a key has arrived on the console (and swallows it). Non-blocking: the REPL's
+// USB-Serial-JTAG driver is read directly, with no wait.
+static bool key_pressed(void)
+{
+    uint8_t c;
+    return usb_serial_jtag_is_driver_installed() && usb_serial_jtag_read_bytes(&c, 1, 0) > 0;
+}
+
+// Waits ms, checking for a key every 20 ms. True if one came (the wait then ends early).
+static bool wait_or_key(uint32_t ms)
+{
+    while (ms > 0)
+    {
+        uint32_t step = ms < 20 ? ms : 20;
+        vTaskDelay(pdMS_TO_TICKS(step));
+        ms -= step;
+        if (key_pressed())
+            return true;
+    }
+    return false;
+}
+
 static void cmd_relay_cycle(const console_cmd_t *c)
 {
-    printf("cycling %" PRIu32 " times, %" PRIu32 " ms on, %" PRIu32 " ms off\n", c->cycle.n,
-           c->cycle.on_ms, c->cycle.off_ms);
-    for (uint32_t i = 1; i <= c->cycle.n; i++)
+    printf("cycling %" PRIu32 " times, %" PRIu32 " ms on, %" PRIu32 " ms off (any key stops)\n",
+           c->cycle.n, c->cycle.on_ms, c->cycle.off_ms);
+    while (key_pressed())  // drop anything typed ahead
+        ;
+    uint32_t done = 0;
+    bool stopped = false;
+    while (done < c->cycle.n && !stopped)
     {
         board_relay(true);
-        vTaskDelay(pdMS_TO_TICKS(c->cycle.on_ms));
+        stopped = wait_or_key(c->cycle.on_ms);
         board_relay(false);
-        vTaskDelay(pdMS_TO_TICKS(c->cycle.off_ms));
-        if (i % 50 == 0 || i == c->cycle.n)
-            printf("  %" PRIu32 "/%" PRIu32 "\n", i, c->cycle.n);
+        if (!stopped)
+            stopped = wait_or_key(c->cycle.off_ms);
+        done++;
+        if (done % 50 == 0 || done == c->cycle.n)
+            printf("  %" PRIu32 "/%" PRIu32 "\n", done, c->cycle.n);
     }
+    board_relay(false);
+    if (stopped)
+        printf("stopped by a key during cycle %" PRIu32 "/%" PRIu32 "\n", done, c->cycle.n);
     printf("relay off\n");
 }
 
@@ -209,28 +241,51 @@ static void cmd_ntc(void)
 
 static esp_err_t wifi_start(void)
 {
-    static bool started;
-    if (started)
-        return ESP_OK;
-    esp_err_t err = esp_netif_init();
-    if (err == ESP_OK)
-        err = esp_event_loop_create_default();
-    if (err == ESP_OK || err == ESP_ERR_INVALID_STATE)
+    // Each step once, so a retry after a failure only does what's still missing (creating the
+    // default STA netif twice asserts).
+    static bool netif_ready, loop_ready, sta_created, wifi_inited, wifi_set, started;
+    esp_err_t err;
+    if (!netif_ready)
     {
-        esp_netif_create_default_wifi_sta();
-        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-        err = esp_wifi_init(&cfg);
+        if ((err = esp_netif_init()) != ESP_OK)
+            return err;
+        netif_ready = true;
     }
-    if (err == ESP_OK)
-        err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
-    if (err == ESP_OK)
-        err = esp_wifi_set_mode(WIFI_MODE_STA);
-    if (err == ESP_OK)
-        err = esp_wifi_set_country_code("GB", true);  // channels 1-13
-    if (err == ESP_OK)
-        err = esp_wifi_start();
-    started = err == ESP_OK;
-    return err;
+    if (!loop_ready)
+    {
+        err = esp_event_loop_create_default();
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)  // INVALID_STATE: it already exists
+            return err;
+        loop_ready = true;
+    }
+    if (!sta_created)
+    {
+        if (esp_netif_create_default_wifi_sta() == NULL)
+            return ESP_FAIL;
+        sta_created = true;
+    }
+    if (!wifi_inited)
+    {
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        if ((err = esp_wifi_init(&cfg)) != ESP_OK)
+            return err;
+        wifi_inited = true;
+    }
+    if (!wifi_set)
+    {
+        if ((err = esp_wifi_set_storage(WIFI_STORAGE_RAM)) != ESP_OK ||
+            (err = esp_wifi_set_mode(WIFI_MODE_STA)) != ESP_OK ||
+            (err = esp_wifi_set_country_code("GB", true)) != ESP_OK)  // channels 1-13
+            return err;
+        wifi_set = true;
+    }
+    if (!started)
+    {
+        if ((err = esp_wifi_start()) != ESP_OK)
+            return err;
+        started = true;
+    }
+    return ESP_OK;
 }
 
 static void cmd_wifi_scan(void)

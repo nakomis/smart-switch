@@ -8,7 +8,7 @@
 const char *const CONSOLE_USAGE[] = {
     "info                              version, MAC, chip, reset reason, mode, trips, prov keys",
     "relay on | relay off              drive the relay",
-    "relay cycle <n> <on_ms> <off_ms>  cycle it n times (n 1-10000, 50-60000 ms)",
+    "relay cycle <n> <on_ms> <off_ms>  cycle it n times (n 1-10000, 50-60000 ms, 1 h at most; any key stops it)",
     "led <r> <g> <b>                   set the LED (0-255 each)",
     "button                            log presses and releases for 10 s",
     "bl                                read the BL0939 (raw and scaled)",
@@ -119,6 +119,9 @@ bool console_parse_argv(int argc, const char *const *argv, console_cmd_t *out, c
             if (!number(argv[4], CONSOLE_CYCLE_MIN_MS, CONSOLE_CYCLE_MAX_MS, &out->cycle.off_ms))
                 return fail(err, err_len, "relay cycle: off_ms must be %d-%d", CONSOLE_CYCLE_MIN_MS,
                             CONSOLE_CYCLE_MAX_MS);
+            uint64_t total = (uint64_t)out->cycle.n * (out->cycle.on_ms + out->cycle.off_ms);
+            if (total > CONSOLE_CYCLE_MAX_TOTAL_MS)
+                return fail(err, err_len, "relay cycle: n x (on_ms + off_ms) must be at most 1 h");
             out->kind = CONSOLE_RELAY_CYCLE;
             return true;
         }
