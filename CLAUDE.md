@@ -31,6 +31,7 @@ reasoning is in `docs/DESIGN.md`.
 | Light sealing | The case is **opaque**, and no light may leak through cracks or joins. The light pipe runs through an opaque tunnel/boss whose **flange sits around the LED on the board**, optionally glued down with opaque glue or enamel paint. So the board keeps a **2 mm clear perimeter around the LED** (no parts, and nothing taller than the mask) for the flange to seat on; the case and board designs share the LED's position and the flange footprint |
 | Assembly | JLCPCB Economic, 1 oz copper. The mains parts (J1, J2, F1's clips, F2's holder, K1, RV1, R1) are **hand-fit**: bought from authorised distributors (`docs/DESIGN.md` §3.2) and soldered by Martin (`pcb/out/petro/hand-fit.csv`) |
 | Integration | MQTT/Fleet, plus Alexa Smart Home on day one (nakostat's Alexa Lambda pattern). No Home Assistant yet |
+| Fuses as built | F1 and F2 bridged with solid copper links (Martin, 5 Nov 2026): the plug's 13 A fuse and R1 protect instead. Never foil. A 500 V insulation test of the case was also declined: never handle the unit plugged in (`docs/testing/README.md`) |
 | Earth | Does not go through the PCB: a Wago 221 or crimp inside the case. The mounting holes are unplated, so the screws aren't live |
 
 ## Mains design rules (non-negotiable)
@@ -53,13 +54,20 @@ reasoning is in `docs/DESIGN.md`.
 
 1. Design review before ordering (DRC, creepage, fuse coordination, relay ratings,
    `superpowers:requesting-code-review`, `cabal` opinions).
-2. Bench, USB only, mains unplugged.
-3. First mains power-up: RCD-protected socket, unit closed in its case, a lamp load.
+2. Bench, USB only, mains unplugged. 2b: the supply from a bench DC supply (≤ 60 V, F2 out).
+3. First mains power-up: RCD-protected socket, unit closed in its case, a dim bulb, then a lamp
+   load.
 4. Load and thermal: 10 A for ≥ 1 h (< 30 °C rise, nothing above ~70 °C), then hundreds of
    full-load relay cycles.
 
 **Martin does all mains work himself; Claude writes the procedures.** Never press order or pay at
 a fab: fill the baskets and stop.
+
+The procedures and results are in `docs/testing/` (Gate 1 passed 5 Nov 2026). Its README lists
+what the gates need from the firmware, the USB console commands and the `petro_*` metrics: they
+are PETRO-3's acceptance tests. Devices report to Fleet **and VictoriaMetrics** (through vmauth,
+with a per-device credential in `prov`, as tinycrypt). Progress from order to Go Live:
+https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land).
 
 ## Repository layout
 
