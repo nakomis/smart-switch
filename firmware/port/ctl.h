@@ -18,8 +18,8 @@
 // a press of the button or Fleet's clear_trip (ctl_clear_trip), and clearing always leaves the
 // relay off: the mode is kept, except that on becomes off (on would close the relay; off is the
 // one mode Fleet may set anyway). In auto, auto's wish is reset to off. A clear is refused while
-// the caller says it's blocked (ctl_set_clear_blocked: the NTC within the hysteresis of its limit,
-// or the BL0939's over-current output still active).
+// the caller says it's blocked (prot_clear_blocked: the NTC within the hysteresis of its limit, or
+// the current still over a threshold).
 //
 // The sensors (ctl_set_sensors_ok, from prot_healthy): while the meter isn't healthy, every
 // command that would close the relay (remote relay on and cycle, the bench's relay on and cycle) is

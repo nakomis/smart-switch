@@ -203,6 +203,13 @@ def test_a_clear_is_blocked_within_5_c_of_the_limit(p, c, blocked):
         assert p("tick", latched=cause)["blocked"] is blocked, cause
 
 
+def test_a_clear_is_blocked_while_the_current_still_reads_over(p):
+    healthy(p)
+    p("frame", amps=11, now=0)
+    assert p("tick", now=2000, latched="overcurrent")["blocked"] is True
+    assert p("frame", amps=0.0, now=2250, latched="overcurrent")["blocked"] is False
+
+
 def test_without_an_ntc_reading_only_an_overtemp_clear_is_blocked(p):
     p("meter", ok=True)
     assert p("tick", latched="overtemp")["blocked"] is True

@@ -343,7 +343,7 @@ const char *ctl_result_message(ctl_result r)
     case CTL_ERR_SENSORS:
         return "refused: the meter isn't healthy (BL0939 or NTC), so the relay stays off";
     case CTL_ERR_CLEAR_BLOCKED:
-        return "refused: can't clear yet (the NTC is within 5 C of its limit, or OC is still active)";
+        return "refused: can't clear yet (the NTC is within 5 C of its limit, or the current is still high)";
     }
     return "?";
 }

@@ -89,7 +89,7 @@ ctl_trip_cause prot_check(const prot_t *p, bool relay_wanted, int64_t now_ms)
 
 bool prot_clear_blocked(const prot_t *p, ctl_trip_cause latched, int64_t now_ms)
 {
-    if (p->oc_active)
+    if (p->oc_active || p->amps_over)
         return true;
     if (fresh(p->have_temp, p->temp_ms, now_ms, p->cfg.stale_ms))
         return p->temp_c > p->cfg.overtemp_c - p->cfg.clear_margin_c;

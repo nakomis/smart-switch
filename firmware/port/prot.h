@@ -19,7 +19,9 @@
 // reading each within stale_ms (3 s). A trip that can't see the current or the temperature is
 // none.
 //
-// Clearing (ctl_clear_trip) is blocked while the BL0939's OC output is active, while the NTC
+// Clearing (ctl_clear_trip) is blocked while the BL0939's OC output is active, while the latest
+// frame still reads over the sustained threshold (the RMS takes most of a second to fall after
+// the relay opens), while the NTC
 // reads within clear_margin_c (5 C) of overtemp_c, and, for an over-temperature trip, while the
 // NTC can't be read at all.
 //
