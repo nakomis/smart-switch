@@ -781,12 +781,22 @@ def isolator_drops(c, p):
     return tracks, vias
 
 
+def ldo_ground(c, p):
+    """(tracks, []): U2's GND pin to its output capacitor C19's GND pad, by hand: down between
+    U2's +5V pins, across, and up past its NC pin and C19's +3V3 pad. The router left the two in
+    separate pieces of pour, walled apart on both layers by tracks."""
+    (gx, gy), (cx, cy) = pad_xy(c, p, "U2", "2"), pad_xy(c, p, "C19", "2")
+    under, side = gy + 1.1, cx - 1.2
+    return _route("GND", "F.Cu", 0.3, (gx, gy), (gx, under), (side, under), (side, cy), (cx, cy)), []
+
+
 def hand_wiring(c, p):
     """(tracks, vias) routed by hand: the divider chain, the supply's high-voltage nets, the
-    Kelvin pair, the isolators' ground drops."""
+    Kelvin pair, the isolators' ground drops, the regulator's ground."""
     kt, kv = kelvin_route(c, p)
     it, iv = isolator_drops(c, p)
-    return divider_tracks(c, p) + supply_tracks(c, p) + kt + it, kv + iv
+    lt, _ = ldo_ground(c, p)
+    return divider_tracks(c, p) + supply_tracks(c, p) + kt + it + lt, kv + iv
 
 
 # --- the low-voltage router's area -----------------------------------------------------------------

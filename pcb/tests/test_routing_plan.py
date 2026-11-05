@@ -186,6 +186,37 @@ def test_where_the_low_voltage_router_may_go_keeps_8mm_from_the_island():
                 assert not pb.in_lv(x, y, keep), (round(x, 2), round(y, 2), round(d, 2))
 
 
+def test_the_regulator_ground_is_tied_to_its_output_capacitor_by_hand():
+    """U2's GND pin to C19's GND pad, before routing: the router left them in separate pieces
+    of pour, walled apart on both layers."""
+    tracks, _ = pb.ldo_ground(C, P)
+    assert _connected_pads("GND", tracks, [("U2", "2"), ("C19", "2")])
+    others = [(net, b) for net, *b in pad_boxes(C, P) if net not in ("GND", None)]
+    for t in tracks:
+        for net, b in others:
+            assert _seg_box_dist(t, b) >= 0.26, (net, b)          # the router's power clearance
+
+
+def _connected_pads(net, tracks, pads):
+    from board.rules import _pad_box
+    boxes = [_pad_box(P, r, next(q for q in C.instances[r].part.footprint.pads if q.number == n)) for r, n in pads]
+    pts = {(round(x, 3), round(y, 3)) for t in tracks for x, y in ((t.x1, t.y1), (t.x2, t.y2))}
+    ends = lambda b: [pt for pt in pts if b[0] <= pt[0] <= b[2] and b[1] <= pt[1] <= b[3]]
+    if not all(ends(b) for b in boxes):
+        return False
+    # the tracks form one chain: union by shared end points
+    par = {pt: pt for pt in pts}
+
+    def f(a):
+        while par[a] != a:
+            a = par[a]
+        return a
+    for t in tracks:
+        a, b = (round(t.x1, 3), round(t.y1, 3)), (round(t.x2, 3), round(t.y2, 3))
+        par[f(a)] = f(b)
+    return len({f(ends(b)[0]) for b in boxes}) == 1
+
+
 def test_every_isolator_ground_pin_has_a_via_past_its_end():
     """So the router has to join it to its ground: the signal tracks to the neighbouring pins
     otherwise fence a pin's bit of pour off with no via under it."""
