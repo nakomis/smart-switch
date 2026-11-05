@@ -85,3 +85,23 @@ def test_drops_and_stitching_keep_their_copper_off_the_board_edge():
     assert vias
     for v in vias:
         assert x0 + m - 1e-9 <= v.x <= x1 - m + 1e-9 and y0 + m - 1e-9 <= v.y <= y1 - m + 1e-9, (v.x, v.y)
+
+
+# --- orphan pour pieces: a via where a piece has none -----------------------------------------
+def test_orphan_vias_stitch_a_front_piece_with_no_via_to_the_back_pour():
+    from board.gnd import orphan_vias
+    front = [[(0, 0), (4, 0), (4, 4), (0, 4)], [(10, 0), (20, 0), (20, 10), (10, 10)]]
+    back = [[(-5, -5), (30, -5), (30, 30), (-5, 30)]]
+    have = [Via("GND", 15.0, 5.0)]                                  # the big front piece has one
+    new = orphan_vias({"F.Cu": front, "B.Cu": back}, have, [], "GND")
+    assert len(new) == 1 and new[0].net == "GND"
+    v = new[0]
+    assert 0.65 <= v.x <= 3.35 and 0.65 <= v.y <= 3.35              # inside the small piece, room round it
+
+
+def test_orphan_vias_skip_pieces_with_a_through_hole_pad_or_no_back_pour_under_them():
+    from board.gnd import orphan_vias
+    front = [[(0, 0), (4, 0), (4, 4), (0, 4)], [(10, 0), (14, 0), (14, 4), (10, 4)]]
+    back = [[(9, -1), (15, -1), (15, 5), (9, 5)]]                   # only under the second
+    new = orphan_vias({"F.Cu": front, "B.Cu": back}, [], [(12.0, 2.0)], "GND")   # ...which has a pad
+    assert new == []

@@ -29,8 +29,8 @@ from pathlib import Path
 from board import gnd
 from board.dsn import ROUTER_MARGIN
 from board import petro_board as pb
-from board.checks import pour_problems
-from board.cleanup import prune
+from board.checks import filled, pour_problems
+from board.cleanup import pad_shapes, prune
 from board.fab import export_step, fab, write_bom, write_bom_pcbway, write_cpl
 from board.kicad_pcb import PRO, write_board
 from board.netlist import check
@@ -160,12 +160,30 @@ def main():
     dru, classes, patterns = netclasses()
     board = out / f"{STEM}.kicad_pcb"
     notes, rects = pb.fab_notes()
-    write_board(c, p, board, tracks, vias + pb.stitch_vias(), layers=LAYERS, mask=MASK, silkscreen=SILK,
-                slots=pb.slots(), zones=pb.mains_zones() + pb.island_zones(), dru=dru,
-                netclasses=classes, netclass_patterns=patterns, plane_pts=pb.gnd_pts(),
-                pad_extra=pb.pad_extra(c), silk=pb.silk(c, p) + notes, user_rects=rects,
-                lines=(), hide_refs=set(c.instances), silk_avoid=pb.silk_avoid(c, p))
-    d = drc(board, out)
+
+    def write(vias):
+        write_board(c, p, board, tracks, vias + pb.stitch_vias(), layers=LAYERS, mask=MASK, silkscreen=SILK,
+                    slots=pb.slots(), zones=pb.mains_zones() + pb.island_zones(), dru=dru,
+                    netclasses=classes, netclass_patterns=patterns, plane_pts=pb.gnd_pts(),
+                    pad_extra=pb.pad_extra(c), silk=pb.silk(c, p) + notes, user_rects=rects,
+                    lines=(), hide_refs=set(c.instances), silk_avoid=pb.silk_avoid(c, p))
+        return drc(board, out)
+
+    d = write(vias)
+    # Pour pieces the tracks cut off with no via to the other layer: one via in each, then refill
+    # (a new via can split a piece again, so a few rounds).
+    for _ in range(3):
+        fills = filled(board)
+        new = []
+        for net in ("GND", "ISO_GND"):
+            tht = [((x0 + x1) / 2, (y0 + y1) / 2) for n, ls, x0, y0, x1, y1 in pad_shapes(c, p)
+                   if n == net and len(ls) == 2]
+            new += gnd.orphan_vias({l: fills[(net, l)] for l in ("F.Cu", "B.Cu")}, vias + new, tht, net)
+        if not new:
+            break
+        print(f"orphan pour pieces: {len(new)} vias")
+        vias = vias + new
+        d = write(vias)
     errors = [v for v in d["violations"] if v["severity"] == "error"]
     print(f"wrote {board}: {len(errors)} DRC errors {dict(Counter(v['type'] for v in errors))}, "
           f"{len(d['unconnected_items'])} unconnected")

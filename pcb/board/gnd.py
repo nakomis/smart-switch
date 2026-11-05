@@ -126,3 +126,55 @@ def stitch(circuit, placement, tracks, vias, net, inside, pitch=2.0, clear=0.5, 
             x += pitch
         y += pitch
     return out
+
+
+# --- orphan pour pieces ------------------------------------------------------------------------
+# After a fill, a piece of pour can be cut off from the rest of its layer by tracks and have no
+# via down to the other layer's pour (Petro rev B: the F.Cu GND round the isolators' ground pins,
+# which the router left to the pour). orphan_vias() puts one via in each such piece, where the
+# other layer's pour is solid under it too; the caller rewrites the board and refills.
+
+def _poly_edge_dist(x, y, poly):
+    return min(_seg_dist(x, y, *a, *b) for a, b in zip(poly, poly[1:] + poly[:1]))
+
+
+def _in_poly(x, y, poly):
+    hit = False
+    for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1]):
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            hit = not hit
+    return hit
+
+
+def orphan_vias(fills, vias, tht_pts, net, clear=0.35, step=0.25):
+    """Vias for 'net' (one per orphan piece): fills is {layer: [filled polygons]} for the net
+    on F.Cu and B.Cu; a piece is an orphan if no via of the net and no through-hole pad (tht_pts:
+    their centres) lies in it. The via goes at the point of the piece nearest its middle that is
+    at least the via's radius plus 'clear' inside both it and a piece of the other layer."""
+    size, drill = VIA
+    need = size / 2 + clear
+    mine = [(v.x, v.y) for v in vias if v.net == net]
+    out = []
+    for layer, other in (("F.Cu", "B.Cu"), ("B.Cu", "F.Cu")):
+        for poly in fills.get(layer, []):
+            if any(_in_poly(x, y, poly) for x, y in mine + list(tht_pts)):
+                continue
+            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+            cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+            best = None
+            y = min(ys)
+            while y <= max(ys):
+                x = min(xs)
+                while x <= max(xs):
+                    if _in_poly(x, y, poly) and _poly_edge_dist(x, y, poly) >= need and any(
+                            _in_poly(x, y, q) and _poly_edge_dist(x, y, q) >= need for q in fills.get(other, [])):
+                        d = math.hypot(x - cx, y - cy)
+                        if best is None or d < best[0]:
+                            best = (d, x, y)
+                    x += step
+                y += step
+            if best:
+                v = Via(net, round(best[1], 3), round(best[2], 3), size, drill)
+                out.append(v)
+                mine.append((v.x, v.y))
+    return out
