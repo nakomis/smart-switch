@@ -42,6 +42,16 @@ size_t bl0939_build_write(uint8_t reg, uint32_t value24, uint8_t out[BL0939_WRIT
 // most max_frames).
 size_t bl0939_init_frames(uint8_t out[][BL0939_WRITE_LEN], size_t max_frames, uint32_t fast_rms_ctrl);
 
+// What the start-up read-back checks (PETRO-5: the trips need all of it): user writes unlocked,
+// the mode, the temperature control (the alarms on) and both fast-RMS thresholds, each compared
+// under its mask. Returns the number of entries written (at most max).
+typedef struct
+{
+    uint8_t reg;
+    uint32_t value, mask;
+} bl0939_check_t;
+size_t bl0939_verify_list(uint32_t fast_rms_ctrl, bl0939_check_t *out, size_t max);
+
 // One register's read request: {0x55, reg}. The chip answers with 4 bytes: the 24-bit value low
 // byte first, then ~(0x55 + reg + the three bytes).
 #define BL0939_REG_REPLY_LEN 4

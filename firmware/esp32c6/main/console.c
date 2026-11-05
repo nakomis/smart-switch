@@ -73,7 +73,8 @@ static void cmd_info(void)
     printf("protect    BL0939 thresholds %s (fast RMS control 0x%04" PRIx32 "); OC %s%s; ZX %s (%" PRIu32
            " switches timed, %" PRIu32 " at once)\n",
            st.bl_configured ? "verified" : "NOT VERIFIED: relay held off", board_bl_fast_ctrl(),
-           st.oc_active ? "ACTIVE" : "idle", board_oc_held() ? ", holding the relay open" : "",
+           !board_oc_armed() ? "NOT ARMED" : st.oc_active ? "ACTIVE" : "armed, idle",
+           board_oc_held() ? ", holding the relay open" : "",
            st.zx_sync ? "in sync" : "absent (switching at once)", timed, at_once);
     if (st.have_meter)
         printf("meter      %.2f V, %.4f A, %.2f W", st.volts, st.amps, st.watts);

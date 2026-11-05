@@ -38,8 +38,9 @@ def p():
 
 
 def healthy(p, now=0, amps=0.2, c=30.0):
-    """A started meter with a fresh frame and NTC reading at now."""
+    """A started meter, the instant trip armed, a fresh frame and NTC reading at now."""
     p("meter", ok=True, now=now)
+    p("armed", on=True, now=now)
     p("frame", amps=amps, limit=10.5, now=now)
     return p("temp", c=c, now=now)
 
@@ -51,14 +52,26 @@ def test_the_defaults(p):
 
 # ---- health -------------------------------------------------------------------------------------
 
-def test_healthy_needs_the_meter_started_a_frame_and_the_ntc(p):
+def test_healthy_needs_the_meter_started_armed_a_frame_and_the_ntc(p):
     s = p("tick")
     assert (s["healthy"], s["starting"]) == (False, False)  # the BL0939 hasn't started
     p("meter", ok=True)
-    assert p("tick") == {"trip": None, "healthy": False, "starting": True, "blocked": False}
+    s = p("tick")
+    assert (s["trip"], s["healthy"], s["starting"], s["blocked"]) == (None, False, True, False)
     p("frame", amps=0.1)
     assert p("tick")["healthy"] is False  # the NTC not yet
-    assert p("temp", c=25)["healthy"] is True
+    assert p("temp", c=25)["healthy"] is False  # the instant trip not armed yet
+    assert p("armed", on=True)["healthy"] is True
+    assert p("armed", on=False)["healthy"] is False
+
+
+def test_unarmed_after_the_grace_is_a_meter_fault(p):
+    p("meter", ok=True)
+    for t in (0, 2999, 3000):
+        p("frame", amps=0.0, now=t)
+        p("temp", c=25, now=t)
+    assert p("tick", now=2999, wanted=True)["trip"] is None
+    assert p("tick", now=3000, wanted=True)["trip"] == "meter_fault"
 
 
 def test_while_starting_relay_on_is_held_without_a_trip(p):
@@ -86,8 +99,8 @@ def test_stale_readings_fault_after_3_s(p, stale_op):
     # keep the other one fresh
     fresh = {"frame": ("temp", {"c": 30.0}), "temp": ("frame", {"amps": 0.2})}[stale_op]
     p(fresh[0], now=13000, **fresh[1])
-    assert p("tick", now=13000, wanted=True) == {"trip": None, "healthy": True, "starting": False,
-                                                 "blocked": False}
+    s = p("tick", now=13000, wanted=True)
+    assert (s["trip"], s["healthy"], s["starting"], s["blocked"]) == (None, True, False, False)
     p(fresh[0], now=13001, **fresh[1])
     s = p("tick", now=13001, wanted=True)
     assert (s["trip"], s["healthy"]) == ("meter_fault", False)
@@ -139,6 +152,18 @@ def test_over_current_trips_with_the_relay_open_too(p):
     assert p("tick", now=2000, wanted=False)["trip"] == "overcurrent"  # a welded contact
 
 
+def test_nan_on_either_channel_counts_as_over(p):
+    healthy(p)
+    p("frame", amps=0.2, amps_b="nan", now=0)
+    assert p("tick", now=2000)["trip"] == "overcurrent"
+
+
+def test_either_channel_over_counts(p):
+    healthy(p)
+    p("frame", amps=0.2, amps_b=11, now=0)
+    assert p("tick", now=2000)["trip"] == "overcurrent"
+
+
 def test_an_infinite_current_counts_as_over(p):
     healthy(p)
     proc = p.proc
@@ -156,6 +181,53 @@ def test_the_oc_output_trips_at_once_and_blocks_a_clear(p):
     assert (s["trip"], s["blocked"]) == ("overcurrent_instant", True)
     s = p("oc", on=False, latched="overcurrent_instant")
     assert (s["trip"], s["blocked"]) == (None, False)
+
+
+# ---- arming and the OC's plausibility ------------------------------------------------------------
+
+def test_arming_needs_configured_open_and_no_current(p):
+    p("meter", ok=True)
+    assert p("may_arm", configured=True, open=True)["may_arm"] is False  # no frame yet
+    p("frame", amps=0.05, now=0)
+    assert p("may_arm", configured=True, open=True)["may_arm"] is True
+    assert p("may_arm", configured=False, open=True)["may_arm"] is False
+    assert p("may_arm", configured=True, open=False)["may_arm"] is False
+    p("frame", amps=0.05, amps_b=0.1, now=0)
+    assert p("may_arm", configured=True, open=True)["may_arm"] is False  # 0.1 A is not under
+    p("frame", amps=0.0, amps_b="nan", now=0)
+    assert p("may_arm", configured=True, open=True)["may_arm"] is False
+    p("frame", amps=0.0, now=0)
+    assert p("may_arm", configured=True, open=True, now=3001)["may_arm"] is False  # stale
+
+
+def test_oc_with_the_relay_open_and_no_current_is_a_meter_fault(p):
+    healthy(p, amps=0.0)
+    s = p("oc", on=True, closed=False)
+    assert (s["trip"], s["oc_cause"]) == ("meter_fault", "meter_fault")
+
+
+def test_oc_with_the_relay_closed_is_real_even_at_no_current(p):
+    healthy(p, amps=0.0)  # a short that came between two frames
+    assert p("oc", on=True, closed=True)["trip"] == "overcurrent_instant"
+
+
+def test_oc_with_the_relay_open_and_current_is_real(p):
+    healthy(p, amps=12.0)  # a welded contact
+    assert p("oc", on=True, closed=False)["trip"] == "overcurrent_instant"
+
+
+def test_oc_with_a_stale_frame_is_real(p):
+    healthy(p, amps=0.0)
+    assert p("oc", on=True, closed=False, now=3001)["trip"] == "overcurrent_instant"
+
+
+@pytest.mark.parametrize("before,after,due", [
+    ("overcurrent_instant", None, True), ("overtemp", None, True), (None, None, False),
+    (None, "overcurrent_instant", False), ("overcurrent", "overcurrent", False),
+])
+def test_the_oc_hold_is_released_only_on_a_clear(p, before, after, due):
+    kw = {k: v for k, v in (("before", before), ("after", after)) if v}
+    assert p("release", **kw)["due"] is due
 
 
 def test_the_oc_output_comes_first(p):

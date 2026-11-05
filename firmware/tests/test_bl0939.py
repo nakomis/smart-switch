@@ -181,6 +181,21 @@ def test_init_with_esphome_s_threshold_matches_esphome(bl):
     assert bl("init 181c")["frames"] == ESPHOME_INIT
 
 
+def test_the_read_back_covers_every_register_the_trips_need(bl):
+    checks = {reg: (value, mask) for reg, value, mask in bl("verify 3ce3")["checks"]}
+    assert checks == {
+        0x1A: (0x55, 0xFF),        # USR_WRPROT: writes unlocked
+        0x18: (0x001000, 0xFFFF),  # MODE
+        0x1B: (0x0047FF, 0xFFFF),  # TPS_CTRL: the alarms on
+        0x10: (0x3CE3, 0xFFFF),    # IA fast RMS
+        0x1E: (0x3CE3, 0xFFFF),    # IB fast RMS
+    }
+    # and what it checks is what init writes
+    writes = {f[2:4]: f[4:10] for f in bl("init 3ce3")["frames"][1:]}
+    for reg, (value, _) in checks.items():
+        assert writes[f"{reg:02x}"] == le24(value).hex()
+
+
 def test_register_read_request(bl):
     assert bl("readreg 1e") == {"frame": "551e"}
 

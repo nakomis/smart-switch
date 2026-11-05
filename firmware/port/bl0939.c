@@ -45,6 +45,21 @@ size_t bl0939_init_frames(uint8_t out[][BL0939_WRITE_LEN], size_t max_frames, ui
     return n;
 }
 
+size_t bl0939_verify_list(uint32_t fast_rms_ctrl, bl0939_check_t *out, size_t max)
+{
+    const bl0939_check_t list[] = {
+        {BL0939_REG_USR_WRPROT, 0x000055, 0xFF},
+        {BL0939_REG_MODE, 0x001000, 0xFFFF},
+        {BL0939_REG_TPS_CTRL, 0x0047FF, 0xFFFF},
+        {BL0939_REG_IA_FAST_RMS_CTRL, fast_rms_ctrl, 0xFFFF},
+        {BL0939_REG_IB_FAST_RMS_CTRL, fast_rms_ctrl, 0xFFFF},
+    };
+    size_t n = 0;
+    for (; n < sizeof(list) / sizeof(list[0]) && n < max; n++)
+        out[n] = list[n];
+    return n;
+}
+
 size_t bl0939_build_read(uint8_t reg, uint8_t out[2])
 {
     out[0] = BL0939_READ_COMMAND;

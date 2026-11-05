@@ -28,13 +28,13 @@ void prot_meter_init(prot_t *p, bool ok)
     p->meter_init = ok;
 }
 
-void prot_frame(prot_t *p, double amps, double trip_amps, int64_t now_ms)
+void prot_frame(prot_t *p, double amps_a, double amps_b, double trip_amps, int64_t now_ms)
 {
     p->have_frame = true;
     p->frame_ms = now_ms;
-    p->amps = amps;
+    p->amps = isnan(amps_a) || isnan(amps_b) ? NAN : fmax(amps_a, amps_b);
     // NaN is over: a frame that can't be read as a current isn't one to trust as "below".
-    bool over = !(amps <= trip_amps);
+    bool over = !(amps_a <= trip_amps) || !(amps_b <= trip_amps);
     if (over && !p->amps_over)
         p->amps_over_ms = now_ms;
     p->amps_over = over;
@@ -53,9 +53,38 @@ void prot_temp(prot_t *p, bool have, double celsius, int64_t now_ms)
     p->temp_over = over;
 }
 
-void prot_oc(prot_t *p, bool active)
+void prot_oc(prot_t *p, bool active, bool relay_closed)
 {
     p->oc_active = active;
+    p->oc_relay_closed = relay_closed;
+}
+
+void prot_oc_armed(prot_t *p, bool armed)
+{
+    p->oc_armed = armed;
+}
+
+static bool fresh(bool have, int64_t at_ms, int64_t now_ms, uint32_t stale_ms);
+
+// A fresh frame with both channels under PROT_ARM_MAX_AMPS (NaN isn't).
+static bool no_current(const prot_t *p, int64_t now_ms)
+{
+    return fresh(p->have_frame, p->frame_ms, now_ms, p->cfg.stale_ms) && p->amps < PROT_ARM_MAX_AMPS;
+}
+
+bool prot_may_arm_oc(const prot_t *p, bool configured, bool relay_open, int64_t now_ms)
+{
+    return configured && relay_open && no_current(p, now_ms);
+}
+
+ctl_trip_cause prot_oc_cause(const prot_t *p, int64_t now_ms)
+{
+    return !p->oc_relay_closed && no_current(p, now_ms) ? CTL_TRIP_METER_FAULT : CTL_TRIP_OVERCURRENT_INSTANT;
+}
+
+bool prot_oc_release_due(ctl_trip_cause before, ctl_trip_cause after)
+{
+    return before != CTL_TRIP_NONE && after == CTL_TRIP_NONE;
 }
 
 static bool fresh(bool have, int64_t at_ms, int64_t now_ms, uint32_t stale_ms)
@@ -65,7 +94,7 @@ static bool fresh(bool have, int64_t at_ms, int64_t now_ms, uint32_t stale_ms)
 
 bool prot_healthy(const prot_t *p, int64_t now_ms)
 {
-    return p->meter_init && fresh(p->have_frame, p->frame_ms, now_ms, p->cfg.stale_ms) &&
+    return p->meter_init && p->oc_armed && fresh(p->have_frame, p->frame_ms, now_ms, p->cfg.stale_ms) &&
            fresh(p->have_temp, p->temp_ms, now_ms, p->cfg.stale_ms);
 }
 
@@ -77,7 +106,7 @@ bool prot_starting(const prot_t *p, int64_t now_ms)
 ctl_trip_cause prot_check(const prot_t *p, bool relay_wanted, int64_t now_ms)
 {
     if (p->oc_active)
-        return CTL_TRIP_OVERCURRENT_INSTANT;
+        return prot_oc_cause(p, now_ms);
     if (p->amps_over && now_ms - p->amps_over_ms >= (int64_t)p->cfg.sustain_ms)
         return CTL_TRIP_OVERCURRENT;
     if (p->temp_over && now_ms - p->temp_over_ms >= (int64_t)p->cfg.overtemp_ms)

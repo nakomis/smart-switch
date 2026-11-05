@@ -4,6 +4,7 @@
 //   write <reg> <value>       -> {"frame":"a5..."}       (hex, value 24-bit)
 //   init [ctrl]               -> {"frames":["a5...",...]}   (ctrl hex: the fast-RMS control)
 //   readreg <reg>             -> {"frame":"55.."}
+//   verify <ctrl>             -> {"checks":[[reg,value,mask],...]}
 //   parsereg <reg> <hex>      -> {"status":"ok","value":..}
 //   parse <hex>               -> {"status":"ok","raw":{...},"petro":{...}}
 //   scale <shunt> <top> <bot> -> {"volts":..,"amps":..,"watts":..,"pulses_per_kwh":..}
@@ -78,6 +79,15 @@ int main(void)
                 hex(f[i], BL0939_WRITE_LEN);
                 printf("\"");
             }
+            printf("]}\n");
+        }
+        else if (strcmp(cmd, "verify") == 0)
+        {
+            bl0939_check_t c[8];
+            size_t n = bl0939_verify_list((uint32_t)strtoul(arg, NULL, 16), c, 8);
+            printf("{\"checks\":[");
+            for (size_t i = 0; i < n; i++)
+                printf("%s[%u,%u,%u]", i ? "," : "", c[i].reg, c[i].value, c[i].mask);
             printf("]}\n");
         }
         else if (strcmp(cmd, "readreg") == 0)

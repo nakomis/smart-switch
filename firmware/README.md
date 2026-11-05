@@ -234,8 +234,10 @@ in the status).
 Every trip opens the relay **at once** (never waiting for a crossing) and latches: LED red, the
 cause in the status and `info`, `petro_trips_total{cause}` up by one, the latch in NVS.
 
-**The meter's health** (`meter_ok`): the BL0939 started and its mode and fast-RMS thresholds
-**read back** as written, a good frame within 3 s and a good NTC reading within 3 s. Without it,
+**The meter's health** (`meter_ok`): the BL0939 started and its write unlock, mode, temperature
+control (the alarms on) and fast-RMS thresholds **read back** as written, the instant trip
+**armed**, a good frame within 3 s and a plausible NTC reading within 3 s (−20 to 150 °C, not
+within 50 mV of either rail: an open NTC reads very cold, a shorted one very hot). Without it,
 every command that would close the relay (Fleet's relay on and relay cycle, the console's `relay
 on` and `relay cycle`) is refused, and a relay that should be closed (the mode on, by the button or
 at boot) is opened and latched as `meter_fault`. In the first 3 s after boot the relay is held open
@@ -273,6 +275,12 @@ wakes the trip task (10), which latches, counts and stores it: no NVS or flash w
 interrupt, whose code is all in IRAM (`CONFIG_GPIO_CTRL_FUNC_IN_IRAM`). No network task holds the
 lock the trips take, and every network task runs below all three.
 
-**OC's polarity** isn't settled by the datasheet, so the firmware takes OC's level at boot (relay
-open, no current) as idle and the other level as active. Gate 2's `edges` should show no OC edges
-at rest; `info` shows OC's state.
+**OC's polarity** isn't settled by the datasheet (Chinese only, no pin polarity found) or by
+ESPHome, so the firmware infers it: it arms the instant trip only with the relay open and a fresh
+frame reading under 0.1 A on both channels, takes OC's level then (steady over 2 ms) as idle and
+the other as active. Arming happens before the meter and control tasks start, and again whenever
+it's safe after a failure (a wandering pin, or Fleet's `instant_amps` not taking). Until armed the
+meter is unhealthy, so the relay stays open. An OC edge with the relay open and under 0.1 A can't
+be real, so it latches `meter_fault`, not `overcurrent_instant`. The OC hold is released only when
+a latched trip is cleared. Gate 2's `edges` should show no OC edges at rest; `info` shows OC's
+state.

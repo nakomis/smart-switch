@@ -9,6 +9,7 @@
 #include "esp_attr.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -29,6 +30,7 @@ static volatile bool relay_on;
 static volatile bool oc_hold;  // the OC interrupt opened the relay: it stays open until released
 static volatile bool oc_armed;
 static volatile int oc_active_level;
+static volatile bool oc_relay_was_on;  // the relay's state when the interrupt opened it
 static TaskHandle_t oc_task;
 static bool bl_configured;
 static uint32_t bl_fast_ctrl;
@@ -68,6 +70,8 @@ static void IRAM_ATTR oc_isr(void *arg)
     if (!oc_armed || gpio_get_level(PETRO_PIN_OC) != oc_active_level)
         return;
     portENTER_CRITICAL_ISR(&relay_mux);
+    if (!oc_hold)
+        oc_relay_was_on = relay_on;
     oc_hold = true;
     gpio_set_level(PETRO_PIN_RELAY, 0);
     relay_on = false;
@@ -205,25 +209,25 @@ static esp_err_t bl_write_locked(uint8_t reg, uint32_t value)
     return uart_wait_tx_done(BL_UART, pdMS_TO_TICKS(50));
 }
 
-// Whether the chip holds what we wrote: the mode and both fast-RMS thresholds. Under bl_lock.
+// Whether the chip holds what we wrote (bl0939_verify_list: write unlock, mode, TPS_CTRL with the
+// alarms on, both fast-RMS thresholds). Under bl_lock.
 static esp_err_t bl_verify_locked(uint32_t fast_ctrl)
 {
-    static const uint8_t regs[] = {BL0939_REG_MODE, BL0939_REG_IA_FAST_RMS_CTRL, BL0939_REG_IB_FAST_RMS_CTRL};
-    const uint32_t want[] = {0x001000, fast_ctrl, fast_ctrl};
-    for (size_t i = 0; i < sizeof(regs); i++)
+    bl0939_check_t checks[8];
+    size_t n = bl0939_verify_list(fast_ctrl, checks, 8);
+    for (size_t i = 0; i < n; i++)
     {
         uint32_t v = 0;
-        esp_err_t err = bl_read_reg_locked(regs[i], &v);
+        esp_err_t err = bl_read_reg_locked(checks[i].reg, &v);
         if (err != ESP_OK)
         {
-            ESP_LOGE(TAG, "bl0939: reading back register 0x%02x: %s", regs[i], esp_err_to_name(err));
+            ESP_LOGE(TAG, "bl0939: reading back register 0x%02x: %s", checks[i].reg, esp_err_to_name(err));
             return err;
         }
-        // The fast-RMS registers are 16 bits wide in the chip: compare what we set.
-        if ((v & 0xFFFF) != (want[i] & 0xFFFF))
+        if ((v & checks[i].mask) != (checks[i].value & checks[i].mask))
         {
-            ESP_LOGE(TAG, "bl0939: register 0x%02x reads 0x%06lx, wrote 0x%06lx", regs[i], (unsigned long)v,
-                     (unsigned long)want[i]);
+            ESP_LOGE(TAG, "bl0939: register 0x%02x reads 0x%06lx, wrote 0x%06lx", checks[i].reg, (unsigned long)v,
+                     (unsigned long)checks[i].value);
             return ESP_ERR_INVALID_RESPONSE;
         }
     }
@@ -391,13 +395,33 @@ void board_zx_snapshot(zx_edges *out)
 
 int board_oc_arm(TaskHandle_t notify)
 {
-    // Sampled with the relay open (no current), so whatever the pin shows now is its idle level.
+    // The caller has checked there is no current (prot_may_arm_oc), so the level now is idle. It
+    // must read the same over 2 ms: a pin that wanders isn't one to infer a polarity from.
     oc_task = notify;
-    oc_active_level = !gpio_get_level(PETRO_PIN_OC);
+    int first = gpio_get_level(PETRO_PIN_OC);
+    for (int i = 0; i < 4; i++)
+    {
+        esp_rom_delay_us(500);
+        if (gpio_get_level(PETRO_PIN_OC) != first)
+        {
+            ESP_LOGE(TAG, "OC wanders at rest: the instant trip stays unarmed (meter fault)");
+            oc_armed = false;
+            return -1;
+        }
+    }
+    oc_active_level = !first;
     oc_armed = true;
-    // Edge-triggered: a pin already active at arming (not possible with the relay open, unless the
-    // polarity guess is wrong) shows up through board_oc_active instead.
     return oc_active_level;
+}
+
+bool board_oc_armed(void)
+{
+    return oc_armed;
+}
+
+bool board_oc_relay_was_on(void)
+{
+    return oc_hold ? oc_relay_was_on : relay_on;
 }
 
 bool board_oc_active(void)
@@ -447,6 +471,8 @@ esp_err_t board_bl_set_instant(double amps)
     bl_configured = err == ESP_OK;
     if (bl_configured)
         bl_fast_ctrl = ctrl;
+    else
+        oc_armed = false;  // armed again (app.c) once the chip takes a threshold and there's no current
     xSemaphoreGive(bl_lock);
     return err;
 }

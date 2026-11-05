@@ -10,14 +10,20 @@
 //     for sustain_ms (2 s) without a break;
 //   - over-current, instant: the BL0939's OC output (its fast RMS, over half a cycle, above
 //     ctl.instant_amps, 15 A). Its interrupt opens the relay itself (board.c); here it is seen as a
-//     level too, in case an edge was missed;
+//     level too, in case an edge was missed. OC with the relay open and the current reading under
+//     PROT_ARM_MAX_AMPS can't be real: that's a meter fault (prot_oc_cause), never an inversion;
 //   - over-temperature: the NTC (TH1, beside the relay) at or above overtemp_c for overtemp_ms;
 //   - a meter fault: the relay wanted on while the meter isn't healthy (below), except in the
 //     first stale_ms after boot, while the first readings arrive (the relay is held open then,
 //     without a trip).
-// Healthy: the BL0939 started and took its thresholds (read back), a good frame and a good NTC
-// reading each within stale_ms (3 s). A trip that can't see the current or the temperature is
-// none.
+// Healthy: the BL0939 started and took its thresholds (read back), the instant trip is armed, a
+// good frame and a good NTC reading (ntc.h's plausible window) each within stale_ms (3 s). A trip
+// that can't see the current or the temperature is none.
+//
+// Arming the instant trip (prot_may_arm_oc): OC's active level isn't settled by the datasheet, so
+// board.c takes the level it reads at arming as idle. That's only safe when there is certainly no
+// current: the BL0939 configured, the relay open and a fresh frame reading under
+// PROT_ARM_MAX_AMPS on both channels.
 //
 // Clearing (ctl_clear_trip) is blocked while the BL0939's OC output is active, while the latest
 // frame still reads over the sustained threshold (the RMS takes most of a second to fall after
@@ -42,6 +48,7 @@
 #define PROT_OVERTEMP_MS 2000
 #define PROT_CLEAR_MARGIN_C 5.0
 #define PROT_STALE_MS 3000
+#define PROT_ARM_MAX_AMPS 0.1
 
 typedef struct
 {
@@ -64,7 +71,9 @@ typedef struct
     int64_t frame_ms;  // the last good frame
     bool amps_over;
     int64_t amps_over_ms;  // since when
-    double amps;
+    double amps;  // the larger channel; NaN if either was
+    bool oc_armed;
+    bool oc_relay_closed;  // the relay was closed when OC went active
     bool have_temp;
     int64_t temp_ms;  // the last good NTC reading
     double temp_c;
@@ -77,12 +86,22 @@ void prot_init(prot_t *p, const prot_config *cfg, int64_t now_ms);
 
 // Whether the BL0939 started and its thresholds read back as written.
 void prot_meter_init(prot_t *p, bool ok);
-// A good frame: the current (the larger channel) and the sustained threshold in force.
-void prot_frame(prot_t *p, double amps, double trip_amps, int64_t now_ms);
+// A good frame: both channels' currents (over if either is over the threshold, or NaN) and the
+// sustained threshold in force.
+void prot_frame(prot_t *p, double amps_a, double amps_b, double trip_amps, int64_t now_ms);
 // An NTC reading; have false if it couldn't be read (the last good one then ages).
 void prot_temp(prot_t *p, bool have, double celsius, int64_t now_ms);
-// The OC output's level: true while active.
-void prot_oc(prot_t *p, bool active);
+// The OC output's level (true while active) and whether the relay was closed when it went active.
+void prot_oc(prot_t *p, bool active, bool relay_closed);
+// Whether the instant trip is armed (board.c).
+void prot_oc_armed(prot_t *p, bool armed);
+// Whether it may be armed now: see above.
+bool prot_may_arm_oc(const prot_t *p, bool configured, bool relay_open, int64_t now_ms);
+// What an active OC means: CTL_TRIP_OVERCURRENT_INSTANT, or CTL_TRIP_METER_FAULT if the relay was
+// open and a fresh frame reads under PROT_ARM_MAX_AMPS (it can't be real).
+ctl_trip_cause prot_oc_cause(const prot_t *p, int64_t now_ms);
+// Whether a change of the latch from `before` to `after` is a clear (the OC hold is then released).
+bool prot_oc_release_due(ctl_trip_cause before, ctl_trip_cause after);
 
 bool prot_healthy(const prot_t *p, int64_t now_ms);
 // The first stale_ms after boot, with the BL0939 started but the readings not yet in: unhealthy,

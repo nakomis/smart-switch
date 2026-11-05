@@ -57,9 +57,13 @@ void board_zx_snapshot(zx_edges *out);
 
 // The instant trip (PETRO-5). From arming, an edge on OC to its active level opens the relay in
 // the interrupt and holds it open, then notifies `notify` (which latches the trip). The active
-// level is the opposite of the level at arming (call it with the relay open, so there is no
-// current); returns it. The BL0939's datasheet doesn't settle the polarity, so this needn't guess.
+// level is the opposite of the level at arming: call it only when prot_may_arm_oc says there is no
+// current (the relay open, under 0.1 A). Returns the active level, or -1 (unarmed) if the pin
+// doesn't hold still. The BL0939's datasheet doesn't settle the polarity, so this needn't guess.
 int board_oc_arm(TaskHandle_t notify);
+bool board_oc_armed(void);
+// Whether the relay was closed when OC went active (or now, if no hold is set): prot_oc_cause.
+bool board_oc_relay_was_on(void);
 // OC at its active level now.
 bool board_oc_active(void);
 // The interrupt has opened the relay and holds it.
@@ -72,7 +76,8 @@ bool board_bl_configured(void);
 // The fast-RMS control value in the chip (prot_fast_rms_ctrl).
 uint32_t board_bl_fast_ctrl(void);
 // Writes the instant threshold to both channels and reads it back. On failure the chip counts as
-// unconfigured (board_bl_configured false: the meter is then unhealthy, so the relay stays open).
+// unconfigured and the instant trip unarmed (the meter is then unhealthy, so the relay stays open,
+// until app.c re-arms it).
 esp_err_t board_bl_set_instant(double amps);
 
 // J3.

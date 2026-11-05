@@ -69,6 +69,9 @@ static bool trip_store_pending;    // the latch's NVS write failed: retried by t
 static int64_t trip_retry_at_ms;
 static ctl_trip_cause trip_to_log; // a new trip or a clear, logged by the control task (not under lock)
 static bool trip_log_pending;
+static TaskHandle_t trip_handle;
+static int arm_logged = -2;        // the last arming result logged (board_oc_arm's)
+static int64_t arm_retry_ms;       // a failed arming (OC wandering) is tried again at most once a second
 static struct
 {
     bool have_meter;
@@ -107,7 +110,22 @@ static int64_t now_ms(void)
 // clear would be refused (the NTC's hysteresis, OC still active). Under the lock.
 static void sync_locked(int64_t now)
 {
-    prot_oc(&prot, board_oc_active());
+    // The instant trip is armed whenever it safely can be: at boot, after Fleet's instant_amps, or
+    // after a read-back failure clears (prot_may_arm_oc: configured, relay open, no current).
+    if (!board_oc_armed() && trip_handle != NULL && now >= arm_retry_ms &&
+        prot_may_arm_oc(&prot, board_bl_configured(), !board_relay_is_on() && !applied_relay, now))
+    {
+        int level = board_oc_arm(trip_handle);  // a 2 ms check of the pin
+        arm_retry_ms = now + 1000;
+        if (level != arm_logged)
+        {
+            arm_logged = level;
+            if (level >= 0)
+                ESP_LOGI(TAG, "instant trip armed: OC active %s", level ? "high" : "low");
+        }
+    }
+    prot_oc_armed(&prot, board_oc_armed());
+    prot_oc(&prot, board_oc_active(), board_oc_relay_was_on());
     ctl_set_sensors_ok(&ctl, prot_healthy(&prot, now));
     ctl_set_clear_blocked(&ctl, prot_clear_blocked(&prot, ctl.trip, now));
 }
@@ -149,10 +167,12 @@ static bool apply_locked(void)
         relay_set(relay, !relay && (ctl.trip != CTL_TRIP_NONE || ctl.shutdown || wanted));
         applied_relay = relay;
     }
-    if (ctl.trip == CTL_TRIP_NONE && board_oc_held())
-        board_oc_release();  // cleared: the relay may close again
     if (ctl.trip != seen_trip)
     {
+        // Only a clear releases the OC hold (not the moment between the interrupt and its trip
+        // task). If OC is still active the hold stays, and so does the trip.
+        if (prot_oc_release_due(seen_trip, ctl.trip) && board_oc_held() && !board_oc_release())
+            ctl_trip(&ctl, CTL_TRIP_OVERCURRENT_INSTANT);
         if (ctl.trip != CTL_TRIP_NONE)
             store_count_trip(ctl.trip);
         seen_trip = ctl.trip;
@@ -337,7 +357,7 @@ static void meter_task(void *arg)
             if (!energy_update(&energy, raw.cfa_cnt, t))
                 ESP_LOGW(TAG, "CF count jumped implausibly: rebaselined");
             // Both channels read the same shunt: the larger counts.
-            prot_frame(&prot, fmax(r.amps_a, r.amps_b), ctl.trip_amps, t);
+            prot_frame(&prot, r.amps_a, r.amps_b, ctl.trip_amps, t);  // NaN on either counts as over
         }
         else
         {
@@ -696,14 +716,18 @@ static void control_task(void *arg)
 
 // On every esp_restart (a reboot command, an OTA install): the relay off at once, and the energy
 // since the last save kept. (A panic or a power cut skips this; the reset leaves the relay off.)
-// The OC interrupt (board.c) has already opened the relay: latch, count and store the trip.
+// The OC interrupt (board.c) has already opened the relay: latch, count and store the trip, as an
+// instant over-current, or a meter fault if OC can't be real (prot_oc_cause).
 static void trip_task(void *arg)
 {
     (void)arg;
     for (;;)
     {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        app_trip(CTL_TRIP_OVERCURRENT_INSTANT);
+        take();
+        ctl_trip(&ctl, prot_oc_cause(&prot, now_ms()));
+        apply_locked();
+        give();
     }
 }
 
@@ -758,20 +782,36 @@ void app_start(bool is_provisioned)
     button_init(&button);
     report_init(&reporter);
     applied_relay = false;
-    take();
-    apply_locked();
-    give();
-
     esp_register_shutdown_handler(on_shutdown);
-    TaskHandle_t trip_handle = NULL;
-    if (xTaskCreate(trip_task, "trip", TRIP_STACK, NULL, TRIP_PRIORITY, &trip_handle) != pdPASS ||
-        xTaskCreate(control_task, "control", CONTROL_STACK, NULL, CONTROL_PRIORITY, NULL) != pdPASS ||
-        xTaskCreate(meter_task, "meter", METER_STACK, NULL, METER_PRIORITY, NULL) != pdPASS)
+
+    // The trip task first, then one frame with the relay still open, so the instant trip is armed
+    // (sync_locked, prot_may_arm_oc) before the meter and control tasks can close the relay.
+    if (xTaskCreate(trip_task, "trip", TRIP_STACK, NULL, TRIP_PRIORITY, &trip_handle) != pdPASS)
     {
-        ESP_LOGE(TAG, "no memory for the control, meter or trip task");
+        ESP_LOGE(TAG, "no memory for the trip task");
         abort();
     }
-    // The instant trip, armed with the relay still open (board_oc_arm takes the idle level now).
-    if (board_bl_configured())
-        ESP_LOGI(TAG, "instant trip armed: OC active %s", board_oc_arm(trip_handle) ? "high" : "low");
+    uint8_t packet[BL0939_PACKET_LEN];
+    size_t len = 0;
+    bl0939_raw_t raw;
+    if (board_bl_read(packet, &len) == ESP_OK && bl0939_parse_packet(packet, len, &raw) == BL0939_OK)
+    {
+        bl0939_scale_t scale = bl0939_petro_scale();
+        bl0939_reading_t r = bl0939_convert(&raw, &scale);
+        take();
+        prot_frame(&prot, r.amps_a, r.amps_b, ctl.trip_amps, now_ms());
+        give();
+    }
+    take();  // arms, if it may
+    apply_locked();
+    give();
+    if (!board_oc_armed())
+        ESP_LOGW(TAG, "instant trip not armed yet: the relay stays open until it is");
+
+    if (xTaskCreate(control_task, "control", CONTROL_STACK, NULL, CONTROL_PRIORITY, NULL) != pdPASS ||
+        xTaskCreate(meter_task, "meter", METER_STACK, NULL, METER_PRIORITY, NULL) != pdPASS)
+    {
+        ESP_LOGE(TAG, "no memory for the control or meter task");
+        abort();
+    }
 }
