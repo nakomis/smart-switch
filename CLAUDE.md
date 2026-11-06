@@ -77,7 +77,7 @@ https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land
 | `firmware/` | ESP-IDF 5.5 firmware: `port/` portable C with pytest host tests (`tools/` drivers, `tests/`), `esp32c6/` IDF project (`main/petro_pins.h` a checked copy of `pcb/out/petro/pins.h`) |
 | `case/` | The enclosure and any printed internal parts |
 | `docs/` | Design notes, gate procedures (`docs/testing/`), the logo |
-| `infra/` | CDK (not yet: arrives with PETRO-9) |
+| `infra/` | CDK TypeScript (pnpm, jest): `PetroDeviceStack`, the units' IoT Things (`devices.json`) and their Fleet policy. GithubCiStack and firmware publishing arrive with PETRO-9 |
 
 ## References
 
