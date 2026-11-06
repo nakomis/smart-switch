@@ -1,0 +1,8 @@
+# Name,   Type, SubType, Offset,   Size
+# Fits a 4 MB flash; the DevKitC-1's 8 or 16 MB just leaves the rest unused.
+# prov holds Wi-Fi, metrics and HTTP-token settings (scripts/provision.sh), so the image holds no
+# secrets. nvs holds the spot rectangles.
+nvs,      data, nvs,     0x9000,  0x6000
+phy_init, data, phy,     0xf000,  0x1000
+prov,     data, nvs,     0x10000, 0x6000
+factory,  app,  factory, 0x20000, 0x1E0000

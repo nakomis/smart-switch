@@ -25,7 +25,7 @@ def test_25c_is_half_the_supply(ntc):
     assert r["celsius"] == pytest.approx(25.0, abs=1e-6)
 
 
-@pytest.mark.parametrize("celsius", [-20, 0, 20, 40, 70, 100])
+@pytest.mark.parametrize("celsius", [-19.9, 0, 20, 40, 70, 100, 149.9])
 def test_round_trip(ntc, celsius):
     mv = ntc(f"at {celsius}")["mv"]
     assert mv == pytest.approx(mv_at(celsius))
@@ -46,6 +46,20 @@ def test_warmer_reads_lower(ntc):
 @pytest.mark.parametrize("mv", ["0", "-5", "3300", "3400"])
 def test_open_or_short_is_refused(ntc, mv):
     assert ntc(mv) == {"ok": False}
+
+
+@pytest.mark.parametrize("mv", [
+    "3299", "3260", "3251",          # open NTC: near the supply
+    "1", "40", "49.9",               # shorted: near 0 V
+    f"{mv_at(-21):.3f}",             # colder than -20 C
+    f"{mv_at(151):.3f}",             # hotter than 150 C
+])
+def test_implausible_readings_are_refused(ntc, mv):
+    assert ntc(mv) == {"ok": False}
+
+
+def test_the_window_s_edges_are_accepted(ntc):
+    assert ntc(f"{mv_at(-19.99):.6f}")["ok"] and ntc(f"{mv_at(149.99):.6f}")["ok"]
 
 
 def test_unknown_line(ntc):

@@ -57,6 +57,22 @@ def test_relay_cycle_rejects(parse, line, why):
     assert why in r["error"]
 
 
+@pytest.mark.parametrize("mode", ["on", "off", "auto"])
+def test_mode(parse, mode):
+    assert parse(f"mode {mode}") == {"ok": True, "kind": "mode", "mode": mode}
+
+
+@pytest.mark.parametrize("line", ["mode", "mode toggle", "mode on now", "mode ON"])
+def test_mode_rejects(parse, line):
+    r = parse(line)
+    assert r["ok"] is False
+    assert "usage: mode on" in r["error"]
+
+
+def test_led_auto(parse):
+    assert parse("led auto") == {"ok": True, "kind": "led auto"}
+
+
 def test_led(parse):
     assert parse("led 255 0 128") == {"ok": True, "kind": "led", "r": 255, "g": 0, "b": 128}
 
@@ -66,6 +82,7 @@ def test_led(parse):
     ("led 0 -1 0", "'-1' is not 0-255"),
     ("led 0 0 x", "'x' is not 0-255"),
     ("led 0 0", "expected 3 arguments, got 2"),
+    ("led auto now", "expected 3 arguments, got 2"),
     ("led 0 0 0 0", "expected 3 arguments, got 4"),
 ])
 def test_led_rejects(parse, line, why):
@@ -94,6 +111,6 @@ def test_rejects(parse, line, why):
 
 def test_usage_lists_every_command(tool):
     usage = tool("petro-console", "usage")()
-    for word in ("info", "relay on", "relay cycle", "led", "button", "bl", "edges", "ntc",
+    for word in ("info", "mode auto", "led auto", "relay on", "relay cycle", "led", "button", "bl", "edges", "ntc",
                  "wifi scan", "j3", "help"):
         assert word in usage

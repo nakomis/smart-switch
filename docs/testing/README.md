@@ -142,8 +142,9 @@ vmauth labels every series `host_name="petro-prod-bN"`.
 **Commands through Fleet:**
 - relay on/off, and the mode;
 - relay cycle (n, on and off times), for Gate 4;
-- a temporary trip threshold for Gate 4's trip test (PETRO-5), never persisted and gone after a
-  reboot. The thresholds in force are reported in the status, so a reboot can be checked;
+- temporary trip thresholds (sustained and instant) for Gate 4's trip test (PETRO-5), never
+  persisted and gone after a reboot. The thresholds in force are reported in the status, so a
+  reboot can be checked;
 - a Wi-Fi **transmit-stress mode** for Gate 3's hour (continuous traffic, not one push every 10 s).
 
 Use `idf.py monitor --no-reset` where a reset reason matters: plain `monitor` resets the C6 when

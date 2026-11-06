@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "app.h"
 #include "board.h"
 #include "bl0939.h"
 #include "console_parse.h"
@@ -25,50 +26,17 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "net.h"
 #include "ntc.h"
+#include "ota.h"
 #include "petro_pins.h"
+#include "prot.h"
 #include "prov.h"
+#include "relay.h"
+#include "store.h"
+#include "stress.h"
 
 static const char *TAG = "console";
-
-static const char *reset_reason(esp_reset_reason_t r)
-{
-    switch (r)
-    {
-    case ESP_RST_POWERON:
-        return "poweron";
-    case ESP_RST_EXT:
-        return "external";
-    case ESP_RST_SW:
-        return "software";
-    case ESP_RST_PANIC:
-        return "panic";
-    case ESP_RST_INT_WDT:
-        return "int_wdt";
-    case ESP_RST_TASK_WDT:
-        return "task_wdt";
-    case ESP_RST_WDT:
-        return "wdt";
-    case ESP_RST_DEEPSLEEP:
-        return "deepsleep";
-    case ESP_RST_BROWNOUT:
-        return "brownout";
-    case ESP_RST_SDIO:
-        return "sdio";
-    case ESP_RST_USB:
-        return "usb";
-    case ESP_RST_JTAG:
-        return "jtag";
-    case ESP_RST_EFUSE:
-        return "efuse";
-    case ESP_RST_PWR_GLITCH:
-        return "power_glitch";
-    case ESP_RST_CPU_LOCKUP:
-        return "cpu_lockup";
-    default:
-        return "unknown";
-    }
-}
 
 static void cmd_info(void)
 {
@@ -82,13 +50,47 @@ static void cmd_info(void)
            mac[5]);
     printf("chip       ESP32-C6 rev v%d.%d, %d core(s)\n", chip.revision / 100, chip.revision % 100,
            chip.cores);
-    printf("reset      %s\n", reset_reason(esp_reset_reason()));
+    printf("reset      %s\n", store_reset_reason());
     printf("uptime     %" PRId64 " s\n", esp_timer_get_time() / 1000000);
-    // TODO(PETRO-3 slice 3): the mode (on, off, auto) from NVS, and the button cycling it.
-    printf("mode       none yet (PETRO-3 slice 3): console control only\n");
-    printf("relay      %s\n", board_relay_is_on() ? "on" : "off");
-    // TODO(PETRO-5): the over-current and over-temperature trips and their thresholds.
-    printf("trips      none in force (PETRO-5)\n");
+    app_state st;
+    app_get_state(&st);
+    printf("mode       %s (stored: the power-on state)%s\n", ctl_mode_name(st.mode),
+           st.remote ? ", accepting remote relay commands" : "");
+    printf("relay      %s%s", st.relay ? "on" : "off", st.bench ? " (bench override)" : "");
+    if (st.cycle_active)
+        printf(", cycling %" PRIu32 "/%" PRIu32, st.cycle_done, st.cycle_n);
+    printf("\n");
+    printf("trip       %s (enforced)\n", st.trip == CTL_TRIP_NONE ? "none latched" : ctl_trip_name(st.trip));
+    printf("thresholds %.2f A over 2 s%s; %.2f A instant%s; NTC %.0f C (clear below %.0f C)\n", st.trip_amps,
+           st.trip_amps_temporary ? " (temporary)" : "", st.instant_amps, st.instant_amps_temporary ? " (temporary)" : "",
+           st.overtemp_c, st.overtemp_c - PROT_CLEAR_MARGIN_C);
+    printf("trips     ");
+    for (int cause = CTL_TRIP_OVERCURRENT; cause <= CTL_TRIP_CAUSES; cause++)
+        printf(" %s %" PRIu32, ctl_trip_name((ctl_trip_cause)cause), store_trips((ctl_trip_cause)cause));
+    printf(" (since NVS was last erased)\n");
+    uint32_t timed = 0, at_once = 0;
+    relay_counts(&timed, &at_once);
+    printf("protect    BL0939 thresholds %s (fast RMS control 0x%04" PRIx32 "); OC %s%s; ZX %s (%" PRIu32
+           " switches timed, %" PRIu32 " at once)\n",
+           st.bl_configured ? "verified" : "NOT VERIFIED: relay held off", board_bl_fast_ctrl(),
+           !board_oc_armed() ? "NOT ARMED" : st.oc_active ? "ACTIVE" : "armed, idle",
+           board_oc_held() ? ", holding the relay open" : "",
+           st.zx_sync ? "in sync" : "absent (switching at once)", timed, at_once);
+    if (st.have_meter)
+        printf("meter      %.2f V, %.4f A, %.2f W", st.volts, st.amps, st.watts);
+    else
+        printf("meter      no reading");
+    printf("; %.6f kWh total; %" PRIu32 " failed reads; %s\n", st.energy_kwh, st.meter_errors,
+           st.meter_ok         ? "healthy"
+           : st.meter_starting ? "starting"
+                               : "UNHEALTHY: relay-on refused");
+    printf("board     ");
+    for (int i = 0; i < BOARD_PARTS; i++)
+        printf(" %s%s", board_part_ok((board_part)i) ? "+" : "-", board_part_name((board_part)i));
+    printf("  (+ started, - failed)\n");
+    printf("network    %s, Wi-Fi %s, Fleet %s%s%s\n", net_started() ? "started" : "off",
+           net_wifi_up() ? "up" : "down", net_subscribed() ? "subscribed" : "not connected",
+           ota_busy() ? ", OTA in progress" : "", stress_left_s() ? ", Wi-Fi stress on" : "");
     prov_state_t prov;
     prov_state(&prov);
     if (!prov.opened)
@@ -126,27 +128,36 @@ static bool wait_or_key(uint32_t ms)
 
 static void cmd_relay_cycle(const console_cmd_t *c)
 {
-    printf("cycling %" PRIu32 " times, %" PRIu32 " ms on, %" PRIu32 " ms off (any key stops)\n",
-           c->cycle.n, c->cycle.on_ms, c->cycle.off_ms);
     while (key_pressed())  // drop anything typed ahead
         ;
-    uint32_t done = 0;
-    bool stopped = false;
-    while (done < c->cycle.n && !stopped)
+    ctl_result r = app_bench_cycle(c->cycle.n, c->cycle.on_ms, c->cycle.off_ms);
+    if (r != CTL_OK)
     {
-        board_relay(true);
-        stopped = wait_or_key(c->cycle.on_ms);
-        board_relay(false);
-        if (!stopped)
-            stopped = wait_or_key(c->cycle.off_ms);
-        done++;
-        if (done % 50 == 0 || done == c->cycle.n)
-            printf("  %" PRIu32 "/%" PRIu32 "\n", done, c->cycle.n);
+        printf("relay cycle: %s\n", ctl_result_message(r));
+        return;
     }
-    board_relay(false);
-    if (stopped)
-        printf("stopped by a key during cycle %" PRIu32 "/%" PRIu32 "\n", done, c->cycle.n);
-    printf("relay off\n");
+    printf("cycling %" PRIu32 " times, %" PRIu32 " ms on, %" PRIu32 " ms off (any key stops)\n",
+           c->cycle.n, c->cycle.on_ms, c->cycle.off_ms);
+    uint32_t reported = 0;
+    app_state st;
+    for (;;)
+    {
+        if (wait_or_key(20))
+        {
+            app_cycle_stop();
+            app_get_state(&st);
+            printf("stopped by a key\n");
+            break;
+        }
+        app_get_state(&st);
+        uint32_t done = st.cycle_active ? st.cycle_done : c->cycle.n;
+        if (done != reported && (done % 50 == 0 || done == c->cycle.n))
+            printf("  %" PRIu32 "/%" PRIu32 "\n", done, c->cycle.n);
+        reported = done;
+        if (!st.cycle_active)
+            break;  // finished, or stopped by a press, a mode change or a trip
+    }
+    printf("relay %s\n", st.relay ? "on" : "off");
 }
 
 static void cmd_button(void)
@@ -157,7 +168,9 @@ static void cmd_button(void)
     bool stable = board_button_pressed();
     bool last = stable;
     int same = 0, presses = 0;
-    printf("watching SW1 for 10 s (now %s)\n", stable ? "pressed" : "released");
+    printf("watching SW1 for 10 s (now %s; presses don't change the mode meanwhile)\n",
+           stable ? "pressed" : "released");
+    app_button_watch(true);
     while (esp_timer_get_time() < end)
     {
         vTaskDelay(pdMS_TO_TICKS(5));
@@ -172,6 +185,7 @@ static void cmd_button(void)
                    stable ? "pressed" : "released");
         }
     }
+    app_button_watch(false);
     printf("%d press(es)\n", presses);
 }
 
@@ -290,8 +304,9 @@ static esp_err_t wifi_start(void)
 
 static void cmd_wifi_scan(void)
 {
-    // Scan only: joining (with the prov partition's credentials) is PETRO-3 slice 3.
-    esp_err_t err = wifi_start();
+    // Scan only. Once the network has started Wi-Fi (net.c), it is already set up: just scan (it may
+    // fail while a join is in progress; try again).
+    esp_err_t err = net_started() ? ESP_OK : wifi_start();
     if (err == ESP_OK)
         err = esp_wifi_scan_start(NULL, true);
     if (err != ESP_OK)
@@ -373,17 +388,32 @@ static int run(int argc, char **argv)
         break;
     case CONSOLE_RELAY_ON:
     case CONSOLE_RELAY_OFF:
-        board_relay(c.kind == CONSOLE_RELAY_ON);
-        printf("relay %s\n", board_relay_is_on() ? "on" : "off");
+    {
+        ctl_result r = app_bench_relay(c.kind == CONSOLE_RELAY_ON);
+        if (r != CTL_OK)
+            printf("relay: %s\n", ctl_result_message(r));
+        printf("relay %s%s\n", board_relay_is_on() ? "on" : "off",
+               r == CTL_OK ? " (bench override, until a press or a mode change)" : "");
+        break;
+    }
+    case CONSOLE_MODE:
+    {
+        ctl_result r = app_set_mode(c.mode);
+        printf("mode %s: %s\n", ctl_mode_name(c.mode), ctl_result_message(r));
+        break;
+    }
+    case CONSOLE_LED_AUTO:
+        app_led_release();
+        printf("led: showing the status\n");
         break;
     case CONSOLE_RELAY_CYCLE:
         cmd_relay_cycle(&c);
         break;
     case CONSOLE_LED:
     {
-        esp_err_t e = board_led(c.led.r, c.led.g, c.led.b);
-        printf("led %u %u %u%s%s\n", c.led.r, c.led.g, c.led.b, e == ESP_OK ? "" : ": ",
-               e == ESP_OK ? "" : esp_err_to_name(e));
+        app_led_hold(c.led.r, c.led.g, c.led.b);
+        printf("led %u %u %u for %d s (led auto gives it back)\n", c.led.r, c.led.g, c.led.b,
+               APP_LED_HOLD_MS / 1000);
         break;
     }
     case CONSOLE_BUTTON:
@@ -410,8 +440,8 @@ static int run(int argc, char **argv)
 
 esp_err_t console_start(void)
 {
-    static const char *const names[] = {"help", "info", "relay", "led", "button", "bl",
-                                        "edges", "ntc", "wifi", "j3"};
+    static const char *const names[] = {"help", "info", "mode", "relay", "led", "button",
+                                        "bl", "edges", "ntc", "wifi", "j3"};
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     repl_cfg.prompt = "petro>";
