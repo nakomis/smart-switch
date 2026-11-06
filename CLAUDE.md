@@ -74,7 +74,7 @@ https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land
 | Path | What's there |
 |---|---|
 | `pcb/` | The board generator (Python → KiCad 10), on the heatlink/tinycrypt pipeline |
-| `firmware/` | ESP-IDF 5.5 firmware: `port/` portable C with pytest host tests, `esp32c6/` IDF project |
+| `firmware/` | ESP-IDF 5.5 firmware: `port/` portable C with pytest host tests (`tools/` drivers, `tests/`), `esp32c6/` IDF project (`main/petro_pins.h` a checked copy of `pcb/out/petro/pins.h`) |
 | `case/` | The enclosure and any printed internal parts |
 | `docs/` | Design notes, gate procedures (`docs/testing/`), the logo |
 | `infra/` | CDK (not yet: arrives with PETRO-9) |
@@ -93,7 +93,7 @@ https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land
 
 - Board: KiCad 10 CLI, Freerouting 2.5.0 (Java via asdf), Python 3.11
   (`ASDF_PYTHON_VERSION=3.11.15`) in a venv.
-- Firmware: ESP-IDF 5.5, ESP32-C6 (single-core RISC-V, 160 MHz), no PSRAM, 4 MB partitions. Fleet topics `petro/<thing>/{commands,responses,status}`;
+- Firmware: ESP-IDF 5.5 (`. ~/esp/v5.5/esp-idf/export.sh`), ESP32-C6 (single-core RISC-V, 160 MHz), no PSRAM, 4 MB partitions. Fleet topics `petro/<thing>/{commands,responses,status}`;
   Fleet's message shapes are not to be changed. Credentials only in the `prov` NVS partition,
   written by the provisioning script: never in the image or CloudFormation. Bump
   `firmware/esp32c6/version.txt` with every firmware change.
