@@ -1,0 +1,96 @@
+menu "Zatt thermal logger"
+
+    config ZATT_I2C_SDA_GPIO
+        int "I2C SDA GPIO"
+        default 8 if IDF_TARGET_ESP32S3
+        default 21 if IDF_TARGET_ESP32
+        default 4
+        help
+            S3-DevKitC-1: GPIO8 (its default I2C SDA, not used by the board).
+
+    config ZATT_I2C_SCL_GPIO
+        int "I2C SCL GPIO"
+        default 9 if IDF_TARGET_ESP32S3
+        default 22 if IDF_TARGET_ESP32
+        default 5
+
+    config ZATT_I2C_FREQ_HZ
+        int "I2C clock (Hz)"
+        default 400000
+        range 100000 1000000
+        help
+            400000 is safe on jumper wires. The MLX90640 allows 1000000; try it with short wires and
+            4k7 or lower pull-ups. At 2 Hz refresh, 400 kHz is plenty.
+
+    config ZATT_EMISSIVITY_PERCENT
+        int "Emissivity (%)"
+        default 95
+        range 10 100
+        help
+            0.95 suits the Kapton tape and marker dots the Gate 4 spots are marked with.
+
+    config ZATT_REFLECTED_SHIFT_C
+        int "Reflected temperature = sensor Ta minus this (degC)"
+        default 8
+        help
+            Melexis' recommended TA_SHIFT for the 55 degree part.
+
+    config ZATT_PUSH_INTERVAL_S
+        int "Seconds between metric pushes"
+        default 10
+        range 2 3600
+
+    config ZATT_HTTP_PORT
+        int "Mapping page HTTP port"
+        default 80
+
+    config ZATT_BATTERY_ADC
+        bool "Measure the battery on an ADC pin"
+        default n
+        help
+            Needs a resistor divider from the battery to the pin (see the README). Off by default:
+            without it zatt_battery_volts is not sent.
+
+    config ZATT_BATTERY_GPIO
+        int "Battery ADC GPIO"
+        depends on ZATT_BATTERY_ADC
+        default 1 if IDF_TARGET_ESP32S3
+        default 34 if IDF_TARGET_ESP32
+        default 0
+        help
+            S3: GPIO1 is ADC1_CH0. Must be an ADC1 pin (ADC2 clashes with Wi-Fi).
+
+    config ZATT_BATTERY_DIVIDER_PERCENT
+        int "Battery divider ratio (percent): battery volts / pin volts x 100"
+        depends on ZATT_BATTERY_ADC
+        default 200
+        help
+            200 for two equal resistors (for example 100k + 100k), which keeps a 4.2 V cell at 2.1 V.
+
+    menu "Default spot rectangles (used until saved from the mapping page)"
+        comment "Format x0,y0,x1,y1 inclusive, pixel (0,0) top left; empty means disabled"
+
+        config ZATT_SPOT_T1_DEFAULT
+            string "T1: J1, the live screw's head"
+            default ""
+        config ZATT_SPOT_T2_DEFAULT
+            string "T2: J2, the live screw's head"
+            default ""
+        config ZATT_SPOT_T3_DEFAULT
+            string "T3: F1's clip on the live input side"
+            default ""
+        config ZATT_SPOT_T4_DEFAULT
+            string "T4: K1, the top of its case above the contacts"
+            default ""
+        config ZATT_SPOT_T5_DEFAULT
+            string "T5: RS1 (the shunt), and the pour beside it"
+            default ""
+        config ZATT_SPOT_T6_DEFAULT
+            string "T6: the L_F pour between F1 and K1"
+            default ""
+        config ZATT_SPOT_T7_DEFAULT
+            string "T7: R1 (the fusible resistor)"
+            default ""
+    endmenu
+
+endmenu
