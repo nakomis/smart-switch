@@ -30,9 +30,16 @@ if existing=$(aws s3api head-object --bucket "$bucket" --key "$object" --query '
         exit 0
     fi
     echo "s3://${bucket}/${object} already exists with other bytes: a published version is never replaced" >&2
+    echo "(another run probably took ${version} first: re-run all this run's jobs to take the next one)" >&2
     exit 1
 fi
-# --if-none-match: never replaced, even by a publish racing this one.
-aws s3api put-object --bucket "$bucket" --key "$object" --body "$image" --if-none-match '*' \
-    --content-type application/octet-stream --metadata "sha256=${sha}" > /dev/null
+# --if-none-match: never replaced, even by a publish racing this one (S3 answers 412).
+if ! out=$(aws s3api put-object --bucket "$bucket" --key "$object" --body "$image" --if-none-match '*' \
+    --content-type application/octet-stream --metadata "sha256=${sha}" 2>&1); then
+    echo "$out" >&2
+    if grep -q 'PreconditionFailed\|(412)' <<< "$out"; then
+        echo "another run published ${version} first: re-run all this run's jobs to take the next one" >&2
+    fi
+    exit 1
+fi
 echo "published petro ${version} (sha256 ${sha}) to s3://${bucket}/${object}"

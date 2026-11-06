@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { GithubCiStack, ciRoleName, githubRepoFrom } from '../lib/github-ci-stack';
+import { GithubCiStack, ciReadRoleName, ciRoleName, githubRepoFrom, publishContext } from '../lib/github-ci-stack';
 
 const ACCOUNT = '000000000000';
 const CONTEXT = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cdk.json'), 'utf8')).context;
@@ -20,21 +20,29 @@ const synth = (deployEnv: 'sandbox' | 'prod') => {
 
 type Statement = { Action: string | string[]; Resource: string | string[]; Condition?: unknown };
 
-const role = (t: Template) => {
-  const [r] = Object.values(t.findResources('AWS::IAM::Role')) as {
-    Properties: {
-      RoleName: string;
-      MaxSessionDuration: number;
-      AssumeRolePolicyDocument: { Statement: (Statement & { Principal: { Federated: string } })[] };
-    };
-  }[];
-  return r.Properties;
+type RoleProps = {
+  RoleName: string;
+  MaxSessionDuration: number;
+  AssumeRolePolicyDocument: { Statement: (Statement & { Principal: { Federated: string } })[] };
 };
 
-const statements = (t: Template): Statement[] =>
+const roleResources = (t: Template) =>
+  t.findResources('AWS::IAM::Role') as Record<string, { Properties: RoleProps }>;
+
+/** The publishing role (CiRole), or the sandbox read-only role (CiReadRole). */
+const role = (t: Template, which: 'CiRole' | 'CiReadRole' = 'CiRole'): RoleProps => {
+  // Logical ids are the construct id plus a hash: CiRole… and CiReadRole… don't share a prefix.
+  const [r] = Object.entries(roleResources(t)).filter(([id]) => id.startsWith(which));
+  return r[1].Properties;
+};
+
+/** The statements of the policies attached to the role whose logical id starts with `which`. */
+const statements = (t: Template, which: 'CiRole' | 'CiReadRole' = 'CiRole'): Statement[] =>
   (Object.values(t.findResources('AWS::IAM::Policy')) as {
-    Properties: { PolicyDocument: { Statement: Statement[] } };
-  }[]).flatMap((p) => p.Properties.PolicyDocument.Statement);
+    Properties: { PolicyDocument: { Statement: Statement[] }; Roles: { Ref: string }[] };
+  }[])
+    .filter((p) => p.Properties.Roles.some((r) => r.Ref.startsWith(which)))
+    .flatMap((p) => p.Properties.PolicyDocument.Statement);
 
 const actions = (s: Statement) => ([] as string[]).concat(s.Action);
 const resources = (s: Statement) => ([] as string[]).concat(s.Resource);
@@ -47,16 +55,24 @@ describe('GithubCiStack', () => {
     expect(GITHUB).toEqual({ owner: 'nakomis', ownerId: '1488244', repo: 'smart-switch', repoId: '1443001490' });
   });
 
-  test('one role per environment, named for the tracker allow-list', () => {
-    sandbox.resourceCountIs('AWS::IAM::Role', 1);
+  test('a publishing role per environment, named for the tracker allow-list; a read role in sandbox', () => {
+    sandbox.resourceCountIs('AWS::IAM::Role', 2);
+    prod.resourceCountIs('AWS::IAM::Role', 1);
     expect(role(sandbox).RoleName).toBe('nakomis-petro-github-ci-sandbox');
+    expect(role(sandbox, 'CiReadRole').RoleName).toBe('nakomis-petro-github-ci-sandbox-read');
+    expect(ciReadRoleName('sandbox')).toBe('nakomis-petro-github-ci-sandbox-read');
+    expect(role(sandbox, 'CiReadRole').MaxSessionDuration).toBe(3600);
     expect(role(prod).RoleName).toBe('nakomis-petro-github-ci-prod');
     expect(ciRoleName('prod')).toBe('nakomis-petro-github-ci-prod');
     expect(role(sandbox).MaxSessionDuration).toBe(3600);
   });
 
-  test("trusts the account's GitHub OIDC provider, for sts.amazonaws.com only", () => {
-    const [trust] = role(sandbox).AssumeRolePolicyDocument.Statement;
+  test.each([
+    ['sandbox', 'CiRole'],
+    ['sandbox', 'CiReadRole'],
+    ['prod', 'CiRole'],
+  ] as const)("%s %s trusts the account's GitHub OIDC provider, for sts.amazonaws.com only", (env, which) => {
+    const [trust] = role(env === 'sandbox' ? sandbox : prod, which).AssumeRolePolicyDocument.Statement;
     expect(trust.Action).toBe('sts:AssumeRoleWithWebIdentity');
     expect(trust.Principal.Federated).toBe(
       `arn:aws:iam::${ACCOUNT}:oidc-provider/token.actions.githubusercontent.com`,
@@ -66,8 +82,22 @@ describe('GithubCiStack', () => {
     });
   });
 
-  test('sandbox trusts any ref of this repository, in both subject forms', () => {
+  test('sandbox publishes only from pushes to main, in both subject forms', () => {
+    expect(publishContext('sandbox')).toBe('ref:refs/heads/main');
     const [trust] = role(sandbox).AssumeRolePolicyDocument.Statement;
+    expect(trust.Condition).toEqual({
+      StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
+      StringLike: {
+        'token.actions.githubusercontent.com:sub': [
+          'repo:nakomis@1488244/smart-switch@1443001490:ref:refs/heads/main',
+          'repo:nakomis/smart-switch:ref:refs/heads/main',
+        ],
+      },
+    });
+  });
+
+  test('the sandbox read role trusts any ref of this repository, in both subject forms', () => {
+    const [trust] = role(sandbox, 'CiReadRole').AssumeRolePolicyDocument.Statement;
     expect(trust.Condition).toMatchObject({
       StringLike: {
         'token.actions.githubusercontent.com:sub': [
@@ -79,6 +109,7 @@ describe('GithubCiStack', () => {
   });
 
   test('prod trusts only the production environment (Martin approves it)', () => {
+    expect(publishContext('prod')).toBe('environment:production');
     const [trust] = role(prod).AssumeRolePolicyDocument.Statement;
     expect(trust.Condition).toMatchObject({
       StringLike: {
@@ -111,8 +142,21 @@ describe('GithubCiStack', () => {
     }
   });
 
-  test('outputs the role ARN for the AWS_*_ROLE_ARN repo variables', () => {
+  test('the sandbox read role may only read and list petro/ in the sandbox bucket', () => {
+    const s = statements(sandbox, 'CiReadRole');
+    expect(s.flatMap(actions).sort()).toEqual(['s3:GetObject', 's3:ListBucket']);
+    const get = s.find((x) => actions(x).includes('s3:GetObject'))!;
+    expect(resources(get)).toEqual(['arn:aws:s3:::nakomis-firmware-sandbox/petro/*']);
+    const list = s.find((x) => actions(x).includes('s3:ListBucket'))!;
+    expect(resources(list)).toEqual(['arn:aws:s3:::nakomis-firmware-sandbox']);
+    expect(JSON.stringify(s)).not.toMatch(/PutObject|execute-api|sts:AssumeRole|[0-9]{12}/);
+  });
+
+  test('outputs the role ARNs for the AWS_*_ROLE_ARN repo variables', () => {
     sandbox.hasOutput('CiRoleArn', {});
+    sandbox.hasOutput('CiReadRoleArn', {});
+    prod.hasOutput('CiRoleArn', {});
+    expect(Object.keys(prod.findOutputs('CiReadRoleArn'))).toEqual([]);
   });
 });
 

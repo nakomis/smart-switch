@@ -13,9 +13,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Deploys on main queue behind each other; PR runs cancel their superseded predecessor.
+# PR runs cancel their superseded predecessor. Pushes and dispatches get a group of their own (the
+# run id), i.e. none: a workflow-level group would hold every later merge's run behind one waiting
+# for the production approval, and GitHub keeps only one pending run per group, so an intermediate
+# merge's firmware would silently never publish. The publish jobs serialise themselves instead.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.ref) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -39,6 +42,7 @@ jobs:
       pull-requests: read
     outputs:
       firmware: ${{ steps.filter.outputs.firmware }}
+      image: ${{ steps.filter.outputs.image }}
       infra: ${{ steps.filter.outputs.infra }}
       pcb: ${{ steps.filter.outputs.pcb }}
     steps:
@@ -52,6 +56,12 @@ jobs:
             firmware:
               - 'firmware/**'
               - '.github/workflows/ci.yml'
+            # What goes into the image: only these need a new version, and only these publish. A
+            # change to the workflow, the scripts or the tests alone builds and tests the firmware
+            # but publishes nothing (and so never steps the published version past version.txt).
+            image:
+              - 'firmware/esp32c6/**'
+              - 'firmware/port/**'
             infra:
               - 'infra/**'
               - '.github/workflows/ci.yml'
@@ -86,14 +96,18 @@ jobs:
           python -m pip install -r firmware/tests/requirements.txt
           python -m pytest -v firmware/tests firmware/scripts/tests
 
-  # The tracker's next version (project petro), on a merge to main that touches the firmware.
-  # version.txt seeds it, and wins if it's ahead (a hand-bumped minor or major); a version already
-  # in the bucket is stepped past. Computed once, so sandbox and prod publish the same version.
+  # The tracker's next version (project petro), on a merge to main that changes the image.
+  # version.txt wins if it's ahead (a hand-bumped minor or major), and is taken exactly when the
+  # tracker doesn't answer (until nakomis-infra#33 is live): compute-version would otherwise fall
+  # back to version.txt and bump it, publishing N+1 for a version.txt of N, and the next PR bumping
+  # to N+1 would then fail its version check. A version already in the bucket is stepped past.
+  # Computed once, so sandbox and prod publish the same version. Runs as the publishing role
+  # (subject ref:refs/heads/main: this job has no environment), which the tracker allow-lists.
   version:
     name: Firmware version
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.firmware == 'true'
+    if: github.event_name == 'push' && needs.changes.outputs.image == 'true'
     permissions:
       id-token: write
       contents: read
@@ -107,27 +121,41 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_SANDBOX_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Seed from version.txt
+      # A sentinel, not version.txt: when the tracker doesn't answer, compute-version bumps this
+      # instead, to 0.0.1, 0.1.0 or 1.0.0, which the next step recognises.
+      - name: Seed compute-version's fallback
         run: |
-          printf '{"version": "%s"}\n' "$(tr -d '[:space:]' < firmware/esp32c6/version.txt)" > version.json
+          printf '{"version": "0.0.0"}\n' > version.json
       - name: Compute version
         id: compute
-        uses: nakomis/nakomis-infra/.github/actions/compute-version@main
+        # nakomis/nakomis-infra main, 30 Oct 2026.
+        uses: nakomis/nakomis-infra/.github/actions/compute-version@e2092262b947874e13ee05d5b5a9365e6b31b8c8
         with:
           project: ${{ env.TRACKER_PROJECT }}
           environment: sandbox
           version-file: version.json
-      - name: Take version.txt if ahead, and skip versions already published
+      - name: Take version.txt if ahead or the tracker is down, and skip versions already published
         id: free
         env:
           COMPUTED: ${{ steps.compute.outputs.version }}
         run: |
+          semver='^[0-9]+\.[0-9]+\.[0-9]+$'
           file=$(tr -d '[:space:]' < firmware/esp32c6/version.txt)
-          v=$(printf '%s\n%s\n' "$COMPUTED" "$file" | sort -V | tail -1)
-          while aws s3api head-object --bucket nakomis-firmware-sandbox --key "petro/$v/firmware.bin" > /dev/null 2>&1; do
+          [[ "$file" =~ $semver ]] || { echo "::error file=firmware/esp32c6/version.txt::not x.y.z: $file"; exit 1; }
+          [[ "$COMPUTED" =~ $semver ]] || { echo "::error::compute-version gave '$COMPUTED', not x.y.z"; exit 1; }
+          case "$COMPUTED" in
+            0.0.1 | 0.1.0 | 1.0.0)
+              echo "::notice::the deployment tracker didn't answer: taking version.txt's $file"
+              v=$file ;;
+            *) v=$(printf '%s\n%s\n' "$COMPUTED" "$file" | sort -V | tail -1) ;;
+          esac
+          # Only a genuine 404 means free; anything else (403, throttling, no network) fails the job.
+          while out=$(aws s3api head-object --bucket nakomis-firmware-sandbox --key "petro/$v/firmware.bin" 2>&1); do
+            echo "petro $v is already published: stepping past it"
             IFS=. read -r a b c <<< "$v"; v="$a.$b.$((c + 1))"
           done
-          [ "$v" = "$COMPUTED" ] || echo "::notice::the tracker gave $COMPUTED, version.txt says $file: publishing $v"
+          grep -q '(404)' <<< "$out" || { echo "::error::could not check the firmware bucket: $out"; exit 1; }
+          [ "$v" = "$COMPUTED" ] || echo "::notice::compute-version gave $COMPUTED, version.txt says $file: publishing $v"
           printf '{\n  "version": "%s"\n}\n' "$v" > version.json
           echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
@@ -180,20 +208,24 @@ jobs:
           . "$IDF_PATH/export.sh"
           python -m pip install --quiet "pytest>=8"
           IDF_PYTHON="$(command -v python)" python -m pytest -v firmware/scripts/tests
-      - if: github.event_name == 'push'
+      - if: github.event_name == 'push' && needs.version.result == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: petro-firmware
           path: publish/
           if-no-files-found: error
 
-  # On a PR that touches the firmware, version.txt must not be published yet: bump it with every
+  # On a PR that changes the image, version.txt must not be published yet: bump it with every
   # firmware change (CLAUDE.md), so a build on the bench is never mistaken for a published one.
+  # Runs as the read-only role (it trusts any ref; the publishing role trusts only main). Skipped on
+  # PRs from forks, which get no OIDC token: skipped passes the CI Status gate.
   firmware-version-check:
     name: Firmware version is unpublished
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.firmware == 'true'
+    if: |
+      github.event_name == 'pull_request' && needs.changes.outputs.image == 'true' &&
+      !github.event.pull_request.head.repo.fork
     permissions:
       id-token: write
       contents: read
@@ -203,7 +235,7 @@ jobs:
           ref: ${{ env.CHECKOUT_REF }}
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ vars.AWS_SANDBOX_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_SANDBOX_READ_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Check version.txt isn't already in the sandbox bucket
         run: |
@@ -221,11 +253,21 @@ jobs:
           fi
 
   # ── Firmware publishing (merges to main) ──────────────────────────────────────────────────────
+  # Job-level groups (the workflow has none on push) publish one run at a time per environment, in
+  # order, and never cancel a publish under way. Two runs that computed the same version (two
+  # merges before either published) can't overwrite each other: ci-publish.sh puts with
+  # If-None-Match, so the later one fails, saying so, and a re-run of all its jobs takes the next
+  # version.
   firmware-publish-sandbox:
     name: Publish firmware (sandbox)
     runs-on: ubuntu-latest
-    needs: [version, firmware-build]
-    if: ${{ !cancelled() && github.event_name == 'push' && needs.version.result == 'success' && needs.firmware-build.result == 'success' }}
+    needs: [version, firmware-host-tests, firmware-build]
+    if: |
+      !cancelled() && github.event_name == 'push' && needs.version.result == 'success' &&
+      needs.firmware-host-tests.result == 'success' && needs.firmware-build.result == 'success'
+    concurrency:
+      group: petro-publish-sandbox
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -250,21 +292,29 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: firmware/scripts/ci-publish.sh sandbox publish/petro.bin "$VERSION"
       - name: Record deployment (sandbox)
-        uses: nakomis/nakomis-infra/.github/actions/record-deployment@main
+        # nakomis/nakomis-infra main, 30 Oct 2026.
+        uses: nakomis/nakomis-infra/.github/actions/record-deployment@e2092262b947874e13ee05d5b5a9365e6b31b8c8
         with:
           project: ${{ env.TRACKER_PROJECT }}
           environment: sandbox
           version-file: publish/version.json
 
   # The same bytes, after Martin approves the production environment. Refuses to run if that
-  # environment has no required reviewer: GitHub creates an environment named in a workflow with no
-  # protection, which would publish to the units on the wall unapproved.
+  # environment has no required reviewer or no branch policy: GitHub creates an environment named in
+  # a workflow with no protection, which would publish to the units on the wall unapproved.
+  # One at a time, like sandbox. A run waiting for approval holds the group, and GitHub keeps one
+  # pending job per group, so with several merges awaiting approval only the newest stays queued:
+  # prod gets the newest firmware (sandbox already has every version), and a superseded prod job
+  # shows as cancelled, which the CI Status gate accepts for this job alone.
   firmware-publish-prod:
     name: Publish firmware (prod)
     runs-on: ubuntu-latest
     needs: [version, firmware-publish-sandbox]
     if: ${{ !cancelled() && github.event_name == 'push' && needs.firmware-publish-sandbox.result == 'success' }}
     environment: production
+    concurrency:
+      group: petro-publish-prod
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -277,8 +327,12 @@ jobs:
           PROD_ROLE: ${{ vars.AWS_PROD_ROLE_ARN }}
         run: |
           [ -n "$PROD_ROLE" ] || { echo "::error::AWS_PROD_ROLE_ARN isn't set: deploy PetroGithubCiStack to prod (infra/README.md)"; exit 1; }
-          rules=$(gh api "repos/$REPO/environments/production" --jq '[.protection_rules[]?.type] | join(",")')
+          env_json=$(gh api "repos/$REPO/environments/production")
+          rules=$(jq -r '[.protection_rules[]?.type] | join(",")' <<< "$env_json")
           [[ ",$rules," == *,required_reviewers,* ]] || { echo "::error::the production environment has no required reviewer (rules: ${rules:-none})"; exit 1; }
+          # Without a branch policy any branch could deploy to it (and so assume the prod role).
+          jq -e '.deployment_branch_policy.custom_branch_policies == true or .deployment_branch_policy.protected_branches == true' <<< "$env_json" > /dev/null ||
+            { echo "::error::the production environment has no deployment branch policy: limit it to main (infra/README.md)"; exit 1; }
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.CHECKOUT_REF }}
@@ -299,7 +353,8 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: firmware/scripts/ci-publish.sh prod publish/petro.bin "$VERSION"
       - name: Record deployment (prod)
-        uses: nakomis/nakomis-infra/.github/actions/record-deployment@main
+        # nakomis/nakomis-infra main, 30 Oct 2026.
+        uses: nakomis/nakomis-infra/.github/actions/record-deployment@e2092262b947874e13ee05d5b5a9365e6b31b8c8
         with:
           project: ${{ env.TRACKER_PROJECT }}
           environment: prod
@@ -387,5 +442,7 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key)=\(.value.result)"'
-          # Every job passed or was skipped (nothing of its changed, or not main).
-          echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")' > /dev/null
+          # Every job passed or was skipped (nothing of its changed, or not main). The prod publish may
+          # also be cancelled: a newer merge's superseded it in its concurrency group, or Martin did.
+          echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped"
+            or (.key == "firmware-publish-prod" and .value.result == "cancelled"))' > /dev/null

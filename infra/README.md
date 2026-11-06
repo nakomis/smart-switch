@@ -10,7 +10,7 @@ eu-west-2.
 | Stack | What |
 |---|---|
 | `PetroDeviceStack` | One IoT Thing per unit, `petro-<env>-bN`, from `devices.json`, and the `petro-device-<env>` policy |
-| `PetroGithubCiStack` | `nakomis-petro-github-ci-<env>`, the role GitHub Actions publishes firmware with (PETRO-9) |
+| `PetroGithubCiStack` | `nakomis-petro-github-ci-<env>`, the role GitHub Actions publishes firmware with, and in sandbox `nakomis-petro-github-ci-sandbox-read` for PR runs (PETRO-9) |
 
 ### The CI role
 
@@ -19,11 +19,19 @@ eu-west-2.
 deployment tracker. Nothing else: CI synthesises the CDK but doesn't deploy it. It trusts the
 account's GitHub OIDC provider, for this repository only, in both subject forms
 (`repo:nakomis@<owner id>/smart-switch@<repo id>:…` and `repo:nakomis/smart-switch:…`): the ids are
-`cdk.json`'s `github` context. Sandbox trusts any ref (PRs check against its bucket; merges publish
-there); prod trusts only jobs in the `production` GitHub environment, which Martin approves.
+`cdk.json`'s `github` context. Sandbox's trusts only pushes to `main` (subject
+`ref:refs/heads/main`: the version job and the sandbox publish, which have no GitHub environment);
+prod's trusts only jobs in the `production` GitHub environment (subject `environment:production`),
+which Martin approves and which is limited to `main`.
 
-The tracker allow-lists both roles by ARN in nakomis-infra (`ALLOWED_CI_ROLE_ARNS`), and the
-workflow finds them in the repository variables `AWS_SANDBOX_ROLE_ARN` and `AWS_PROD_ROLE_ARN`:
+In sandbox only, `nakomis-petro-github-ci-sandbox-read` is for PR and branch runs (it trusts any
+ref): it may read and list `petro/` in `nakomis-firmware-sandbox`, for the check that `version.txt`
+isn't published yet, and nothing else. It doesn't call the tracker.
+
+The tracker allow-lists both publishing roles by ARN in nakomis-infra (`ALLOWED_CI_ROLE_ARNS`; the
+read role needn't be), and the workflow finds the roles in the repository variables
+`AWS_SANDBOX_ROLE_ARN`, `AWS_SANDBOX_READ_ROLE_ARN` (the stack's `CiReadRoleArn` output) and
+`AWS_PROD_ROLE_ARN`:
 
 ```bash
 NPM_ENVIRONMENT=prod npx cdk deploy --profile nakom.is-admin PetroGithubCiStack

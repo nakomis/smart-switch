@@ -57,13 +57,24 @@ Bump `esp32c6/version.txt` with every firmware change. `sdkconfig`, `build/` and
 
 ### Publishing (CI, PETRO-9)
 
-A PR that touches `firmware/` fails if `version.txt` is already in the sandbox bucket. Its merge
-takes the deployment tracker's next version for project `petro` (patch, or `--bump-minor` /
-`--bump-major` alone on a line of the PR description), or `version.txt` if that's ahead, builds the
-image stamped with it, and `scripts/ci-publish.sh` puts it at
+A PR that changes the image (`esp32c6/` or `port/`) fails if `version.txt` is already in the
+sandbox bucket. Its merge takes the deployment tracker's next version for project `petro` (patch, or
+`--bump-minor` / `--bump-major` alone on a line of the PR description), or `version.txt` if that's
+ahead, builds the image stamped with it, and `scripts/ci-publish.sh` puts it at
 `s3://nakomis-firmware-sandbox/petro/<x.y.z>/firmware.bin`, where Fleet offers it. Once Martin
 approves the `production` environment, the same bytes go to `nakomis-firmware-prod`. Each publish is
-recorded in the tracker. A published version is never replaced.
+recorded in the tracker. A published version is never replaced. Changes to the tests, the scripts
+or the workflow alone are built and tested but not published.
+
+While the tracker isn't answering (until nakomis/nakomis-infra#33 is deployed, or in an outage),
+the merge publishes exactly `version.txt`'s version, so the published version and `version.txt`
+agree and the next PR's bump passes its check. Once it answers, the published version can run
+ahead of `version.txt` (a merge that didn't bump takes the next patch); bump `version.txt` past the
+published one in your next firmware PR.
+
+Two merges whose runs pick the same version (both before either publishes) can't overwrite each
+other: the second publish fails, saying another run took the version. Re-run all that run's jobs
+and it takes the next one.
 
 ## Provisioning
 

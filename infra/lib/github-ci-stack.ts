@@ -39,6 +39,17 @@ export interface GithubCiStackProps extends cdk.StackProps {
 /** The CI role's name: the deployment tracker allow-lists it by this name (nakomis-infra). */
 export const ciRoleName = (deployEnv: string) => `nakomis-petro-github-ci-${deployEnv}`;
 
+/** The read-only role PR and branch runs check the sandbox bucket with (sandbox only). */
+export const ciReadRoleName = (deployEnv: string) => `nakomis-petro-github-ci-${deployEnv}-read`;
+
+/**
+ * The OIDC subject context the publishing role trusts. A job with an `environment:` is issued
+ * `environment:<name>` in place of its ref, so prod (behind `production`) trusts that; sandbox's
+ * publish jobs have no environment, so it trusts pushes to main only.
+ */
+export const publishContext = (deployEnv: 'sandbox' | 'prod') =>
+  deployEnv === 'prod' ? 'environment:production' : 'ref:refs/heads/main';
+
 /**
  * GitHub's OIDC subject carries immutable ids (repo:OWNER@OWNER_ID/REPO@REPO_ID:CONTEXT) as well as
  * the older name-only form; both are accepted, with the names pinned either way. The ids survive a
@@ -56,13 +67,18 @@ export const oidcSubjects = (github: GithubRepo, context: string) => [
  * nakomis-infra). Nothing else: CI synthesises the CDK but never deploys it, so the role has no
  * sts:AssumeRole on the CDK bootstrap roles (add `cdk-hnb659fds-*` here when it does).
  *
- * Sandbox trusts any ref of this repository: PRs check the version against its bucket and compute
- * the version from the tracker; merges publish there. Forks get no OIDC token. Prod trusts only jobs
- * in the `production` GitHub environment, which Martin approves, so neither a branch nor an
- * unapproved run can publish to the units on the wall.
+ * The sandbox publishing role trusts only pushes to main (the version job, which computes the version
+ * from the tracker, and the sandbox publish): a branch or PR run can't publish. Prod's trusts only
+ * jobs in the `production` GitHub environment, which Martin approves (and which is limited to main),
+ * so neither a branch nor an unapproved run can publish to the units on the wall. In sandbox a
+ * second, read-only role trusts any ref, for the PR check that version.txt isn't published yet: it
+ * may only read and list the bucket's petro/ objects, and doesn't call the tracker. Forks get no
+ * OIDC token.
  */
 export class GithubCiStack extends cdk.Stack {
   public readonly role: iam.Role;
+  /** The read-only role for PR and branch runs; sandbox only. */
+  public readonly readRole?: iam.Role;
 
   constructor(scope: Construct, id: string, props: GithubCiStackProps) {
     super(scope, id, props);
@@ -75,35 +91,30 @@ export class GithubCiStack extends cdk.Stack {
       `arn:${this.partition}:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
     );
     const bucket = `nakomis-firmware-${deployEnv}`;
+    const trust = (context: string) =>
+      new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
+        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
+        StringLike: { 'token.actions.githubusercontent.com:sub': oidcSubjects(github, context) },
+      });
+    const objects = `arn:${this.partition}:s3:::${bucket}/petro/*`;
+    // So a missing object answers 404, not 403 (unconditional: S3's implicit check carries no prefix).
+    const list = () =>
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [`arn:${this.partition}:s3:::${bucket}`],
+      });
 
     this.role = new iam.Role(this, 'CiRole', {
       roleName: ciRoleName(deployEnv),
       description: `Assumed by smart-switch (Petro) GitHub Actions to publish firmware (${deployEnv})`,
       maxSessionDuration: cdk.Duration.hours(1),
-      assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
-        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        StringLike: {
-          'token.actions.githubusercontent.com:sub': oidcSubjects(
-            github,
-            deployEnv === 'prod' ? 'environment:production' : '*',
-          ),
-        },
-      }),
+      assumedBy: trust(publishContext(deployEnv)),
     });
 
     this.role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['s3:PutObject', 's3:GetObject'],
-        resources: [`arn:${this.partition}:s3:::${bucket}/petro/*`],
-      }),
+      new iam.PolicyStatement({ actions: ['s3:PutObject', 's3:GetObject'], resources: [objects] }),
     );
-    // So a missing object answers 404, not 403 (unconditional: S3's implicit check carries no prefix).
-    this.role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['s3:ListBucket'],
-        resources: [`arn:${this.partition}:s3:::${bucket}`],
-      }),
-    );
+    this.role.addToPolicy(list());
     // The deployment tracker (nakomis-infra's DeploymentTrackerStack) is a REST API in the prod
     // account, so the sandbox role calls it cross-account and needs this identity grant as well as
     // the tracker's resource-policy allow-list. Its account isn't this stack's to know: the resource
@@ -116,5 +127,17 @@ export class GithubCiStack extends cdk.Stack {
     );
 
     new cdk.CfnOutput(this, 'CiRoleArn', { value: this.role.roleArn });
+
+    if (deployEnv === 'sandbox') {
+      this.readRole = new iam.Role(this, 'CiReadRole', {
+        roleName: ciReadRoleName(deployEnv),
+        description: 'Assumed by smart-switch (Petro) GitHub Actions on PRs and branches: read-only (sandbox)',
+        maxSessionDuration: cdk.Duration.hours(1),
+        assumedBy: trust('*'),
+      });
+      this.readRole.addToPolicy(new iam.PolicyStatement({ actions: ['s3:GetObject'], resources: [objects] }));
+      this.readRole.addToPolicy(list());
+      new cdk.CfnOutput(this, 'CiReadRoleArn', { value: this.readRole.roleArn });
+    }
   }
 }
