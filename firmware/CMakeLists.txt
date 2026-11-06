@@ -14,10 +14,14 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(PETRO_COVERAGE "Build port/ with --coverage" OFF)
 
+find_package(PkgConfig REQUIRED)
+# cJSON for the command parsers; ESP-IDF has its own (the json component).
+pkg_check_modules(CJSON REQUIRED IMPORTED_TARGET libcjson)
+
 file(GLOB PETRO_PORT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/port/*.c)
 add_library(petro_port STATIC ${PETRO_PORT_SOURCES})
 target_include_directories(petro_port PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/port)
-target_link_libraries(petro_port PUBLIC m)
+target_link_libraries(petro_port PUBLIC PkgConfig::CJSON m)
 target_compile_options(petro_port PRIVATE -Wall -Wextra -Werror)
 if(PETRO_COVERAGE)
   target_compile_options(petro_port PRIVATE --coverage -O0)

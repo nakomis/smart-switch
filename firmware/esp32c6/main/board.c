@@ -10,6 +10,7 @@
 #include "esp_check.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "led_strip.h"
 #include "petro_pins.h"
@@ -21,6 +22,11 @@ static const char *TAG = "board";
 #define NTC_SAMPLES 16
 
 static bool relay_on;
+static esp_err_t part_err[BOARD_PARTS] = {
+    ESP_ERR_INVALID_STATE, ESP_ERR_INVALID_STATE, ESP_ERR_INVALID_STATE, ESP_ERR_INVALID_STATE,
+    ESP_ERR_INVALID_STATE,
+};
+static SemaphoreHandle_t bl_lock;
 static led_strip_handle_t led;
 static adc_oneshot_unit_handle_t adc;
 static adc_cali_handle_t adc_cali;
@@ -145,6 +151,9 @@ static esp_err_t ntc_init(void)
 
 static esp_err_t bl_init(void)
 {
+    bl_lock = xSemaphoreCreateMutex();
+    if (bl_lock == NULL)
+        return ESP_ERR_NO_MEM;
     // UART1 at 4800 8N1: our TX (GPIO11, net BL_RX) to the BL0939's RX, its TX (GPIO10, net
     // BL_TX, 10k pull-up on the board) to our RX.
     uart_config_t cfg = {
@@ -176,14 +185,31 @@ static esp_err_t bl_init(void)
 
 esp_err_t board_init(void)
 {
-    // The relay before anything else (and before anything can fail).
-    esp_err_t relay = relay_init();
-    ESP_RETURN_ON_ERROR(relay, TAG, "relay");
-    ESP_RETURN_ON_ERROR(inputs_init(), TAG, "inputs");
-    ESP_RETURN_ON_ERROR(led_init(), TAG, "led");
-    ESP_RETURN_ON_ERROR(ntc_init(), TAG, "ntc");
-    ESP_RETURN_ON_ERROR(bl_init(), TAG, "bl0939");
-    return ESP_OK;
+    // The relay before anything else (and before anything can fail); then each part on its own.
+    static esp_err_t (*const init[BOARD_PARTS])(void) = {relay_init, inputs_init, led_init, ntc_init, bl_init};
+    esp_err_t first = ESP_OK;
+    for (int i = 0; i < BOARD_PARTS; i++)
+    {
+        part_err[i] = init[i]();
+        if (part_err[i] != ESP_OK)
+        {
+            ESP_LOGE(TAG, "%s: %s", board_part_name((board_part)i), esp_err_to_name(part_err[i]));
+            if (first == ESP_OK)
+                first = part_err[i];
+        }
+    }
+    return first;
+}
+
+bool board_part_ok(board_part part)
+{
+    return part < BOARD_PARTS && part_err[part] == ESP_OK;
+}
+
+const char *board_part_name(board_part part)
+{
+    static const char *const names[BOARD_PARTS] = {"relay", "inputs", "led", "ntc", "bl0939"};
+    return part < BOARD_PARTS ? names[part] : "?";
 }
 
 void board_relay(bool on)
@@ -199,6 +225,8 @@ bool board_relay_is_on(void)
 
 esp_err_t board_led(uint8_t r, uint8_t g, uint8_t b)
 {
+    if (led == NULL)
+        return ESP_ERR_INVALID_STATE;
     ESP_RETURN_ON_ERROR(led_strip_set_pixel(led, 0, r, g, b), TAG, "led pixel");
     return led_strip_refresh(led);
 }
@@ -210,6 +238,10 @@ bool board_button_pressed(void)
 
 esp_err_t board_ntc_read(int *raw, int *mv)
 {
+    *raw = 0;
+    *mv = -1;
+    if (adc == NULL)
+        return ESP_ERR_INVALID_STATE;
     int sum = 0;
     for (int i = 0; i < NTC_SAMPLES; i++)
     {
@@ -226,13 +258,21 @@ esp_err_t board_ntc_read(int *raw, int *mv)
 
 esp_err_t board_bl_read(uint8_t packet[BL0939_PACKET_LEN], size_t *len)
 {
+    *len = 0;
+    if (!board_part_ok(BOARD_BL0939))
+        return ESP_ERR_INVALID_STATE;
     uint8_t req[2];
     size_t n = bl0939_build_full_read(req);
+    xSemaphoreTake(bl_lock, portMAX_DELAY);
     uart_flush_input(BL_UART);
     if (uart_write_bytes(BL_UART, req, n) != (int)n)
+    {
+        xSemaphoreGive(bl_lock);
         return ESP_FAIL;
+    }
     // 2 bytes out and 35 back at 4800 baud is about 77 ms on the wire.
     int got = uart_read_bytes(BL_UART, packet, BL0939_PACKET_LEN, pdMS_TO_TICKS(250));
+    xSemaphoreGive(bl_lock);
     *len = got > 0 ? (size_t)got : 0;
     return got == BL0939_PACKET_LEN ? ESP_OK : ESP_ERR_TIMEOUT;
 }

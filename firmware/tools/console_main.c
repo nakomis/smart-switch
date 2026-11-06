@@ -55,6 +55,8 @@ int main(int argc_main, char **argv_main)
         if (cmd.kind == CONSOLE_RELAY_CYCLE)
             printf(",\"n\":%u,\"on_ms\":%u,\"off_ms\":%u", cmd.cycle.n, cmd.cycle.on_ms,
                    cmd.cycle.off_ms);
+        if (cmd.kind == CONSOLE_MODE)
+            printf(",\"mode\":\"%s\"", ctl_mode_name(cmd.mode));
         if (cmd.kind == CONSOLE_LED)
             printf(",\"r\":%u,\"g\":%u,\"b\":%u", cmd.led.r, cmd.led.g, cmd.led.b);
         printf("}\n");
