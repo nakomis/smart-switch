@@ -77,7 +77,8 @@ https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land
 | `firmware/` | ESP-IDF 5.5 firmware: `port/` portable C with pytest host tests (`tools/` drivers, `tests/`), `esp32c6/` IDF project (`main/petro_pins.h` a checked copy of `pcb/out/petro/pins.h`) |
 | `case/` | The enclosure and any printed internal parts |
 | `docs/` | Design notes, gate procedures (`docs/testing/`), the logo |
-| `infra/` | CDK TypeScript (pnpm, jest): `PetroDeviceStack`, the units' IoT Things (`devices.json`) and their Fleet policy. GithubCiStack and firmware publishing arrive with PETRO-9 |
+| `infra/` | CDK TypeScript (pnpm, jest): `PetroDeviceStack`, the units' IoT Things (`devices.json`) and their Fleet policy; `PetroGithubCiStack` (PETRO-9); the Alexa stacks `PetroAlexaAuthStack`, `PetroAlexaStateStack` (eu-west-2) and `PetroAlexaStack` (eu-west-1), with their Lambdas in `lambda/alexa/` (PETRO-8) |
+| `alexa/` | The Alexa skill package (`skill-package/`: manifest, icons), staged per env by `infra/lib/skill-package.ts`; setup in `docs/alexa-setup.md` |
 
 ## References
 
@@ -86,7 +87,8 @@ https://claude.ai/artifact/A1f2kEu7jyYBrHbdiJMifh (tick items there as they land
   `stat-75-heatlink-pcb` (nakomis/nakostat#57). Once merged: `~/repos/nakomis/nakostat/pcb/heatlink/`.
 - Tinycrypt: `~/repos/nakomis/tinycrypt/hardware/key-board/` (original pipeline, house USB connector).
 - Heatlink firmware: `~/repos/nakomis/nakostat/embedded/esp32/heatlink/`.
-- Alexa pattern: nakostat `docs/alexa-setup.md` and its Alexa Lambda in `infra/`.
+- Alexa pattern: nakostat `docs/alexa-setup.md` and its Alexa Lambda in `infra/`; skill as code: Recipator's
+  `alexa/skill-package/` and `infra/lib/skill-package.ts`. Petro's own: `docs/alexa-setup.md`.
 - ESPHome's `bl0939` component: a reference for the register map and calibration (the datasheet is Chinese only).
 
 ## Tooling

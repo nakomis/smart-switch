@@ -2,6 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
+import { AlexaAuthStack, AlexaStack, AlexaStateStack } from '../lib/alexa-stack';
 import { DeviceStack } from '../lib/device-stack';
 import { GithubCiStack, githubRepoFrom } from '../lib/github-ci-stack';
 import { deployEnvFrom, deviceNamesFor } from '../lib/devices';
@@ -32,6 +33,37 @@ new GithubCiStack(app, 'PetroGithubCiStack', {
   deployEnv,
   github: githubRepoFrom(app.node.tryGetContext('github')),
   description: `Petro GitHub Actions role: publish firmware for Fleet (${deployEnv})`,
+});
+
+// PETRO-8: Alexa Smart Home. The account-linking client sits with the shared pool and the reporter
+// with IoT Core (both eu-west-2); the skill's Lambda runs in eu-west-1, Alexa's EU endpoint region.
+// Two-step first deploy: docs/alexa-setup.md. `-c alexaSkillId=… -c alexaVendorId=…` skip the SSM
+// lookups (CI synthesises without credentials).
+const homeRegion = env.region;
+const alexaAuth = new AlexaAuthStack(app, 'PetroAlexaAuthStack', {
+  env,
+  deployEnv,
+  deviceNames,
+  vendorId: app.node.tryGetContext('alexaVendorId'),
+  crossRegionReferences: true,
+  description: `Petro: Cognito client for Alexa account linking (${deployEnv})`,
+});
+
+new AlexaStateStack(app, 'PetroAlexaStateStack', {
+  env,
+  deployEnv,
+  description: `Petro: unit status for Alexa, and its ChangeReports (${deployEnv})`,
+});
+
+new AlexaStack(app, 'PetroAlexaStack', {
+  env: { account: env.account, region: 'eu-west-1' },
+  deployEnv,
+  homeRegion,
+  userPoolId: alexaAuth.userPoolId,
+  alexaClientId: alexaAuth.client.userPoolClientId,
+  skillId: app.node.tryGetContext('alexaSkillId'),
+  crossRegionReferences: true,
+  description: `Petro: Alexa Smart Home skill Lambda (${deployEnv})`,
 });
 
 const { version: infraVersion } = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'));
