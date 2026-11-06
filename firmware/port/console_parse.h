@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "ctl.h"
+
 typedef enum
 {
     CONSOLE_HELP,
@@ -21,6 +23,8 @@ typedef enum
     CONSOLE_NTC,
     CONSOLE_WIFI_SCAN,
     CONSOLE_J3,
+    CONSOLE_MODE,      // mode is set
+    CONSOLE_LED_AUTO,  // the LED back to showing the state
 } console_kind_t;
 
 // relay cycle's limits: 50 ms is the shortest on or off time, comfortably above the relay's operate
@@ -44,6 +48,7 @@ typedef struct
         {
             uint8_t r, g, b;
         } led;
+        ctl_mode mode;
     };
 } console_cmd_t;
 
