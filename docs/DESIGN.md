@@ -251,7 +251,11 @@ no V-0 black nylon gland was found.
   nor 15 A clips, and 10 A is 67 % of 15 A. A 5×20 15 A fuse breaks only about 500 A, which is low
   for a UK socket's prospective fault current, hence the 6.3×32.
 - **Overload:** the plug's 13 A BS 1362 fuse protects the cord, and the firmware trip at about
-  10.5 A is the backstop for the unit's rating (PETRO-5).
+  10.5 A is the backstop for the unit's rating (PETRO-5). That trip needs 2 s of readings over
+  10.5 A **without a break**: the window restarts at any reading at or below the threshold, so a
+  load hovering around 10.5 A (readings either side of it) may never trip. Accepted: it is within
+  the copper's and the relay's 16 A, and the plug fuse covers a real overload. The instant trip
+  (15 A, half a cycle) has no window.
 - **As built (Martin's decision, 5 Nov 2026): F1 and F2 are bridged** with solid copper links
   (≥ 1.5 mm², clamped), not fuses. Short circuits fall to the plug's 13 A BS 1362 (a breaking
   capacity of its own; Fable at Gate 1 judged F1 to add little on top of it), and a fault in the

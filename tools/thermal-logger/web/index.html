@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zatt</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 1rem; background: #111; color: #ddd; }
+  canvas { width: min(96vw, 800px); image-rendering: pixelated; border: 1px solid #555; cursor: crosshair; display: block; }
+  #info { height: 1.4em; margin: .4rem 0; font-variant-numeric: tabular-nums; }
+  label, select, input, button { margin-right: .5rem; }
+  input[type=password] { width: 12em; }
+  #msg { margin-left: .5rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 0; margin: .5rem 0; }
+  small { color: #999; }
+</style>
+</head>
+<body>
+<h1>Zatt</h1>
+<canvas id="c" width="32" height="24"></canvas>
+<div id="info">hover a pixel</div>
+<div class="bar">
+  <label>Spot <select id="spot"></select></label>
+  <span id="sel">drag on the picture to choose a rectangle</span>
+</div>
+<div class="bar">
+  <label>Token <input id="tok" type="password" autocomplete="off" placeholder="http_token"></label>
+  <button id="save">Save spot</button>
+  <button id="clear">Clear spot</button>
+  <span id="msg"></span>
+</div>
+<div class="bar"><small id="stat"></small></div>
+<small>Pixel (0,0) is top left, as the sensor reports it; warm a pixel with a hand to check the orientation.
+The picture is open on the LAN; saving needs the token from the provisioning step.</small>
+<script>
+const W = 32, H = 24, cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const img = ctx.createImageData(W, H);
+let data = [], spots = {}, sel = null, drag = null, hover = null, lo = 0, hi = 1;
+const names = ['T1','T2','T3','T4','T5','T6','T7'], dropdown = document.getElementById('spot');
+names.forEach(n => dropdown.add(new Option(n)));
+const tok = document.getElementById('tok');
+tok.value = localStorage.getItem('zattToken') || '';
+
+// A dark-to-bright ramp (black, purple, red, orange, yellow, white).
+const stops = [[0,0,0],[70,0,110],[190,40,70],[250,140,20],[255,230,80],[255,255,255]];
+function ramp(t) {
+  t = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(t)), f = t - i;
+  return stops[i].map((v, k) => v + (stops[i + 1][k] - v) * f);
+}
+function draw() {
+  const v = data.filter(x => x !== null);
+  if (v.length) { lo = Math.min(...v); hi = Math.max(...v); if (hi - lo < 5) hi = lo + 5; }
+  data.forEach((x, i) => {
+    const c = x === null ? [40, 40, 40] : ramp((x - lo) / (hi - lo));
+    img.data.set([c[0], c[1], c[2], 255], i * 4);
+  });
+  ctx.putImageData(img, 0, 0);
+  ctx.lineWidth = 0.12; ctx.font = '1px sans-serif';
+  for (const [n, r] of Object.entries(spots)) if (r) outline(r, '#4cf', n);
+  if (sel) outline(sel, '#fff');
+}
+function outline(r, colour, label) {
+  ctx.strokeStyle = colour; ctx.strokeRect(r[0], r[1], r[2] - r[0] + 1, r[3] - r[1] + 1);
+  if (label) { ctx.fillStyle = colour; ctx.fillText(label, r[0] + .1, Math.max(1, r[1] - .2)); }
+}
+function pixel(e) {
+  const b = cv.getBoundingClientRect();
+  return [Math.max(0, Math.min(W - 1, Math.floor((e.clientX - b.left) / b.width * W))),
+          Math.max(0, Math.min(H - 1, Math.floor((e.clientY - b.top) / b.height * H)))];
+}
+function rect(a, b) { return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; }
+function showSel() {
+  document.getElementById('sel').textContent = sel ? 'selected ' + sel.join(',') + ' (x0,y0,x1,y1)'
+    : 'drag on the picture to choose a rectangle';
+}
+cv.addEventListener('mousedown', e => { drag = pixel(e); sel = rect(drag, drag); showSel(); draw(); });
+cv.addEventListener('mousemove', e => {
+  const p = pixel(e), t = data[p[1] * W + p[0]];
+  hover = p;
+  document.getElementById('info').textContent = 'x ' + p[0] + ', y ' + p[1] + ': ' + (t === null || t === undefined ? '-' : t.toFixed(1) + ' °C');
+  if (drag) { sel = rect(drag, p); showSel(); draw(); }
+});
+addEventListener('mouseup', () => { drag = null; });
+cv.addEventListener('mouseleave', () => { document.getElementById('info').textContent = 'hover a pixel'; });
+dropdown.addEventListener('change', () => { const r = spots[dropdown.value]; sel = r ? r.slice() : null; showSel(); draw(); });
+
+async function send(body, what) {
+  const m = document.getElementById('msg');
+  localStorage.setItem('zattToken', tok.value);
+  try {
+    const r = await fetch('/spots', { method: 'POST', headers: { Authorization: 'Bearer ' + tok.value }, body: JSON.stringify(body) });
+    m.textContent = what + ': ' + (await r.text()).trim();
+  } catch (e) { m.textContent = 'failed: ' + e; }
+}
+document.getElementById('save').onclick = () => { if (sel) send({ [dropdown.value]: sel }, dropdown.value); };
+document.getElementById('clear').onclick = () => { send({ [dropdown.value]: null }, dropdown.value + ' cleared'); };
+
+async function tick() {
+  try {
+    const f = await (await fetch('/frame.json', { cache: 'no-store' })).json();
+    data = f.data; spots = f.spots;
+    document.getElementById('stat').textContent = 'frames ' + f.frames + ', Ta ' + (f.ta ?? '-') + ' °C, air ' + (f.air ?? '-') +
+      ' °C, ' + (f.pa ?? '-') + ' Pa, up ' + f.up + ' s, scale ' + lo.toFixed(1) + '..' + hi.toFixed(1) + ' °C';
+    draw();
+  } catch (e) { document.getElementById('stat').textContent = 'no frame: ' + e; }
+  setTimeout(tick, 1000);
+}
+tick();
+</script>
+</body>
+</html>

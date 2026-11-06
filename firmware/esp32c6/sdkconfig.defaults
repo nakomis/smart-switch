@@ -1,0 +1,51 @@
+CONFIG_IDF_TARGET="esp32c6"
+
+# The WROOM-1-N8 has 8 MB, but the table fits 4 MB, as the heatlink's (CLAUDE.md: 4 MB partitions).
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+CONFIG_PARTITION_TABLE_MD5=y
+
+# 160 MHz, the C6's maximum.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+
+# The console (and the logs) on the USB-Serial-JTAG, the house USB connector J4. UART0 (the debug
+# pads) carries the ROM bootloader's output only.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# 1 ms ticks, so relay cycle's times and the button's 5 ms poll are exact.
+CONFIG_FREERTOS_HZ=1000
+
+# The brown-out detector stays on (its default): Gate 2 checks that relay cycling doesn't trip it.
+CONFIG_ESP_BROWNOUT_DET=y
+
+# The OC interrupt (PETRO-5's instant trip) reads OC and opens the relay itself, even while flash
+# is being written: gpio_get_level and gpio_set_level in IRAM.
+CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
+
+# Crashes are saved to flash (read with: idf.py coredump-info).
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# OTA through Fleet: two app slots; a new image that isn't marked healthy (subscribed to Fleet)
+# within 120 s, or crashes first, is rolled back by the bootloader. Images are unsigned (Fleet
+# capability "ota"), as the heatlink's: the SHA-256 from Fleet, the project name and the version
+# guard against a wrong or corrupt download.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# MQTT: drop an unsent message after 10 s, so a reconnect can't deliver a stale response.
+CONFIG_MQTT_USE_CUSTOM_CONFIG=y
+CONFIG_MQTT_OUTBOX_EXPIRED_TIMEOUT_MS=10000
+
+# MQTT and the downloads: allocate TLS record buffers only while they're needed.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+
+# Task watchdog: the control task (which drives the relay) and the meter task (the protection's
+# readings) subscribe themselves; if either, or the idle task, goes 5 s without resetting it, Petro panics and restarts, and a restart leaves the relay
+# off. A new image on probation that hangs is therefore rolled back too.
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
+CONFIG_ESP_TASK_WDT_PANIC=y

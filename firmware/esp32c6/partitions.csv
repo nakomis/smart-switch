@@ -1,0 +1,11 @@
+# Name,   Type, SubType,  Offset,   Size
+# The nakostat heatlink's table. prov holds this unit's settings and credentials (written by the
+# provisioning script, read-only to the firmware), so every Petro runs the same image. Two 1.875 MB
+# app slots for OTA with rollback, and a coredump; the whole table fits the N8's flash in 4 MB.
+nvs,      data, nvs,      0x9000,   0x6000
+phy_init, data, phy,      0xf000,   0x1000
+otadata,  data, ota,      0x10000,  0x2000
+prov,     data, nvs,      0x12000,  0x6000
+ota_0,    app,  ota_0,    0x20000,  1920K
+ota_1,    app,  ota_1,    0x200000, 1920K
+coredump, data, coredump, 0x3E0000, 64K
