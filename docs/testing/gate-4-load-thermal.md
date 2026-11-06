@@ -62,7 +62,9 @@ run, put a small piece of Kapton tape or a dot of black permanent marker on each
     cycling, pointed at open air, never at the unit.
   - **Not the AC unit**, or any motor or compressor: they are inductive, with a large inrush, and
     this test is the resistive rating.
-- [ ] A **kettle** (≈ 3 kW, 13 A), for the real trip test only (§1.7).
+- [ ] A **kettle** drawing **at least 11.5 A** (a 3 kW kettle draws about 13 A), for the real trip
+  test only (§1.7). Check it first on the power meter alone, without the unit: a 2.5 kW kettle
+  draws about 10 A at 230 V, under the 10.5 A trip, and would never trip.
 - [ ] The thermal logger charged and pushing to VictoriaMetrics; the hood printed.
 - [ ] The discharge tool (README rule 6), a room thermometer.
 
@@ -87,8 +89,9 @@ run, put a small piece of Kapton tape or a dot of black permanent marker on each
    in force are back to 10.5 A and 15 A (`trip_amps_temporary` and `instant_amps_temporary` false).
    Relay on: the radiator runs without tripping.
 7. **The real (sustained) threshold:**
-   - Swap the radiator for the **kettle** (water in it), switched on, then relay on.
-   - At 13 A, the relay must open **within about 2.5 s**, as `overcurrent` (13 A is under the 15 A
+   - Swap the radiator for the **kettle** (water in it, and checked at ≥ 11.5 A, above), switched
+     on, then relay on.
+   - At 11.5–14 A, the relay must open **within about 2.5 s**, as `overcurrent` (under the 15 A
      instant threshold, so this is the sustained trip at 10.5 A).
    - If it hasn't opened by 3 s, **switch off at the wall at once**: 13 A is the plug fuse's rating
      and above Petro's.

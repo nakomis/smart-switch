@@ -81,7 +81,7 @@ unit draws under 1–2 W, so the lamp stays dark.
 |---|---|---|---|
 | 3.1 | Nothing on the output. Plug the unit into the dim-bulb tester, then switch on at the wall | A brief glimmer at most (C1 and C2 charging), then dark. The LED shows the boot colours, then Wi-Fi joining, then connected | The lamp stays lit; the RCD trips; any smell, sound or smoke |
 | 3.2 | Wait 5 minutes | Fleet: connected. VictoriaMetrics: `petro_voltage_volts` reads a few volts **below** the power meter's reading (the lamp drops a little; UK mains is often 240–245 V); `petro_zx_hz` ≈ 100; `petro_relay_on` 0 | The voltage reads 0 or wildly off |
-| 3.3 | Press the button **twice** (off → auto → on; the cycle is on → off → auto) | The relay clicks; the lamp stays dark (nothing on the output) | The lamp lights |
+| 3.3 | Press the button **twice** (off → auto → on; the cycle is on → off → auto) | The relay clicks (possibly on the first press already: auto follows a remembered remote "on"); the lamp stays dark (nothing on the output) | The lamp lights |
 | 3.4 | Press it **once** (on → off), or set off from Fleet; check `petro_relay_on` is 0. Switch off at the wall, then unplug | | |
 
 ## 4. Direct, with a lamp load
