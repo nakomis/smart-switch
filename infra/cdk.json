@@ -2,6 +2,12 @@
   "app": "npx ts-node --prefer-ts-exts bin/petro.ts",
   "context": {
     "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:enablePartitionLiterals": true
+    "@aws-cdk/core:enablePartitionLiterals": true,
+    "github": {
+      "owner": "nakomis",
+      "ownerId": "1488244",
+      "repo": "smart-switch",
+      "repoId": "1443001490"
+    }
   }
 }

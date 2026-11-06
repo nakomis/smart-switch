@@ -50,6 +50,7 @@ def test_slot_is_a_stadium_on_edge_cuts(tmp_path):
     assert sorted(find(a, "mid")[1] for a in arcs) == [9.0, 31.0]  # round ends, radius 1 mm
 
 
+@pytest.mark.kicad
 def test_slot_drc_accepts_the_outline_and_keeps_pours_off_it(tmp_path):
     _, _, pcb = _mini(tmp_path, slots=[Slot(10.0, 27.0, 30.0, 27.0, 2.0)])
     drc = _drc(pcb, tmp_path, save=True)
@@ -77,6 +78,7 @@ def test_slot_narrower_than_the_mill_is_refused(tmp_path):
         _mini(tmp_path, slots=[Slot(10.0, 27.0, 30.0, 27.0, MIN_SLOT - 0.1)])
 
 
+@pytest.mark.kicad
 def test_polygon_zone_on_both_layers_with_solid_pads(tmp_path):
     l_shape = [(10.0, 18.0), (30.0, 18.0), (30.0, 21.0), (16.0, 21.0), (16.0, 26.0), (10.0, 26.0)]
     _, _, pcb = _mini(tmp_path, zones=[Zone("+3V3", ("F.Cu", "B.Cu"), l_shape, solid=True, priority=2,
@@ -123,6 +125,7 @@ def test_merge_pad_extra_concatenates_per_pad():
     assert "C1" in merged and "U1" in merged
 
 
+@pytest.mark.kicad
 def test_dru_and_netclasses_are_parameters(tmp_path):
     dru = '(version 1)\n(rule "x"\n  (constraint clearance (min 1mm))\n  (condition "A.hasNetclass(\'Hot\')"))\n'
     classes = [{"name": "Default", "clearance": 0.15, "track_width": 0.15, "via_diameter": 0.6, "via_drill": 0.3},

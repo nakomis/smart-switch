@@ -99,6 +99,7 @@ def drc(tmp_path_factory):
     return json.loads((out / "drc.json").read_text())
 
 
+@pytest.mark.kicad
 def test_drc_raises_no_silk_warnings(drc):
     silk = [(v["type"], [i["description"] for i in v["items"]]) for v in drc["violations"]
             if v["type"].startswith("silk") or v["type"].startswith("text")]

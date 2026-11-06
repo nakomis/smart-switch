@@ -1,3 +1,4 @@
+import pytest
 import csv
 import subprocess
 import zipfile
@@ -77,6 +78,7 @@ def test_cpl_rotation_and_coordinates(tmp_path):
     assert abs(float(rows[a]["Mid Y"]) - -50.0) < 1e-6
 
 
+@pytest.mark.kicad
 def test_cpl_matches_kicad_position_file(tmp_path):
     """JLCPCB's CPL frame: Mid Y is the negated KiCad y. KiCad's own position export agrees."""
     pcb = tmp_path / "x.kicad_pcb"
@@ -124,6 +126,7 @@ def test_parts_without_numbered_pads_are_never_assembled():
     assert all(PARTS[k].lcsc is None for k in bare)
 
 
+@pytest.mark.kicad
 def test_fab_outputs(tmp_path):
     pcb = tmp_path / "petro-mini.kicad_pcb"
     write_board(C, P, pcb, layers=2, silk=[("BACK", 20.0, 27.0, 1.0, "B.SilkS")])

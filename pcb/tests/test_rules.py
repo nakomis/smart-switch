@@ -129,42 +129,50 @@ def _pair(tmp_path, net_a, net_b, gap, **kw):
     return _probe(tmp_path, [Via(net_a, 30.0, 30.0), Via(net_b, 30.0 + 0.6 + gap, 30.0)], **kw)
 
 
+@pytest.mark.kicad
 def test_dru_parses_without_rule_errors(tmp_path):
     bad = _pair(tmp_path, "L_IN", "N", 10.0)
     assert not any(t in ("invalid_drc_rule", "drc_rule_error") for t, _ in bad), bad
     assert bad == set()
 
 
+@pytest.mark.kicad
 @pytest.mark.parametrize("selv", ["GND", "+3V3", "IO5"])
 def test_mains_to_selv_below_8mm_fails(tmp_path, selv):
     assert ("clearance", "LIVE to SELV") in _pair(tmp_path, "L_F", selv, REINFORCED - 0.1)
 
 
+@pytest.mark.kicad
 def test_mains_to_selv_at_8mm_passes(tmp_path):
     assert _pair(tmp_path, "L_F", "GND", REINFORCED + 0.05) == set()
 
 
+@pytest.mark.kicad
 def test_live_to_neutral_needs_2_5mm(tmp_path):
     assert ("clearance", "LIVE to NEUTRAL (250 V)") in _pair(tmp_path, "L_F", "N", 2.4)
     (tmp_path / "ok").mkdir()
     assert _pair(tmp_path / "ok", "L_F", "N", 2.55) == set()
 
 
+@pytest.mark.kicad
 def test_across_the_fuse_needs_2_5mm(tmp_path):
     assert ("clearance", "LINE to LIVE (250 V)") in _pair(tmp_path, "L_IN", "L_F", 2.4)
 
 
+@pytest.mark.kicad
 def test_one_divider_step_needs_only_1_2mm(tmp_path):
     assert _pair(tmp_path, "DIV1", "DIV2", 1.25) == set()
     (tmp_path / "bad").mkdir()
     assert ("clearance", "DIV1 to DIV2 (50 V)") in _pair(tmp_path / "bad", "DIV1", "DIV2", 1.1)
 
 
+@pytest.mark.kicad
 def test_same_group_different_nets_have_no_mains_rule(tmp_path):
     """The island's ground and the shunt's live side are within millivolts: default rules only."""
     assert _pair(tmp_path, "L_F", "GND_M", 0.5) == set()
 
 
+@pytest.mark.kicad
 def test_mains_near_the_board_edge_fails(tmp_path):
     bad = _probe(tmp_path, [Via("L_F", MAINS_EDGE - 0.1 + 0.3, 30.0)])
     assert ("copper_edge_clearance", "mains to edge") in bad
@@ -172,6 +180,7 @@ def test_mains_near_the_board_edge_fails(tmp_path):
     assert _probe(tmp_path / "ok", [Via("L_F", MAINS_EDGE + 0.1 + 0.3, 30.0)]) == set()
 
 
+@pytest.mark.kicad
 def test_thin_high_current_track_fails(tmp_path):
     t = [Track("L_F", "F.Cu", 20.0, 30.0, 40.0, 30.0, HIGH_CURRENT_WIDTH - 0.1)]
     # KiCad words this one as a board-setup constraint rather than naming the rule
@@ -181,17 +190,20 @@ def test_thin_high_current_track_fails(tmp_path):
     assert _probe(tmp_path / "ok", [], tracks=t) == set()
 
 
+@pytest.mark.kicad
 def test_island_track_may_be_thin(tmp_path):
     t = [Track("GND_M", "F.Cu", 20.0, 30.0, 40.0, 30.0, 0.2)]
     assert _probe(tmp_path, [], tracks=t) == set()
 
 
+@pytest.mark.kicad
 def test_a_slot_does_not_rescue_too_little_clearance(tmp_path):
     """Creepage around a slot can be longer, but clearance through the air is still the gap."""
     bad = _pair(tmp_path, "L_F", "GND", 7.0, slots=[Slot(34.1, 10.0, 34.1, 50.0, 1.0)])
     assert ("clearance", "LIVE to SELV") in bad
 
 
+@pytest.mark.kicad
 def test_an_unconnected_barrier_pad_counts_as_selv(tmp_path):
     """Pin 2, with no net, is 1.3 mm from the live pin 1: a floating pad could be touched."""
     io = {"U9": ("IO", 30.0, 30.0, {"1": "L_F", "3": "GND", "4": "GND", "5": "GND", "6": "GND",
@@ -211,6 +223,7 @@ def _barrier(pads):
 IO_PADS = {"1": "L_F", "3": "GND", "4": "GND", "5": "GND", "6": "GND", "7": "GND", "8": "GND"}
 
 
+@pytest.mark.kicad
 def test_kicad_does_not_check_creepage_within_one_footprint(tmp_path):
     """The reason barrier_creepage() exists. If a KiCad release starts reporting this, the
     test fails and the in-house check can be reviewed (but kept: it costs nothing)."""
@@ -261,12 +274,14 @@ def test_creepage_estimate_never_exceeds_the_straight_line_around_the_slot_end()
     assert got > 6.0
 
 
+@pytest.mark.kicad
 def test_barrier_pads_below_3mm_still_fail(tmp_path):
     io = {"U9": ("IO", 30.0, 30.0, {"1": "L_F", "2": "GND", "3": "GND", "4": "GND",
                                     "5": "GND", "6": "GND", "7": "GND", "8": "GND"})}
     assert ("clearance", "U9 own pads, mains to SELV") in _probe(tmp_path, [], parts=io)
 
 
+@pytest.mark.kicad
 def test_the_exception_is_only_for_the_named_barrier(tmp_path):
     io = {"J9": ("IO", 30.0, 30.0, {"1": "L_F", "2": "L_F", "3": "L_F", "4": "GND",
                                     "5": "GND", "6": "GND", "7": "GND", "8": "GND"})}

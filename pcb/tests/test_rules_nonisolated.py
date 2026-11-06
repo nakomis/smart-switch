@@ -41,6 +41,7 @@ def test_ipc2221_width_matches_the_published_formula():
     assert ipc2221_width(16, 1) > 2 * ipc2221_width(8, 1)
 
 
+@pytest.mark.kicad
 def test_the_switching_node_keeps_a_reduced_functional_spacing(tmp_path):
     """SWNODE (the LNK306's source node and the BP/FB parts riding on it): functional insulation
     inside the converter, where a short only trips its current limit or kills the converter. 1.0 mm
@@ -56,6 +57,7 @@ def test_the_switching_node_keeps_a_reduced_functional_spacing(tmp_path):
     assert ("clearance", "SWNODE to the rest (1 mm)") in bad
 
 
+@pytest.mark.kicad
 def test_the_switching_node_is_never_reduced_to_the_live(tmp_path):
     """A short from the switching node to the incoming live would bypass the supply's fuses: the
     reduction stops at its partners, and SW to L_F keeps the DC-bus table spacing (4.35 mm)."""
@@ -73,6 +75,7 @@ def test_reduced_spacing_must_name_its_partners():
         Rules(GROUPS_B, rest="NEUTRAL", reduced={"SWNODE": 1.0})
 
 
+@pytest.mark.kicad
 def test_the_dc_bus_keeps_its_peak_from_low_voltage_and_more_from_the_live(tmp_path):
     """The smoothed bus sits at the rectified peak (250 V x sqrt 2, 354 V DC) above neutral:
     3.55 mm to the rest; to the live, the rms of that DC plus the live's AC (433 V): 4.35 mm."""
@@ -94,25 +97,30 @@ def test_no_reinforced_barrier_in_non_isolated_mode():
     assert "SELV" not in dru and f"{REINFORCED}mm" not in dru
 
 
+@pytest.mark.kicad
 def test_low_voltage_to_live_needs_2_5mm(tmp_path):
     assert ("clearance", "LIVE to the rest (250 V)") in _pair(tmp_path, "L_F", "GND", 2.4)
     (tmp_path / "ok").mkdir()
     assert _pair(tmp_path / "ok", "L_F", "GND", 2.55) == set()
 
 
+@pytest.mark.kicad
 def test_low_voltage_to_the_bulk_capacitor_needs_2_5mm(tmp_path):
     assert ("clearance", "PSU to the rest (250 V)") in _pair(tmp_path, "VBULK", "+3V3", 2.4)
 
 
+@pytest.mark.kicad
 def test_low_voltage_next_to_the_divider_foot_needs_only_1_2mm(tmp_path):
     """DIV1 is one fifth of the way from neutral to live: 50 V from the rest."""
     assert _pair(tmp_path, "DIV1", "GND", 1.25) == set()
 
 
+@pytest.mark.kicad
 def test_low_voltage_beside_neutral_has_no_mains_rule(tmp_path):
     assert _pair(tmp_path, "N_IN", "GND", 0.5) == set()
 
 
+@pytest.mark.kicad
 def test_low_voltage_may_come_near_the_edge_but_live_may_not(tmp_path):
     assert _probe(tmp_path, [Via("GND", 1.0 + 0.3, 30.0)], rules=_rules()) == set()
     (tmp_path / "live").mkdir()
@@ -120,6 +128,7 @@ def test_low_voltage_may_come_near_the_edge_but_live_may_not(tmp_path):
         tmp_path / "live", [Via("L_F", MAINS_EDGE - 0.1 + 0.3, 30.0)], rules=_rules())
 
 
+@pytest.mark.kicad
 def test_a_part_rated_across_its_own_leads_keeps_its_own_pitch(tmp_path):
     """C1/C2, 400 V electrolytics at the maker's 3.5 mm pitch (1.6 mm pads: 1.9 mm between them),
     sit across VBULK and GND: the PSU-to-rest 2.5 mm fails between their own pads unless the part
@@ -142,6 +151,7 @@ def test_a_part_rated_across_its_own_leads_keeps_its_own_pitch(tmp_path):
                                                                parts=cap)
 
 
+@pytest.mark.kicad
 def test_any_copper_near_a_mounting_hole_fails(tmp_path):
     """An unplated M3 hole (MHN, 3.2 mm) at (60, 30): a GND via 2 mm from its edge fails, 3.1 mm
     passes."""
@@ -170,6 +180,7 @@ def test_the_selv_island_keeps_8_mm_from_everything_else():
     assert all("SELV" not in pair for pair in r.matrix())
 
 
+@pytest.mark.kicad
 def test_selv_copper_near_the_low_voltage_side_fails_below_8_mm(tmp_path):
     near = [Via("ISO_3V3", 30.0, 30.0), Via("GND", 30.0 + 0.6 + 5.0, 30.0)]
     assert ("clearance", "SELV island to everything else (8 mm)") in _probe(tmp_path, near, rules=_rules_s())
@@ -178,6 +189,7 @@ def test_selv_copper_near_the_low_voltage_side_fails_below_8_mm(tmp_path):
     assert _probe(tmp_path / "far", far, rules=_rules_s()) == set()
 
 
+@pytest.mark.kicad
 def test_selv_copper_near_live_fails_below_8_mm(tmp_path):
     near = [Via("ISO_SDA", 30.0, 30.0), Via("L_F", 30.0 + 0.6 + 5.0, 30.0)]
     assert ("clearance", "SELV island to everything else (8 mm)") in _probe(tmp_path, near, rules=_rules_s())

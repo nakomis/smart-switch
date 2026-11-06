@@ -86,6 +86,11 @@ Java comes from asdf. KiCad 10 must be installed at `/Applications/KiCad/`.
 TEST_MAX_WORKERS=2 .venv/bin/python -m pytest -q tests
 ```
 
+Tests marked `kicad` run `kicad-cli` (DRC, position files) or read KiCad's footprint library.
+Without KiCad they're skipped, not failed, and the rest still run: that's how CI runs them (PETRO-9),
+so the DRC-backed tests still need a run on the Mac before a board is ordered. `KICAD_CLI` and
+`KICAD_FP` override the macOS paths.
+
 The generic tests run on a small fixture board (`tests/fixture_board.py`), not on Petro's board.
 The routing test routes that fixture with Freerouting **in a temporary directory**. Freerouting
 isn't deterministic, so a test that routed in place would overwrite `out/` (the heatlink nearly

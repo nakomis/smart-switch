@@ -7,12 +7,14 @@ mounting holes) are excluded explicitly, in Python. Hand-fit parts (exclude=...)
 board and in the STEP model but left out of what the fab assembles, and listed on their own
 (write_hand_fit) for buying from authorised distributors."""
 import csv
+import os
 import shutil
 import subprocess
 import zipfile
 from pathlib import Path
 
-KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
+# $KICAD_CLI overrides the macOS install (CI has no KiCad: see tests/conftest.py).
+KICAD_CLI = os.environ.get("KICAD_CLI", "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli")
 
 
 def _fitted(circuit, exclude=()):
