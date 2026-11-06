@@ -6,7 +6,8 @@
 <title>Zatt</title>
 <style>
   body { font: 14px system-ui, sans-serif; margin: 1rem; background: #111; color: #ddd; }
-  canvas { width: min(96vw, 800px); image-rendering: pixelated; border: 1px solid #555; cursor: crosshair; display: block; }
+  canvas { width: min(96vw, 800px); border: 1px solid #555; cursor: crosshair; display: block; }
+  input[type=number] { width: 4em; }
   #info { height: 1.4em; margin: .4rem 0; font-variant-numeric: tabular-nums; }
   label, select, input, button { margin-right: .5rem; }
   input[type=password] { width: 12em; }
@@ -17,10 +18,15 @@
 </head>
 <body>
 <h1>Zatt</h1>
-<canvas id="c" width="32" height="24"></canvas>
+<canvas id="c" width="320" height="240"></canvas>
 <div id="info">hover a pixel</div>
 <div class="bar">
-  <label><input id="mirror" type="checkbox"> Mirror</label>&nbsp;
+  <label><input id="mirror" type="checkbox"> Mirror</label>
+  <label><input id="smooth" type="checkbox"> Smooth</label>
+  <label><input id="fixed" type="checkbox"> Fixed scale</label>
+  <label><input id="smin" type="number" step="1"> to <input id="smax" type="number" step="1"> °C</label>
+</div>
+<div class="bar">
   <label>Spot <select id="spot"></select></label>
   <span id="sel">drag on the picture to choose a rectangle</span>
 </div>
@@ -35,8 +41,8 @@
 are always the sensor's own); warm a pixel with a hand to check the orientation.
 The picture is open on the LAN; saving needs the token from the provisioning step.</small>
 <script>
-const W = 32, H = 24, cv = document.getElementById('c'), ctx = cv.getContext('2d');
-const img = ctx.createImageData(W, H);
+const W = 32, H = 24, S = 10, cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const img = ctx.createImageData(W * S, H * S);   // the canvas is S × the sensor; overlays draw in sensor units
 let data = [], spots = {}, sel = null, drag = null, hover = null, lo = 0, hi = 1;
 const names = ['T1','T2','T3','T4','T5','T6','T7'], dropdown = document.getElementById('spot');
 names.forEach(n => dropdown.add(new Option(n)));
@@ -47,6 +53,18 @@ const mirror = document.getElementById('mirror');
 mirror.checked = localStorage.getItem('zattMirror') !== '0';
 mirror.addEventListener('change', () => { localStorage.setItem('zattMirror', mirror.checked ? '1' : '0'); draw(); });
 const dx = x => mirror.checked ? W - 1 - x : x;   // sensor x <-> display x (its own inverse)
+// Smooth: bilinear interpolation between pixel centres. Fixed scale: the same colours mean the same
+// temperatures in every frame (otherwise each frame is stretched over its own min..max, at least 5 °C).
+const smooth = document.getElementById('smooth'), fixed = document.getElementById('fixed');
+const smin = document.getElementById('smin'), smax = document.getElementById('smax');
+smooth.checked = localStorage.getItem('zattSmooth') !== '0';
+fixed.checked = localStorage.getItem('zattFixed') !== '0';
+smin.value = localStorage.getItem('zattMin') || 18;
+smax.value = localStorage.getItem('zattMax') || 36;
+for (const [el, key] of [[smooth, 'zattSmooth'], [fixed, 'zattFixed']])
+  el.addEventListener('change', () => { localStorage.setItem(key, el.checked ? '1' : '0'); draw(); });
+for (const [el, key] of [[smin, 'zattMin'], [smax, 'zattMax']])
+  el.addEventListener('input', () => { localStorage.setItem(key, el.value); draw(); });
 
 // A dark-to-bright ramp (black, purple, red, orange, yellow, white).
 const stops = [[0,0,0],[70,0,110],[190,40,70],[250,140,20],[255,230,80],[255,255,255]];
@@ -56,13 +74,31 @@ function ramp(t) {
   return stops[i].map((v, k) => v + (stops[i + 1][k] - v) * f);
 }
 function draw() {
-  const v = data.filter(x => x !== null);
-  if (v.length) { lo = Math.min(...v); hi = Math.max(...v); if (hi - lo < 5) hi = lo + 5; }
-  data.forEach((x, i) => {
-    const c = x === null ? [40, 40, 40] : ramp((x - lo) / (hi - lo));
-    img.data.set([c[0], c[1], c[2], 255], ((i - i % W) + dx(i % W)) * 4);
-  });
+  const v = data.filter(x => x !== null && x !== undefined);
+  const a = +smin.value, b = +smax.value;
+  if (fixed.checked && b > a) { lo = a; hi = b; }
+  else if (v.length) { lo = Math.min(...v); hi = Math.max(...v); if (hi - lo < 5) hi = lo + 5; }
+  if (data.length === W * H) {
+    // Temperature at display pixel (x, y); a missing pixel reads as the bottom of the scale.
+    const at = (x, y) => { const t = data[y * W + dx(x)]; return t === null || t === undefined ? lo : t; };
+    for (let Y = 0; Y < H * S; Y++) {
+      for (let X = 0; X < W * S; X++) {
+        let t;
+        if (smooth.checked) {
+          const u = Math.max(0, Math.min(W - 1, (X + .5) / S - .5)), w = Math.max(0, Math.min(H - 1, (Y + .5) / S - .5));
+          const x0 = Math.min(W - 2, Math.floor(u)), y0 = Math.min(H - 2, Math.floor(w)), fu = u - x0, fw = w - y0;
+          t = (at(x0, y0) * (1 - fu) + at(x0 + 1, y0) * fu) * (1 - fw) + (at(x0, y0 + 1) * (1 - fu) + at(x0 + 1, y0 + 1) * fu) * fw;
+        } else {
+          t = at(Math.floor(X / S), Math.floor(Y / S));
+        }
+        const c = ramp((t - lo) / (hi - lo));
+        img.data.set([c[0], c[1], c[2], 255], (Y * W * S + X) * 4);
+      }
+    }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.putImageData(img, 0, 0);
+  ctx.setTransform(S, 0, 0, S, 0, 0);
   ctx.lineWidth = 0.12; ctx.font = '1px sans-serif';
   for (const [n, r] of Object.entries(spots)) if (r) outline(r, '#4cf', n);
   if (sel) outline(sel, '#fff');
@@ -112,7 +148,7 @@ async function tick() {
       ' °C, ' + (f.pa ?? '-') + ' Pa, up ' + f.up + ' s, scale ' + lo.toFixed(1) + '..' + hi.toFixed(1) + ' °C';
     draw();
   } catch (e) { document.getElementById('stat').textContent = 'no frame: ' + e; }
-  setTimeout(tick, 1000);
+  setTimeout(tick, 500);   // the sensor makes 2 frames a second
 }
 tick();
 </script>
