@@ -25,6 +25,8 @@ static const char *kind_name(fleet_cmd_kind k)
         return "relay_cycle_stop";
     case FLEET_CMD_SET_TRIP:
         return "set_trip_threshold";
+    case FLEET_CMD_CLEAR_TRIP:
+        return "clear_trip";
     case FLEET_CMD_WIFI_STRESS:
         return "wifi_stress";
     case FLEET_CMD_REBOOT:
@@ -42,7 +44,7 @@ int main(int argc, char **argv)
     (void)argv;
     if (argc > 1)
     {
-        for (int r = CTL_OK; r <= CTL_ERR_LOCAL_ONLY + 1; r++)
+        for (int r = CTL_OK; r <= CTL_ERR_CLEAR_BLOCKED + 1; r++)
             puts(ctl_result_message((ctl_result)r));
         printf("%s %s\n", ctl_mode_name((ctl_mode)99), fleet_cmd_result_type((fleet_cmd_kind)99));
         return 0;
@@ -79,10 +81,14 @@ int main(int argc, char **argv)
             cJSON_AddNumberToObject(out, "off_ms", cmd.off_ms);
             break;
         case FLEET_CMD_SET_TRIP:
-            if (cmd.amps < 0)
+            if (cmd.set_amps && cmd.amps < 0)
                 cJSON_AddNullToObject(out, "amps");
-            else
+            else if (cmd.set_amps)
                 cJSON_AddNumberToObject(out, "amps", cmd.amps);
+            if (cmd.set_instant && cmd.instant_amps < 0)
+                cJSON_AddNullToObject(out, "instant_amps");
+            else if (cmd.set_instant)
+                cJSON_AddNumberToObject(out, "instant_amps", cmd.instant_amps);
             break;
         case FLEET_CMD_WIFI_STRESS:
             cJSON_AddBoolToObject(out, "on", cmd.on);

@@ -3,14 +3,19 @@
 //
 //   {"command":"get_status"}                       publish a status now (reason "request")
 //   {"command":"relay","on":true}                  auto only (ctl.h): refused in on and off
-//   {"command":"set_mode","mode":"on"|"off"|"auto"} persisted; "off" also clears a trip
+//   {"command":"set_mode","mode":"on"|"off"|"auto"} only off is accepted (ctl.h); persisted
 //   {"command":"relay_cycle","n":500,"on_ms":3000,"off_ms":5000}
 //                                                  auto only; n 1-10000, 50-60000 ms each, two
 //                                                  hours at most in all (the console: one)
 //   {"command":"relay_cycle_stop"}
-//   {"command":"set_trip_threshold","amps":6.5}    temporary, RAM only (gone after a reboot); 0.5 to
-//                                                  10.5 A, never above the default. "amps":null
-//                                                  puts the default back
+//   {"command":"set_trip_threshold","amps":6.5,"instant_amps":12}
+//                                                  temporary, RAM only (gone after a reboot), each
+//                                                  optional (at least one): amps, the sustained
+//                                                  threshold, 0.5-10.5 A; instant_amps, the
+//                                                  BL0939's OC output, 1-15 A. Never above the
+//                                                  defaults; null puts a default back
+//   {"command":"clear_trip"}                       clears a latched trip, the relay left off
+//                                                  (ctl_clear_trip)
 //   {"command":"wifi_stress","on":true,"duration_s":3600}
 //                                                  Gate 3's transmit stress; duration_s 60-7200,
 //                                                  default 3600; "on":false stops it. RAM only
@@ -39,7 +44,8 @@ typedef enum
     FLEET_CMD_SET_MODE,        // mode
     FLEET_CMD_RELAY_CYCLE,     // n, on_ms, off_ms
     FLEET_CMD_RELAY_CYCLE_STOP,
-    FLEET_CMD_SET_TRIP,        // amps (negative: the default)
+    FLEET_CMD_SET_TRIP,        // set_amps/amps, set_instant/instant_amps (negative: the default)
+    FLEET_CMD_CLEAR_TRIP,
     FLEET_CMD_WIFI_STRESS,     // on, duration_s
     FLEET_CMD_REBOOT,
     FLEET_CMD_FLEET,           // one of Fleet's: pass the bytes to ota_cmd_parse
@@ -52,7 +58,8 @@ typedef struct
     bool on;
     ctl_mode mode;
     uint32_t n, on_ms, off_ms;
-    double amps;
+    bool set_amps, set_instant;
+    double amps, instant_amps;
     uint32_t duration_s;
     char message[96];
 } fleet_cmd;

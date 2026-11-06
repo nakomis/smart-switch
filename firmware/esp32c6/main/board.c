@@ -9,11 +9,14 @@
 #include "esp_attr.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "led_strip.h"
 #include "petro_pins.h"
+#include "prot.h"
 
 static const char *TAG = "board";
 
@@ -21,7 +24,19 @@ static const char *TAG = "board";
 #define NTC_CHANNEL ADC_CHANNEL_0  // GPIO0 is ADC1_CH0 on the C6
 #define NTC_SAMPLES 16
 
-static bool relay_on;
+// The relay's output and the OC hold, under relay_mux (tasks and the OC interrupt).
+static portMUX_TYPE relay_mux = portMUX_INITIALIZER_UNLOCKED;
+static volatile bool relay_on;
+static volatile bool oc_hold;  // the OC interrupt opened the relay: it stays open until released
+static volatile bool oc_armed;
+static volatile int oc_active_level;
+static volatile bool oc_relay_was_on;  // the relay's state when the interrupt opened it
+static TaskHandle_t oc_task;
+static bool bl_configured;
+static uint32_t bl_fast_ctrl;
+// The last three ZX edges, under zx_mux.
+static portMUX_TYPE zx_mux = portMUX_INITIALIZER_UNLOCKED;
+static zx_edges zx;
 static esp_err_t part_err[BOARD_PARTS] = {
     ESP_ERR_INVALID_STATE, ESP_ERR_INVALID_STATE, ESP_ERR_INVALID_STATE, ESP_ERR_INVALID_STATE,
     ESP_ERR_INVALID_STATE,
@@ -32,18 +47,39 @@ static adc_oneshot_unit_handle_t adc;
 static adc_cali_handle_t adc_cali;
 // 32-bit counters, written only by their ISR and read whole by tasks: on the single-core C6 a
 // 32-bit load is atomic, so no lock is needed.
-static volatile uint32_t zx_edges, oc_edges;
+static volatile uint32_t zx_count, oc_count;
 
 static void IRAM_ATTR zx_isr(void *arg)
 {
     (void)arg;
-    zx_edges++;
+    zx_count++;
+    int64_t t = esp_timer_get_time();
+    portENTER_CRITICAL_ISR(&zx_mux);
+    zx_edge(&zx, t);
+    portEXIT_CRITICAL_ISR(&zx_mux);
 }
 
+// The instant trip (PETRO-5): the BL0939's fast RMS passed its threshold. The relay opens here,
+// within microseconds of the edge (then the relay's release time), and is held open; the trip task
+// latches, stores and reports it (no NVS or flash in here). gpio_get_level and gpio_set_level are
+// in IRAM (CONFIG_GPIO_CTRL_FUNC_IN_IRAM).
 static void IRAM_ATTR oc_isr(void *arg)
 {
     (void)arg;
-    oc_edges++;
+    oc_count++;
+    if (!oc_armed || gpio_get_level(PETRO_PIN_OC) != oc_active_level)
+        return;
+    portENTER_CRITICAL_ISR(&relay_mux);
+    if (!oc_hold)
+        oc_relay_was_on = relay_on;
+    oc_hold = true;
+    gpio_set_level(PETRO_PIN_RELAY, 0);
+    relay_on = false;
+    portEXIT_CRITICAL_ISR(&relay_mux);
+    BaseType_t woken = pdFALSE;
+    if (oc_task != NULL)
+        vTaskNotifyGiveFromISR(oc_task, &woken);
+    portYIELD_FROM_ISR(woken);
 }
 
 static esp_err_t relay_init(void)
@@ -149,6 +185,55 @@ static esp_err_t ntc_init(void)
     return ESP_OK;
 }
 
+// One register read: {0x55, reg}, 4 bytes back. Under bl_lock.
+static esp_err_t bl_read_reg_locked(uint8_t reg, uint32_t *value)
+{
+    uint8_t req[2], reply[BL0939_REG_REPLY_LEN];
+    size_t n = bl0939_build_read(reg, req);
+    uart_flush_input(BL_UART);
+    if (uart_write_bytes(BL_UART, req, n) != (int)n)
+        return ESP_FAIL;
+    // 2 bytes out and 4 back at 4800 baud: about 13 ms.
+    int got = uart_read_bytes(BL_UART, reply, sizeof(reply), pdMS_TO_TICKS(100));
+    if (got != (int)sizeof(reply))
+        return ESP_ERR_TIMEOUT;
+    return bl0939_parse_register(reg, reply, sizeof(reply), value) == BL0939_OK ? ESP_OK : ESP_ERR_INVALID_CRC;
+}
+
+static esp_err_t bl_write_locked(uint8_t reg, uint32_t value)
+{
+    uint8_t f[BL0939_WRITE_LEN];
+    bl0939_build_write(reg, value, f);
+    if (uart_write_bytes(BL_UART, f, BL0939_WRITE_LEN) != BL0939_WRITE_LEN)
+        return ESP_FAIL;
+    return uart_wait_tx_done(BL_UART, pdMS_TO_TICKS(50));
+}
+
+// Whether the chip holds what we wrote (bl0939_verify_list: write unlock, mode, TPS_CTRL with the
+// alarms on, both fast-RMS thresholds). Under bl_lock.
+static esp_err_t bl_verify_locked(uint32_t fast_ctrl)
+{
+    bl0939_check_t checks[8];
+    size_t n = bl0939_verify_list(fast_ctrl, checks, 8);
+    for (size_t i = 0; i < n; i++)
+    {
+        uint32_t v = 0;
+        esp_err_t err = bl_read_reg_locked(checks[i].reg, &v);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "bl0939: reading back register 0x%02x: %s", checks[i].reg, esp_err_to_name(err));
+            return err;
+        }
+        if ((v & checks[i].mask) != (checks[i].value & checks[i].mask))
+        {
+            ESP_LOGE(TAG, "bl0939: register 0x%02x reads 0x%06lx, wrote 0x%06lx", checks[i].reg, (unsigned long)v,
+                     (unsigned long)checks[i].value);
+            return ESP_ERR_INVALID_RESPONSE;
+        }
+    }
+    return ESP_OK;
+}
+
 static esp_err_t bl_init(void)
 {
     bl_lock = xSemaphoreCreateMutex();
@@ -170,8 +255,10 @@ static esp_err_t bl_init(void)
                                      UART_PIN_NO_CHANGE),
                         TAG, "uart pins");
 
+    // The instant trip's threshold (PETRO-5) goes in with the rest.
+    bl_fast_ctrl = prot_fast_rms_ctrl(CTL_INSTANT_AMPS_DEFAULT, bl0939_petro_scale().amps);
     uint8_t frames[8][BL0939_WRITE_LEN];
-    size_t n = bl0939_init_frames(frames, 8);
+    size_t n = bl0939_init_frames(frames, 8, bl_fast_ctrl);
     for (size_t i = 0; i < n; i++)
     {
         uart_write_bytes(BL_UART, frames[i], BL0939_WRITE_LEN);
@@ -180,6 +267,13 @@ static esp_err_t bl_init(void)
         vTaskDelay(pdMS_TO_TICKS(i == 0 ? 20 : 2));
     }
     uart_flush_input(BL_UART);
+    // The UART works without the chip answering; the trips need it to have taken the thresholds.
+    xSemaphoreTake(bl_lock, portMAX_DELAY);
+    bl_configured = bl_verify_locked(bl_fast_ctrl) == ESP_OK;
+    xSemaphoreGive(bl_lock);
+    if (bl_configured)
+        ESP_LOGI(TAG, "bl0939: thresholds set (fast RMS control 0x%04lx, %.1f A)", (unsigned long)bl_fast_ctrl,
+                 CTL_INSTANT_AMPS_DEFAULT);
     return ESP_OK;
 }
 
@@ -214,8 +308,13 @@ const char *board_part_name(board_part part)
 
 void board_relay(bool on)
 {
+    // The check and the write together, so the OC interrupt can't fall between them.
+    portENTER_CRITICAL(&relay_mux);
+    if (oc_hold)
+        on = false;
     gpio_set_level(PETRO_PIN_RELAY, on ? 1 : 0);
     relay_on = on;
+    portEXIT_CRITICAL(&relay_mux);
 }
 
 bool board_relay_is_on(void)
@@ -279,12 +378,103 @@ esp_err_t board_bl_read(uint8_t packet[BL0939_PACKET_LEN], size_t *len)
 
 uint32_t board_zx_edges(void)
 {
-    return zx_edges;
+    return zx_count;
 }
 
 uint32_t board_oc_edges(void)
 {
-    return oc_edges;
+    return oc_count;
+}
+
+void board_zx_snapshot(zx_edges *out)
+{
+    portENTER_CRITICAL(&zx_mux);
+    *out = zx;
+    portEXIT_CRITICAL(&zx_mux);
+}
+
+int board_oc_arm(TaskHandle_t notify)
+{
+    // The caller has checked there is no current (prot_may_arm_oc), so the level now is idle. It
+    // must read the same over 2 ms: a pin that wanders isn't one to infer a polarity from.
+    oc_task = notify;
+    int first = gpio_get_level(PETRO_PIN_OC);
+    for (int i = 0; i < 4; i++)
+    {
+        esp_rom_delay_us(500);
+        if (gpio_get_level(PETRO_PIN_OC) != first)
+        {
+            ESP_LOGE(TAG, "OC wanders at rest: the instant trip stays unarmed (meter fault)");
+            oc_armed = false;
+            return -1;
+        }
+    }
+    oc_active_level = !first;
+    oc_armed = true;
+    return oc_active_level;
+}
+
+bool board_oc_armed(void)
+{
+    return oc_armed;
+}
+
+bool board_oc_relay_was_on(void)
+{
+    return oc_hold ? oc_relay_was_on : relay_on;
+}
+
+bool board_oc_active(void)
+{
+    return oc_armed && gpio_get_level(PETRO_PIN_OC) == oc_active_level;
+}
+
+bool board_oc_held(void)
+{
+    return oc_hold;
+}
+
+bool board_oc_release(void)
+{
+    bool released = false;
+    portENTER_CRITICAL(&relay_mux);
+    if (!(oc_armed && gpio_get_level(PETRO_PIN_OC) == oc_active_level))
+    {
+        oc_hold = false;
+        released = true;
+    }
+    portEXIT_CRITICAL(&relay_mux);
+    return released;
+}
+
+bool board_bl_configured(void)
+{
+    return board_part_ok(BOARD_BL0939) && bl_configured;
+}
+
+uint32_t board_bl_fast_ctrl(void)
+{
+    return bl_fast_ctrl;
+}
+
+esp_err_t board_bl_set_instant(double amps)
+{
+    if (!board_part_ok(BOARD_BL0939))
+        return ESP_ERR_INVALID_STATE;
+    uint32_t ctrl = prot_fast_rms_ctrl(amps, bl0939_petro_scale().amps);
+    xSemaphoreTake(bl_lock, portMAX_DELAY);
+    esp_err_t err = bl_write_locked(BL0939_REG_IA_FAST_RMS_CTRL, ctrl);
+    if (err == ESP_OK)
+        err = bl_write_locked(BL0939_REG_IB_FAST_RMS_CTRL, ctrl);
+    if (err == ESP_OK)
+        err = bl_verify_locked(ctrl);
+    bl_configured = err == ESP_OK;
+    if (bl_configured)
+        bl_fast_ctrl = ctrl;
+    else
+        oc_armed = false;  // armed again (app.c) once the chip takes a threshold and there's no current
+    xSemaphoreGive(bl_lock);
+    return err;
 }
 
 void board_j3_out(bool level)

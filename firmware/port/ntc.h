@@ -25,7 +25,15 @@ ntc_params_t ntc_petro_params(void);
 // NTC reads the supply and a shorted one 0 V.
 bool ntc_resistance(const ntc_params_t *p, double mv, double *ohms);
 
-// Degrees Celsius from the divider's voltage, by the B equation. False as ntc_resistance.
+// The plausible readings (PETRO-5): an open NTC reads near the supply, so very cold, and a shorted
+// one near 0 V, so very hot. Outside -20 to 150 C, or within 50 mV of either rail, the reading is
+// refused (and the protection, without a good NTC reading for 3 s, calls it a meter fault).
+#define NTC_MIN_C (-20.0)
+#define NTC_MAX_C 150.0
+#define NTC_RAIL_MV 50.0
+
+// Degrees Celsius from the divider's voltage, by the B equation. False as ntc_resistance, and for
+// the implausible readings above.
 bool ntc_celsius(const ntc_params_t *p, double mv, double *celsius);
 
 // The divider's voltage at a temperature (the inverse, for tests and limits).

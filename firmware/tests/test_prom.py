@@ -6,7 +6,7 @@ import pytest
 
 FULL = {"volts": 239.814, "amps": 0.26114, "watts": 61.237, "energy_kwh": 1.2345678, "board_c": 24.13,
         "relay": True, "zx_hz": 100.0, "rssi": -61, "uptime_s": 3600, "trips_overcurrent": 1,
-        "trips_overtemp": 0, "resets": {"poweron": 2, "brownout": 1, "panic": 0}}
+        "trips_overcurrent_instant": 2, "trips_overtemp": 0, "trips_meter_fault": 3, "resets": {"poweron": 2, "brownout": 1, "panic": 0}}
 
 
 @pytest.fixture
@@ -32,14 +32,18 @@ def test_every_metric(prom):
         'petro_resets_total{reason="poweron"} 2',
         'petro_resets_total{reason="brownout"} 1',
         'petro_trips_total{cause="overcurrent"} 1',
+        'petro_trips_total{cause="overcurrent_instant"} 2',
         'petro_trips_total{cause="overtemp"} 0',
+        'petro_trips_total{cause="meter_fault"} 3',
     ]
 
 
 def test_unknown_readings_are_left_out(prom):
     lines = prom({"uptime_s": 5}).splitlines()
     assert lines == ["petro_energy_kwh_total 0.000000", "petro_relay_on 0", "petro_uptime_seconds 5",
-                     'petro_trips_total{cause="overcurrent"} 0', 'petro_trips_total{cause="overtemp"} 0']
+                     'petro_trips_total{cause="overcurrent"} 0',
+                     'petro_trips_total{cause="overcurrent_instant"} 0',
+                     'petro_trips_total{cause="overtemp"} 0', 'petro_trips_total{cause="meter_fault"} 0']
 
 
 def test_nan_is_never_sent(prom):

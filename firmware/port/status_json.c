@@ -99,8 +99,16 @@ int status_json(char *out, size_t cap, const status_view *v)
     put_number(&s, true, "%.2f", v->trip_amps);
     put(&s, ",\"trip_amps_temporary\":");
     put_bool(&s, v->trip_amps_temporary);
+    put(&s, ",\"instant_amps\":");
+    put_number(&s, true, "%.2f", v->instant_amps);
+    put(&s, ",\"instant_amps_temporary\":");
+    put_bool(&s, v->instant_amps_temporary);
+    put(&s, ",\"overtemp_c\":");
+    put_number(&s, true, "%.1f", v->overtemp_c);
     put(&s, ",\"trips_enforced\":");
     put_bool(&s, v->trips_enforced);
+    put(&s, ",\"zx_sync\":");
+    put_bool(&s, v->zx_sync);
     put(&s, ",\"stress_s\":");
     if (v->stress)
         put(&s, "%lu", (unsigned long)v->stress_left_s);

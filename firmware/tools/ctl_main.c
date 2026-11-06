@@ -1,7 +1,11 @@
 // petro-ctl: drive the control logic (port/ctl.c), one operation per line on stdin, keeping state.
 //
 //   {"op":"init","stored":true,"mode":2,"trip":1}   ctl_init (also the start: stored false)
-//   {"op":"press"}                             a debounced press
+//   {"op":"press"}                             a debounced press (result: ctl_press's)
+//   {"op":"clear"}                             ctl_clear_trip (Fleet's clear_trip)
+//   {"op":"sensors","ok":false}                ctl_set_sensors_ok
+//   {"op":"blocked","on":true}                 ctl_set_clear_blocked
+//   {"op":"instant","amps":12.0}               ctl_set_instant_amps
 //   {"op":"relay","on":true}                   a remote relay command
 //   {"op":"mode","mode":"auto"}                set_mode, the console's ("bogus" tries an invalid one)
 //   {"op":"remote_mode","mode":"off"}          Fleet's set_mode
@@ -10,13 +14,14 @@
 //   {"op":"bench_cycle","n":3,"on_ms":100,"off_ms":100}   the console's
 //   {"op":"bench","on":true}                   the console's relay on/off
 //   {"op":"stop"}                              ctl_cycle_stop
-//   {"op":"trip","cause":"overcurrent"}        the trip hook
+//   {"op":"trip","cause":"overcurrent"}        ctl_trip (any ctl_trip_name, else none)
 //   {"op":"amps","amps":5.0}                   ctl_set_trip_amps
 //   {"op":"tick"}                              nothing but ctl_relay
 // Every line may carry "now" (ms; it stays until changed). Each prints the state after it, with
 // ctl_relay at now:
 //   {"result":"ok","relay":false,"mode":"off","trip":null,"remote":false,"bench":false,
-//    "cycle":null|{"done":0,"n":3},"trip_amps":10.5,"temporary":false}
+//    "cycle":null|{"done":0,"n":3},"trip_amps":10.5,"temporary":false,"instant_amps":15,
+//    "instant_temporary":false}
 #include <stdio.h>
 #include <string.h>
 
@@ -54,6 +59,10 @@ static const char *result_name(ctl_result r)
         return "invalid";
     case CTL_ERR_LOCAL_ONLY:
         return "local_only";
+    case CTL_ERR_SENSORS:
+        return "sensors";
+    case CTL_ERR_CLEAR_BLOCKED:
+        return "blocked";
     }
     return "?";
 }
@@ -76,7 +85,15 @@ int main(void)
         if (strcmp(op, "init") == 0)
             ctl_init(&c, flag(in, "stored"), (int)num(in, "mode", 0), (int)num(in, "trip", 0));
         else if (strcmp(op, "press") == 0)
-            ctl_press(&c);
+            result = result_name(ctl_press(&c));
+        else if (strcmp(op, "clear") == 0)
+            result = result_name(ctl_clear_trip(&c));
+        else if (strcmp(op, "sensors") == 0)
+            ctl_set_sensors_ok(&c, flag(in, "ok"));
+        else if (strcmp(op, "blocked") == 0)
+            ctl_set_clear_blocked(&c, flag(in, "on"));
+        else if (strcmp(op, "instant") == 0)
+            result = result_name(ctl_set_instant_amps(&c, num(in, "amps", 0)));
         else if (strcmp(op, "relay") == 0)
             result = result_name(ctl_remote_relay(&c, flag(in, "on")));
         else if (strcmp(op, "mode") == 0)
@@ -103,10 +120,9 @@ int main(void)
             result = ctl_cycle_stop(&c) ? "stopped" : "idle";
         else if (strcmp(op, "trip") == 0)
         {
-            const char *cause = str(in, "cause");
-            is_new = ctl_trip(&c, strcmp(cause, "overcurrent") == 0 ? CTL_TRIP_OVERCURRENT
-                                  : strcmp(cause, "overtemp") == 0  ? CTL_TRIP_OVERTEMP
-                                                                    : CTL_TRIP_NONE);
+            ctl_trip_cause cause = CTL_TRIP_NONE;
+            ctl_trip_parse(str(in, "cause"), &cause);
+            is_new = ctl_trip(&c, cause);
             result = is_new ? "new" : "not_new";
         }
         else if (strcmp(op, "amps") == 0)
@@ -127,7 +143,9 @@ int main(void)
             printf("{\"done\":%u,\"n\":%u}", c.cycle.done, c.cycle.n);
         else
             printf("null");
-        printf(",\"trip_amps\":%g,\"temporary\":%s}\n", c.trip_amps, ctl_trip_amps_temporary(&c) ? "true" : "false");
+        printf(",\"trip_amps\":%g,\"temporary\":%s,\"instant_amps\":%g,\"instant_temporary\":%s}\n", c.trip_amps,
+               ctl_trip_amps_temporary(&c) ? "true" : "false", c.instant_amps,
+               ctl_instant_amps_temporary(&c) ? "true" : "false");
         fflush(stdout);
     }
     return 0;

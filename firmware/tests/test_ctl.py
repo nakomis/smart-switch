@@ -4,7 +4,9 @@ Spec (CLAUDE.md, Control; PETRO-3): one button cycling the mode on -> off -> aut
 decision; nothing stored means off); on and off are local overrides, so remote relay commands are refused;
 auto follows remote commands; the mode persists and is the power-on state; a press with a trip
 latched clears the trip and leaves the relay off. Review decisions (PR #8): the trip survives a
-reboot and only a press clears it; Fleet's set_mode accepts only off.
+reboot; Fleet's set_mode accepts only off. PETRO-5: Fleet's clear_trip clears it too; clearing keeps
+the mode except on (which becomes off), so the relay stays off; a clear can be blocked (the NTC's
+hysteresis); relay-on is refused while the sensors aren't healthy.
 """
 
 import json
@@ -182,7 +184,9 @@ def test_set_mode_off_does_not_clear_a_trip(c):
     assert c("remote_mode", mode="auto")["result"] == "local_only"
 
 
-@pytest.mark.parametrize("stored,cause", [(1, "overcurrent"), (2, "overtemp"), (7, "overcurrent")])
+@pytest.mark.parametrize("stored,cause", [(1, "overcurrent"), (2, "overtemp"), (3, "overcurrent_instant"),
+                                          (4, "meter_fault"), (5, "overcurrent"), (7, "overcurrent"),
+                                          (-1, "overcurrent")])
 def test_a_trip_survives_a_reboot(c, stored, cause):
     c("init", stored=True, mode=ON)
     c("trip", cause=cause)
@@ -348,8 +352,108 @@ def test_messages(tool):
     lines = tool("petro-fleetcmd", "messages")().splitlines()
     assert lines[0] == "ok"
     assert "set mode auto" in lines[1]
-    assert "only a press" in lines[2]
+    assert "clear_trip" in lines[2]
     assert lines[3] == "out of range"
     assert "only off can be set remotely" in lines[4]
-    assert lines[5] == "?"
-    assert lines[6] == "? error"
+    assert "isn't healthy" in lines[5]
+    assert "within 5 C" in lines[6]
+    assert lines[7] == "?"
+    assert lines[8] == "? error"
+
+
+# ---- PETRO-5: clearing, the sensors, the instant threshold ---------------------------------------
+
+@pytest.mark.parametrize("mode,after", [(ON, "off"), (OFF, "off"), (AUTO, "auto")])
+def test_clear_trip_keeps_the_mode_but_on_and_leaves_the_relay_off(c, mode, after):
+    c("init", stored=True, mode=mode)
+    c("trip", cause="overtemp")
+    s = c("clear")
+    assert (s["result"], s["trip"], s["mode"], s["relay"]) == ("ok", None, after, False)
+
+
+def test_a_press_clears_in_auto_and_stays_in_auto(c):
+    in_auto(c)
+    c("relay", on=True)
+    c("trip", cause="overcurrent_instant")
+    s = c("press")
+    assert (s["result"], s["trip"], s["mode"], s["relay"], s["remote"]) == ("ok", None, "auto", False, True)
+
+
+def test_clear_with_nothing_latched_is_a_no_op(c):
+    in_auto(c)
+    c("relay", on=True)
+    s = c("clear")
+    assert (s["result"], s["mode"], s["relay"]) == ("ok", "auto", True)
+
+
+@pytest.mark.parametrize("op", ["clear", "press"])
+def test_a_blocked_clear_is_refused(c, op):
+    c("init", stored=True, mode=ON)
+    c("trip", cause="overtemp")
+    c("blocked", on=True)
+    s = c(op)
+    assert (s["result"], s["trip"], s["mode"], s["relay"]) == ("blocked", "overtemp", "on", False)
+    c("blocked", on=False)
+    s = c(op)
+    assert (s["result"], s["trip"], s["mode"], s["relay"]) == ("ok", None, "off", False)
+
+
+def test_blocked_only_matters_while_tripped(c):
+    c("init")
+    c("blocked", on=True)
+    assert c("press")["mode"] == "auto"
+
+
+@pytest.mark.parametrize("cause", ["overcurrent", "overcurrent_instant", "overtemp", "meter_fault"])
+def test_every_cause_latches(c, cause):
+    c("init", stored=True, mode=ON)
+    s = c("trip", cause=cause)
+    assert (s["result"], s["trip"], s["relay"]) == ("new", cause, False)
+
+
+def test_unhealthy_sensors_refuse_every_relay_on(c):
+    in_auto(c)
+    c("sensors", ok=False)
+    assert c("relay", on=True)["result"] == "sensors"
+    assert c("cycle", n=3, on_ms=100, off_ms=100)["result"] == "sensors"
+    assert c("bench_cycle", n=3, on_ms=100, off_ms=100)["result"] == "sensors"
+    assert c("bench", on=True)["result"] == "sensors"
+    s = c("tick")
+    assert s["relay"] is False and s["bench"] is False and s["cycle"] is None
+    # off is always fine
+    assert c("relay", on=False)["result"] == "ok"
+    assert c("bench", on=False)["result"] == "ok"
+    c("sensors", ok=True)
+    assert c("relay", on=True)["relay"] is True
+
+
+def test_unhealthy_sensors_leave_the_button_alone(c):
+    c("init")
+    c("sensors", ok=False)
+    s = c("press")
+    assert (s["result"], s["mode"]) == ("ok", "auto")  # the caller holds the relay and latches
+
+
+def test_a_tripped_refusal_comes_before_the_sensors(c):
+    in_auto(c)
+    c("sensors", ok=False)
+    c("trip", cause="meter_fault")
+    assert c("relay", on=True)["result"] == "tripped"
+
+
+def test_a_temporary_instant_threshold(c):
+    c("init")
+    s = c("instant", amps=12)
+    assert (s["result"], s["instant_amps"], s["instant_temporary"]) == ("ok", 12, True)
+    assert s["trip_amps"] == 10.5 and s["temporary"] is False  # separate
+    s = c("instant", amps=-1)
+    assert (s["instant_amps"], s["instant_temporary"]) == (15, False)
+    c("instant", amps=1)
+    assert c("init")["instant_amps"] == 15  # gone after a reboot
+
+
+@pytest.mark.parametrize("amps", [0.99, 15.01, 0, 100])
+def test_an_instant_threshold_out_of_range_is_refused(c, amps):
+    c("init")
+    s = c("instant", amps=amps)
+    assert (s["result"], s["instant_amps"]) == ("invalid", 15)

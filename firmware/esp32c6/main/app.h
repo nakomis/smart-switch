@@ -1,7 +1,9 @@
 // The application: the control task (SW1, the mode, the relay, the LED, Fleet's commands and the
-// status) and the meter task (the BL0939, the NTC and ZX once a second, and the energy total).
+// status), the meter task (the BL0939 and the NTC every 250 ms, ZX, the energy total, and the
+// protection's checks: port/prot.h) and the trip task (the OC interrupt's follow-up).
 //
-// The control task owns the relay. It runs every 5 ms at a priority above the network's tasks and
+// The control task drives the relay from the mode (the meter and trip tasks, and the OC interrupt,
+// open it on a trip). It runs every 5 ms at a priority above the network's tasks and
 // is watched by the task watchdog (5 s, then a panic and a restart, which leaves the relay off).
 // Nothing on it waits on the network: publishing only copies into net.c's queue, and the OTA
 // download, the metrics push and the Wi-Fi stress traffic each run in their own lower-priority task.
@@ -36,8 +38,8 @@ void app_led_release(void);
 // While true, presses of SW1 are only watched (the console's button test), not acted on.
 void app_button_watch(bool watching);
 
-// The trip hook (PETRO-5): latch a trip, open the relay at once, store it (it survives a reboot;
-// only a press clears it) and count it.
+// Latch a trip, open the relay at once, store it (it survives a reboot; only a press or Fleet's
+// clear_trip clears it) and count it. The protection (port/prot.h) calls for them itself.
 void app_trip(ctl_trip_cause cause);
 
 // A copy of the device's state, for the console's info, the status and the metrics.
@@ -51,7 +53,14 @@ typedef struct
     uint32_t cycle_done, cycle_n;
     double trip_amps;
     bool trip_amps_temporary;
-    bool meter_ok;   // the BL0939 started and its latest reads are good
+    double instant_amps;
+    bool instant_amps_temporary;
+    double overtemp_c;
+    bool meter_ok;   // prot_healthy: the BL0939 configured, a good frame and NTC reading within 3 s
+    bool meter_starting;  // the first 3 s, before the readings are in
+    bool bl_configured;
+    bool oc_active;
+    bool zx_sync;    // the relay switches at zero crossings
     bool have_meter;
     double volts, amps, watts;
     double energy_kwh;

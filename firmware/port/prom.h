@@ -10,7 +10,8 @@
 //   petro_wifi_rssi_dbm                                            (left out when not associated)
 //   petro_uptime_seconds
 //   petro_resets_total{reason="..."}                               one line per reason seen
-//   petro_trips_total{cause="overcurrent"|"overtemp"}              both, always
+//   petro_trips_total{cause="overcurrent"|"overcurrent_instant"|"overtemp"|"meter_fault"}
+//                                                                  all four, always
 // vmauth adds host_name="petro-prod-bN" to every series.
 #pragma once
 
@@ -37,7 +38,7 @@ typedef struct
     const char *const *reset_names;
     const uint32_t *reset_counts;
     size_t resets;
-    uint32_t trips_overcurrent, trips_overtemp;
+    uint32_t trips_overcurrent, trips_overcurrent_instant, trips_overtemp, trips_meter_fault;
 } prom_sample;
 
 // Returns the length written (NUL-terminated), or -1 if it doesn't fit. Non-finite values are left

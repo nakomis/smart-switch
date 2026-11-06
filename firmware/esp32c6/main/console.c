@@ -30,7 +30,9 @@
 #include "ntc.h"
 #include "ota.h"
 #include "petro_pins.h"
+#include "prot.h"
 #include "prov.h"
+#include "relay.h"
 #include "store.h"
 #include "stress.h"
 
@@ -58,17 +60,30 @@ static void cmd_info(void)
     if (st.cycle_active)
         printf(", cycling %" PRIu32 "/%" PRIu32, st.cycle_done, st.cycle_n);
     printf("\n");
-    printf("trip       %s; threshold %.2f A%s; trips not enforced until PETRO-5\n",
-           st.trip == CTL_TRIP_NONE ? "none latched" : ctl_trip_name(st.trip), st.trip_amps,
-           st.trip_amps_temporary ? " (temporary, until a reboot)" : " (the default)");
-    printf("trips      overcurrent %" PRIu32 ", overtemp %" PRIu32 " (since NVS was last erased)\n",
-           store_trips(CTL_TRIP_OVERCURRENT), store_trips(CTL_TRIP_OVERTEMP));
+    printf("trip       %s (enforced)\n", st.trip == CTL_TRIP_NONE ? "none latched" : ctl_trip_name(st.trip));
+    printf("thresholds %.2f A over 2 s%s; %.2f A instant%s; NTC %.0f C (clear below %.0f C)\n", st.trip_amps,
+           st.trip_amps_temporary ? " (temporary)" : "", st.instant_amps, st.instant_amps_temporary ? " (temporary)" : "",
+           st.overtemp_c, st.overtemp_c - PROT_CLEAR_MARGIN_C);
+    printf("trips     ");
+    for (int cause = CTL_TRIP_OVERCURRENT; cause <= CTL_TRIP_CAUSES; cause++)
+        printf(" %s %" PRIu32, ctl_trip_name((ctl_trip_cause)cause), store_trips((ctl_trip_cause)cause));
+    printf(" (since NVS was last erased)\n");
+    uint32_t timed = 0, at_once = 0;
+    relay_counts(&timed, &at_once);
+    printf("protect    BL0939 thresholds %s (fast RMS control 0x%04" PRIx32 "); OC %s%s; ZX %s (%" PRIu32
+           " switches timed, %" PRIu32 " at once)\n",
+           st.bl_configured ? "verified" : "NOT VERIFIED: relay held off", board_bl_fast_ctrl(),
+           !board_oc_armed() ? "NOT ARMED" : st.oc_active ? "ACTIVE" : "armed, idle",
+           board_oc_held() ? ", holding the relay open" : "",
+           st.zx_sync ? "in sync" : "absent (switching at once)", timed, at_once);
     if (st.have_meter)
         printf("meter      %.2f V, %.4f A, %.2f W", st.volts, st.amps, st.watts);
     else
         printf("meter      no reading");
     printf("; %.6f kWh total; %" PRIu32 " failed reads; %s\n", st.energy_kwh, st.meter_errors,
-           st.meter_ok ? "healthy" : "UNHEALTHY");
+           st.meter_ok         ? "healthy"
+           : st.meter_starting ? "starting"
+                               : "UNHEALTHY: relay-on refused");
     printf("board     ");
     for (int i = 0; i < BOARD_PARTS; i++)
         printf(" %s%s", board_part_ok((board_part)i) ? "+" : "-", board_part_name((board_part)i));

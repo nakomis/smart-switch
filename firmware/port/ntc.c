@@ -23,10 +23,13 @@ bool ntc_resistance(const ntc_params_t *p, double mv, double *ohms)
 bool ntc_celsius(const ntc_params_t *p, double mv, double *celsius)
 {
     double r;
-    if (!ntc_resistance(p, mv, &r))
+    if (!(mv >= NTC_RAIL_MV && mv <= p->supply_mv - NTC_RAIL_MV) || !ntc_resistance(p, mv, &r))
         return false;
     double inv_t = 1.0 / T25_KELVIN + log(r / p->r25_ohms) / p->b_kelvin;
-    *celsius = 1.0 / inv_t - KELVIN;
+    double c = 1.0 / inv_t - KELVIN;
+    if (!(c >= NTC_MIN_C && c <= NTC_MAX_C))
+        return false;
+    *celsius = c;
     return true;
 }
 

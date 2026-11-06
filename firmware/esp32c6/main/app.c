@@ -25,7 +25,10 @@
 #include "net.h"
 #include "ntc.h"
 #include "ota.h"
+#include "prot.h"
+#include "relay.h"
 #include "report.h"
+#include "sdkconfig.h"
 #include "status_json.h"
 #include "store.h"
 #include "stress.h"
@@ -38,11 +41,14 @@ static const char *TAG = "app";
 #define CONTROL_STACK 8192  // cJSON and the command parsers run here
 #define CONTROL_PRIORITY 8  // above MQTT (5), the OTA task (4), metrics (2) and stress (1)
 #define METER_STACK 4096
-#define METER_PRIORITY 6
-#define METER_PERIOD_MS 1000
-#define METER_STALE_READS 3  // failed reads in a row before V/A/W go unknown
+#define METER_PRIORITY 9    // the protection's readings: above the control task too
+#define METER_PERIOD_MS 250  // the BL0939's RMS updates every 400 ms; a read takes about 77 ms
+#define METER_STALE_READS 12  // failed reads in a row (3 s) before V/A/W go unknown
+#define ZX_HZ_READS 4        // zx_hz over this many reads (1 s)
+#define TRIP_STACK 3072
+#define TRIP_PRIORITY 10    // the OC interrupt's follow-up: above everything of ours
 #define RESTART_DELAY_MS 2000  // for the response to reach IoT Core first
-#define STATUS_MAX 512
+#define STATUS_MAX 768
 #define STORE_RETRY_MS 5000  // a failed NVS write of the mode or the trip latch is retried this often
 
 typedef struct
@@ -57,6 +63,15 @@ static bool provisioned;
 
 // Under lock.
 static ctl_t ctl;
+static prot_t prot;
+static ctl_trip_cause seen_trip;   // the latch as last counted and stored
+static bool trip_store_pending;    // the latch's NVS write failed: retried by the control task
+static int64_t trip_retry_at_ms;
+static ctl_trip_cause trip_to_log; // a new trip or a clear, logged by the control task (not under lock)
+static bool trip_log_pending;
+static TaskHandle_t trip_handle;
+static int arm_logged = -2;        // the last arming result logged (board_oc_arm's)
+static int64_t arm_retry_ms;       // a failed arming (OC wandering) is tried again at most once a second
 static struct
 {
     bool have_meter;
@@ -75,7 +90,6 @@ static reporter_t reporter;
 static bool applied_relay;
 static ctl_mode stored_mode;
 static bool have_stored_mode;
-static ctl_trip_cause stored_trip;
 static int64_t store_retry_at_ms;
 static bool healthy;
 
@@ -92,9 +106,35 @@ static int64_t now_ms(void)
     return esp_timer_get_time() / 1000;
 }
 
+// The protection's view into ctl: the sensors' health (relay-on refused without it) and whether a
+// clear would be refused (the NTC's hysteresis, OC still active). Under the lock.
+static void sync_locked(int64_t now)
+{
+    // The instant trip is armed whenever it safely can be: at boot, after Fleet's instant_amps, or
+    // after a read-back failure clears (prot_may_arm_oc: configured, relay open, no current).
+    if (!board_oc_armed() && trip_handle != NULL && now >= arm_retry_ms &&
+        prot_may_arm_oc(&prot, board_bl_configured(), !board_relay_is_on() && !applied_relay, now))
+    {
+        int level = board_oc_arm(trip_handle);  // a 2 ms check of the pin
+        arm_retry_ms = now + 1000;
+        if (level != arm_logged)
+        {
+            arm_logged = level;
+            if (level >= 0)
+                ESP_LOGI(TAG, "instant trip armed: OC active %s", level ? "high" : "low");
+        }
+    }
+    prot_oc_armed(&prot, board_oc_armed());
+    prot_oc(&prot, board_oc_active(), board_oc_relay_was_on());
+    ctl_set_sensors_ok(&ctl, prot_healthy(&prot, now));
+    ctl_set_clear_blocked(&ctl, prot_clear_blocked(&prot, ctl.trip, now));
+}
+
+// Every locked section starts with ctl in step with the protection.
 static void take(void)
 {
     xSemaphoreTake(lock, portMAX_DELAY);
+    sync_locked(now_ms());
 }
 
 static void give(void)
@@ -102,15 +142,43 @@ static void give(void)
     xSemaphoreGive(lock);
 }
 
-// Drives the relay to what ctl says now. Called with the lock held, by whichever task changed ctl,
-// so a command or a trip acts at once rather than on the next loop.
+// The latch in NVS, so a reboot doesn't clear it. Under the lock (it's rare, and the relay is
+// already open); a failure is retried by the control task.
+static void store_trip_locked(int64_t now)
+{
+    trip_store_pending = store_set_trip(ctl.trip) != ESP_OK;
+    trip_retry_at_ms = now + STORE_RETRY_MS;
+}
+
+// Drives the relay to what ctl and the protection say now, tripping first if the protection calls
+// for it. Called with the lock held, by whichever task changed ctl or read the meter, so a command
+// or a trip acts at once rather than on the next loop. Trips, the shutdown and the health gate
+// switch at once; everything else at the next zero crossing (relay.h).
 static bool apply_locked(void)
 {
-    bool relay = ctl_relay(&ctl, now_ms());
+    int64_t now = now_ms();
+    sync_locked(now);
+    bool wanted = ctl_relay(&ctl, now);
+    ctl_trip(&ctl, prot_check(&prot, wanted, now));  // CTL_TRIP_NONE does nothing
+    wanted = ctl_relay(&ctl, now);
+    bool relay = wanted && prot_healthy(&prot, now);  // held open while starting up
     if (relay != applied_relay)
     {
-        board_relay(relay);
+        relay_set(relay, !relay && (ctl.trip != CTL_TRIP_NONE || ctl.shutdown || wanted));
         applied_relay = relay;
+    }
+    if (ctl.trip != seen_trip)
+    {
+        // Only a clear releases the OC hold (not the moment between the interrupt and its trip
+        // task). If OC is still active the hold stays, and so does the trip.
+        if (prot_oc_release_due(seen_trip, ctl.trip) && board_oc_held() && !board_oc_release())
+            ctl_trip(&ctl, CTL_TRIP_OVERCURRENT_INSTANT);
+        if (ctl.trip != CTL_TRIP_NONE)
+            store_count_trip(ctl.trip);
+        seen_trip = ctl.trip;
+        trip_to_log = ctl.trip;
+        trip_log_pending = true;
+        store_trip_locked(now);
     }
     return relay;
 }
@@ -178,23 +246,18 @@ void app_button_watch(bool watching)
 void app_trip(ctl_trip_cause cause)
 {
     take();
-    bool latched = ctl_trip(&ctl, cause);
-    apply_locked();
+    ctl_trip(&ctl, cause);
+    apply_locked();  // opens the relay, counts and stores the latch
     give();
-    if (latched)
-    {
-        ESP_LOGW(TAG, "TRIP: %s, relay open", ctl_trip_name(cause));
-        // The latch itself is stored by the control task's step() (with retries); counted here.
-        store_count_trip(cause);
-    }
 }
 
 void app_get_state(app_state *out)
 {
     memset(out, 0, sizeof(*out));
     take();
+    int64_t now = now_ms();
     out->mode = ctl.mode;
-    out->relay = applied_relay;
+    out->relay = board_relay_is_on();
     out->trip = ctl.trip;
     out->remote = ctl_accepts_remote(&ctl);
     out->bench = ctl.bench;
@@ -203,7 +266,13 @@ void app_get_state(app_state *out)
     out->cycle_n = ctl.cycle.n;
     out->trip_amps = ctl.trip_amps;
     out->trip_amps_temporary = ctl_trip_amps_temporary(&ctl);
-    out->meter_ok = board_part_ok(BOARD_BL0939) && readings.have_meter;
+    out->instant_amps = ctl.instant_amps;
+    out->instant_amps_temporary = ctl_instant_amps_temporary(&ctl);
+    out->overtemp_c = prot.cfg.overtemp_c;
+    out->meter_ok = prot_healthy(&prot, now);
+    out->meter_starting = prot_starting(&prot, now);
+    out->bl_configured = prot.meter_init;
+    out->oc_active = prot.oc_active;
     out->have_meter = readings.have_meter;
     out->volts = readings.volts;
     out->amps = readings.amps;
@@ -215,6 +284,7 @@ void app_get_state(app_state *out)
     out->have_zx = readings.have_zx;
     out->zx_hz = readings.zx_hz;
     give();
+    out->zx_sync = relay_zx_sync();
 }
 
 // ---- the meter task ------------------------------------------------------------------------------
@@ -235,18 +305,23 @@ static void save_energy(void)
     }
 }
 
+// The meter and the protection's readings, every 250 ms at a priority above the control task and
+// the network. Each reading goes straight to prot and apply_locked, so a sustained over-current
+// trips within one read of its 2 s; the watchdog resets Petro (relay off) if this task stops.
 static void meter_task(void *arg)
 {
     (void)arg;
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
     const bl0939_scale_t scale = bl0939_petro_scale();
     const ntc_params_t ntc = ntc_petro_params();
-    int failures = 0;
+    int failures = 0, reads = 0;
     uint32_t zx_last = board_zx_edges();
     int64_t zx_last_ms = now_ms();
     TickType_t wake = xTaskGetTickCount();
     for (;;)
     {
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(METER_PERIOD_MS));
+        esp_task_wdt_reset();
         uint8_t packet[BL0939_PACKET_LEN];
         size_t len = 0;
         bl0939_raw_t raw;
@@ -260,11 +335,16 @@ static void meter_task(void *arg)
         double celsius = NAN;
         bool have_temp = board_ntc_read(&adc_raw, &mv) == ESP_OK && ntc_celsius(&ntc, mv, &celsius);
 
-        uint32_t zx = board_zx_edges();
         int64_t t = now_ms();
-        double zx_hz = t > zx_last_ms ? (double)(zx - zx_last) * 1000.0 / (double)(t - zx_last_ms) : 0;
-        zx_last = zx;
-        zx_last_ms = t;
+        bool zx_due = ++reads % ZX_HZ_READS == 0;
+        double zx_hz = 0;
+        if (zx_due)
+        {
+            uint32_t zx = board_zx_edges();
+            zx_hz = t > zx_last_ms ? (double)(zx - zx_last) * 1000.0 / (double)(t - zx_last_ms) : 0;
+            zx_last = zx;
+            zx_last_ms = t;
+        }
 
         take();
         if (good)
@@ -276,6 +356,8 @@ static void meter_task(void *arg)
             readings.watts = r.watts_a;
             if (!energy_update(&energy, raw.cfa_cnt, t))
                 ESP_LOGW(TAG, "CF count jumped implausibly: rebaselined");
+            // Both channels read the same shunt: the larger counts.
+            prot_frame(&prot, r.amps_a, r.amps_b, ctl.trip_amps, t);  // NaN on either counts as over
         }
         else
         {
@@ -285,16 +367,15 @@ static void meter_task(void *arg)
         }
         readings.have_temp = have_temp;
         readings.board_c = celsius;
-        readings.have_zx = true;
-        readings.zx_hz = zx_hz;
+        prot_temp(&prot, have_temp, celsius, t);
+        if (zx_due)
+        {
+            readings.have_zx = true;
+            readings.zx_hz = zx_hz;
+        }
+        apply_locked();  // the trips (prot_check), and the relay held open while unhealthy
         give();
 
-        // TODO(PETRO-5): the over-current trip (readings.amps against ctl.trip_amps, and the
-        // BL0939's OC output through board_oc_edges) and the over-temperature trip (the NTC),
-        // each calling app_trip(). Until then trips_enforced is false in the status.
-        // TODO(PETRO-5): once trips are enforced, refuse relay-on (every route: button, Fleet,
-        // bench) while the meter is unhealthy (app_state.meter_ok false: the BL0939 didn't start,
-        // or METER_STALE_READS reads in a row failed): a trip that can't see the current is none.
         save_energy();
     }
 }
@@ -328,7 +409,11 @@ static bool publish_status(report_reason reason)
         .zx_hz = s.zx_hz,
         .trip_amps = s.trip_amps,
         .trip_amps_temporary = s.trip_amps_temporary,
-        .trips_enforced = false,  // PETRO-5
+        .instant_amps = s.instant_amps,
+        .instant_amps_temporary = s.instant_amps_temporary,
+        .overtemp_c = s.overtemp_c,
+        .trips_enforced = true,
+        .zx_sync = s.zx_sync,
         .stress = stress > 0,
         .stress_left_s = stress,
         .have_rssi = rssi != 0,
@@ -411,16 +496,47 @@ static void handle_command(const char *json, size_t len)
     case FLEET_CMD_SET_TRIP:
     {
         take();
-        r = ctl_set_trip_amps(&ctl, cmd.amps);
-        double amps = ctl.trip_amps;
+        if (cmd.set_amps)
+            r = ctl_set_trip_amps(&ctl, cmd.amps);
+        if (r == CTL_OK && cmd.set_instant)
+            r = ctl_set_instant_amps(&ctl, cmd.instant_amps);
+        double amps = ctl.trip_amps, instant = ctl.instant_amps;
+        bool temp_amps = ctl_trip_amps_temporary(&ctl), temp_instant = ctl_instant_amps_temporary(&ctl);
         give();
-        char message[64];
-        snprintf(message, sizeof(message), "trip threshold %.2f A (%s)", amps,
-                 cmd.amps < 0 ? "the default" : "temporary, until a reboot");
-        ESP_LOGI(TAG, "Fleet: %s", message);
-        respond(fleet_cmd_result_type(cmd.kind), r == CTL_OK ? "ok" : "error",
+        // The instant threshold lives in the BL0939 (a UART write and read-back, outside the lock).
+        esp_err_t err = ESP_OK;
+        if (r == CTL_OK && cmd.set_instant)
+        {
+            err = board_bl_set_instant(instant);
+            take();
+            prot_meter_init(&prot, board_bl_configured());
+            apply_locked();  // unconfigured: the meter is unhealthy and the relay opens
+            give();
+        }
+        char message[128];
+        if (err != ESP_OK)
+            snprintf(message, sizeof(message), "the BL0939 didn't take %.2f A (%s): the relay stays off", instant,
+                     esp_err_to_name(err));
+        else
+            snprintf(message, sizeof(message), "trip thresholds %.2f A over 2 s (%s), %.2f A instant (%s)", amps,
+                     temp_amps ? "temporary, until a reboot" : "the default", instant,
+                     temp_instant ? "temporary, until a reboot" : "the default");
+        ESP_LOGI(TAG, "Fleet: %s", r == CTL_OK ? message : ctl_result_message(r));
+        respond(fleet_cmd_result_type(cmd.kind), r == CTL_OK && err == ESP_OK ? "ok" : "error",
                 r == CTL_OK ? message : ctl_result_message(r));
         publish_status(REPORT_REQUEST);  // the thresholds in force
+        break;
+    }
+    case FLEET_CMD_CLEAR_TRIP:
+    {
+        take();
+        bool was = ctl.trip != CTL_TRIP_NONE;
+        r = ctl_clear_trip(&ctl);
+        apply_locked();
+        give();
+        ESP_LOGI(TAG, "Fleet: clear trip: %s", ctl_result_message(r));
+        respond(fleet_cmd_result_type(cmd.kind), r == CTL_OK ? "ok" : "error",
+                r != CTL_OK ? ctl_result_message(r) : was ? "cleared, relay off" : "no trip latched");
         break;
     }
     case FLEET_CMD_WIFI_STRESS:
@@ -518,44 +634,43 @@ static bool step(void)
     bool press = button_update(&button, board_button_pressed(), now) && !button_watched;
 
     take();
+    bool was_tripped = ctl.trip != CTL_TRIP_NONE;
+    ctl_result pressed = CTL_OK;
     if (press)
-    {
-        bool tripped = ctl.trip != CTL_TRIP_NONE;
-        ctl_press(&ctl);
-        ESP_LOGI(TAG, "button: %s", tripped ? "trip cleared, mode off" : ctl_mode_name(ctl.mode));
-    }
-    bool relay = apply_locked();
+        pressed = ctl_press(&ctl);
+    bool relay = apply_locked();  // also the protection's checks, should the meter task stop
     ctl_mode mode = ctl.mode;
     bool tripped = ctl.trip != CTL_TRIP_NONE;
-    ctl_trip_cause trip = ctl.trip;
     bool cycling = ctl.cycle.active;
+    if (trip_store_pending && now >= trip_retry_at_ms)
+        store_trip_locked(now);
+    bool log_trip = trip_log_pending;
+    ctl_trip_cause logged = trip_to_log;
+    trip_log_pending = false;
     give();
 
-    // The power-on state and the trip latch, kept in NVS. A failed write (logged by store.c) is
-    // retried every STORE_RETRY_MS until it succeeds.
-    ctl_trip_cause trip_now = tripped ? trip : CTL_TRIP_NONE;
-    if ((!have_stored_mode || mode != stored_mode || trip_now != stored_trip) && now >= store_retry_at_ms)
+    if (press)
+        ESP_LOGI(TAG, "button: %s", !was_tripped ? ctl_mode_name(mode)
+                                    : pressed == CTL_OK ? "trip cleared, relay off"
+                                                        : ctl_result_message(pressed));
+    if (log_trip && logged != CTL_TRIP_NONE)
+        ESP_LOGW(TAG, "TRIP: %s, relay open", ctl_trip_name(logged));
+    else if (log_trip)
+        ESP_LOGI(TAG, "trip cleared");
+
+    // The power-on state, kept in NVS. A failed write (logged by store.c) is retried every
+    // STORE_RETRY_MS until it succeeds. (The trip latch is stored by apply_locked.)
+    if ((!have_stored_mode || mode != stored_mode) && now >= store_retry_at_ms)
     {
-        bool ok = true;
-        if (!have_stored_mode || mode != stored_mode)
+        if (store_set_mode(mode) == ESP_OK)
         {
-            if (store_set_mode(mode) == ESP_OK)
-            {
-                ESP_LOGI(TAG, "mode %s stored", ctl_mode_name(mode));
-                stored_mode = mode;
-                have_stored_mode = true;
-            }
-            else
-                ok = false;
+            ESP_LOGI(TAG, "mode %s stored", ctl_mode_name(mode));
+            stored_mode = mode;
+            have_stored_mode = true;
+            store_retry_at_ms = 0;
         }
-        if (trip_now != stored_trip)
-        {
-            if (store_set_trip(trip_now) == ESP_OK)
-                stored_trip = trip_now;
-            else
-                ok = false;
-        }
-        store_retry_at_ms = ok ? 0 : now + STORE_RETRY_MS;
+        else
+            store_retry_at_ms = now + STORE_RETRY_MS;
     }
     show_led(now, mode, relay, tripped);
 
@@ -601,9 +716,24 @@ static void control_task(void *arg)
 
 // On every esp_restart (a reboot command, an OTA install): the relay off at once, and the energy
 // since the last save kept. (A panic or a power cut skips this; the reset leaves the relay off.)
+// The OC interrupt (board.c) has already opened the relay: latch, count and store the trip, as an
+// instant over-current, or a meter fault if OC can't be real (prot_oc_cause).
+static void trip_task(void *arg)
+{
+    (void)arg;
+    for (;;)
+    {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        take();
+        ctl_trip(&ctl, prot_oc_cause(&prot, now_ms()));
+        apply_locked();
+        give();
+    }
+}
+
 static void on_shutdown(void)
 {
-    board_relay(false);
+    relay_set(false, true);
     if (xSemaphoreTake(lock, pdMS_TO_TICKS(200)) == pdTRUE)
     {
         ctl_shutdown(&ctl);  // nothing re-closes it before the reset
@@ -630,7 +760,15 @@ void app_start(bool is_provisioned)
     int mode = CTL_MODE_OFF;
     have_stored_mode = store_mode(&mode);
     ctl_init(&ctl, have_stored_mode, mode, store_trip());
-    stored_trip = ctl.trip;
+    seen_trip = ctl.trip;  // a stored latch is not a new trip
+    prot_config cfg = prot_defaults();
+    cfg.overtemp_c = CONFIG_PETRO_OVERTEMP_C;
+    prot_init(&prot, &cfg, now_ms());
+    prot_meter_init(&prot, board_bl_configured());
+    if (!board_bl_configured())
+        ESP_LOGE(TAG, "the BL0939 isn't configured: the relay stays off (meter fault)");
+    if (relay_init() != ESP_OK)
+        ESP_LOGE(TAG, "relay timer: switching without zero-cross timing");
     if (ctl.trip != CTL_TRIP_NONE)
         ESP_LOGW(TAG, "a %s trip is still latched: relay open until the button is pressed",
                  ctl_trip_name(ctl.trip));
@@ -644,11 +782,32 @@ void app_start(bool is_provisioned)
     button_init(&button);
     report_init(&reporter);
     applied_relay = false;
-    take();
+    esp_register_shutdown_handler(on_shutdown);
+
+    // The trip task first, then one frame with the relay still open, so the instant trip is armed
+    // (sync_locked, prot_may_arm_oc) before the meter and control tasks can close the relay.
+    if (xTaskCreate(trip_task, "trip", TRIP_STACK, NULL, TRIP_PRIORITY, &trip_handle) != pdPASS)
+    {
+        ESP_LOGE(TAG, "no memory for the trip task");
+        abort();
+    }
+    uint8_t packet[BL0939_PACKET_LEN];
+    size_t len = 0;
+    bl0939_raw_t raw;
+    if (board_bl_read(packet, &len) == ESP_OK && bl0939_parse_packet(packet, len, &raw) == BL0939_OK)
+    {
+        bl0939_scale_t scale = bl0939_petro_scale();
+        bl0939_reading_t r = bl0939_convert(&raw, &scale);
+        take();
+        prot_frame(&prot, r.amps_a, r.amps_b, ctl.trip_amps, now_ms());
+        give();
+    }
+    take();  // arms, if it may
     apply_locked();
     give();
+    if (!board_oc_armed())
+        ESP_LOGW(TAG, "instant trip not armed yet: the relay stays open until it is");
 
-    esp_register_shutdown_handler(on_shutdown);
     if (xTaskCreate(control_task, "control", CONTROL_STACK, NULL, CONTROL_PRIORITY, NULL) != pdPASS ||
         xTaskCreate(meter_task, "meter", METER_STACK, NULL, METER_PRIORITY, NULL) != pdPASS)
     {

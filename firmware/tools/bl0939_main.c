@@ -2,7 +2,10 @@
 //
 //   read                      -> {"frame":"55aa"}
 //   write <reg> <value>       -> {"frame":"a5..."}       (hex, value 24-bit)
-//   init                      -> {"frames":["a5...",...]}
+//   init [ctrl]               -> {"frames":["a5...",...]}   (ctrl hex: the fast-RMS control)
+//   readreg <reg>             -> {"frame":"55.."}
+//   verify <ctrl>             -> {"checks":[[reg,value,mask],...]}
+//   parsereg <reg> <hex>      -> {"status":"ok","value":..}
 //   parse <hex>               -> {"status":"ok","raw":{...},"petro":{...}}
 //   scale <shunt> <top> <bot> -> {"volts":..,"amps":..,"watts":..,"pulses_per_kwh":..}
 //   temp <tps1>               -> {"celsius":..}
@@ -67,7 +70,8 @@ int main(void)
         else if (strcmp(cmd, "init") == 0)
         {
             uint8_t f[8][BL0939_WRITE_LEN];
-            size_t n = bl0939_init_frames(f, 8);
+            unsigned ctrl = (unsigned)strtoul(arg, NULL, 16);
+            size_t n = bl0939_init_frames(f, 8, ctrl);
             printf("{\"frames\":[");
             for (size_t i = 0; i < n; i++)
             {
@@ -76,6 +80,37 @@ int main(void)
                 printf("\"");
             }
             printf("]}\n");
+        }
+        else if (strcmp(cmd, "verify") == 0)
+        {
+            bl0939_check_t c[8];
+            size_t n = bl0939_verify_list((uint32_t)strtoul(arg, NULL, 16), c, 8);
+            printf("{\"checks\":[");
+            for (size_t i = 0; i < n; i++)
+                printf("%s[%u,%u,%u]", i ? "," : "", c[i].reg, c[i].value, c[i].mask);
+            printf("]}\n");
+        }
+        else if (strcmp(cmd, "readreg") == 0)
+        {
+            uint8_t f[2];
+            size_t n = bl0939_build_read((uint8_t)strtoul(arg, NULL, 16), f);
+            printf("{\"frame\":\"");
+            hex(f, n);
+            printf("\"}\n");
+        }
+        else if (strcmp(cmd, "parsereg") == 0)
+        {
+            unsigned reg = 0;
+            char data[64] = "";
+            sscanf(line, "%*s %x %63s", &reg, data);
+            uint8_t p[32];
+            size_t n = unhex(data, p, sizeof(p));
+            uint32_t value = 0;
+            bl0939_status_t st = bl0939_parse_register((uint8_t)reg, p, n, &value);
+            printf("{\"status\":\"%s\"", bl0939_status_name(st));
+            if (st == BL0939_OK)
+                printf(",\"value\":%u", value);
+            printf("}\n");
         }
         else if (strcmp(cmd, "parse") == 0)
         {
