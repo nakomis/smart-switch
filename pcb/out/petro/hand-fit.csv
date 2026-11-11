@@ -1,7 +1,7 @@
-Designator,Qty per board,Manufacturer,Mfg Part #,Value,LCSC (reference)
-"J1,J2",2,Degson,DG636-7.62-02P-14-02A(H),DG636-7.62-02P,C2827897
-K1,1,Hongfa,HF115F-I/005-1HS3A,HF115F-I/005-1HS3A,C2976795
-R1,1,Yageo,FKN2WSJT-52-10R,10R 2W fusible,C1394194
-RV1,1,Littelfuse,TMOV20RP275E,TMOV20RP275E,C187710
-"XF1,XF2",2,Littelfuse,01220088Z,6.35mm fuse clip 30A,C206903
-XF3,1,Littelfuse,65600001009,5x20 holder,C187510
+Designator,Qty per board,Manufacturer,Mfg Part #,Value,LCSC (reference),,MH
+"J1,J2",2,Degson,DG636-7.62-02P-14-02A(H),DG636-7.62-02P,C2827897,,In stock
+K1,1,Hongfa,HF115F-I/005-1HS3A,HF115F-I/005-1HS3A,C2976795,,On order
+R1,1,Yageo,FKN2WSJT-52-10R,10R 2W fusible,C1394194,,
+RV1,1,Littelfuse,TMOV20RP275E,TMOV20RP275E,C187710,,
+"XF1,XF2",2,Littelfuse,01220088Z,6.35mm fuse clip 30A,C206903,,
+XF3,1,Littelfuse,FKN2WSJT-52-10R,5x20 holder,C187510,,
